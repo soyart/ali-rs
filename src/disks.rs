@@ -17,8 +17,7 @@ fn do_disk(disk: &manifest::ManifestDisk) -> Result<(), AyiError> {
     linux::fdisk::run_fdisk_cmd(&disk.device, &create_table_cmd)?;
 
     for (n, part) in disk.partitions.iter().enumerate() {
-        let create_part_cmd =
-            linux::fdisk::create_partition_cmd(&disk.device, &disk.table, n + 1, part);
+        let create_part_cmd = linux::fdisk::create_partition_cmd(&disk.table, n + 1, part);
 
         linux::fdisk::run_fdisk_cmd(&disk.device, &create_part_cmd)?;
     }

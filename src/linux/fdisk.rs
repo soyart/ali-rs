@@ -10,7 +10,6 @@ pub fn create_table_cmd(device: &str, table: &PartitionTable) -> String {
 }
 
 pub fn create_partition_cmd(
-    device: &str,
     table: &PartitionTable,
     part_num: usize,
     part: &ManifestPartition,
@@ -57,7 +56,6 @@ fn join_newlines(slice: &[&str]) -> String {
 #[test]
 fn test_create_part_cmd() {
     struct Test<'a> {
-        device: &'a str,
         table: PartitionTable,
         num: usize,
         part: ManifestPartition,
@@ -66,7 +64,6 @@ fn test_create_part_cmd() {
 
     let tests: Vec<Test> = vec![
         Test {
-            device: "/dev/vda",
             table: PartitionTable::Gpt,
             num: 1,
             part: ManifestPartition {
@@ -77,7 +74,6 @@ fn test_create_part_cmd() {
             expected: "n\n1\n\n\n+200M\nt\n8e\n",
         },
         Test {
-            device: "/dev/vda",
             table: PartitionTable::Mbr,
             num: 1,
             part: ManifestPartition {
@@ -90,7 +86,7 @@ fn test_create_part_cmd() {
     ];
 
     for test in tests {
-        let result = create_partition_cmd(&test.device, &test.table, test.num, &test.part);
+        let result = create_partition_cmd(&test.table, test.num, &test.part);
         assert_eq!(test.expected, result);
     }
 }
