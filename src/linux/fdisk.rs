@@ -3,6 +3,7 @@ use std::process::{Command, Stdio};
 use crate::errors::AyiError;
 use crate::manifest::{ManifestPartition, PartitionTable};
 
+/// Returns fdisk cmd string for creating gpt/msdos partition table
 pub fn create_table_cmd(device: &str, table: &PartitionTable) -> String {
     match table {
         PartitionTable::Gpt => "g\nw\n".to_string(),
@@ -10,6 +11,9 @@ pub fn create_table_cmd(device: &str, table: &PartitionTable) -> String {
     }
 }
 
+/// Returns fdisk cmd for creating new partition.
+/// It assumes caller calls it from 1st to last partitions,
+/// in that exact order, so no `start` sector will be used.
 pub fn create_partition_cmd(
     table: &PartitionTable,
     part_num: usize,
@@ -32,6 +36,7 @@ pub fn create_partition_cmd(
     }
 }
 
+/// Returns fdisk cmd for changing partition type.
 pub fn set_partition_type_cmd(part_num: usize, part: &ManifestPartition) -> String {
     match part_num {
         1 => assemble_and_w(&["t", &part.part_type]),

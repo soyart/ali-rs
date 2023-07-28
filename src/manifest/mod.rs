@@ -64,6 +64,14 @@ pub struct ManifestFs {
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct ManifestRootFs(pub ManifestFs);
 
+impl std::ops::Deref for ManifestRootFs {
+    type Target = ManifestFs;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct ManifestSwap {
     pub device: String,

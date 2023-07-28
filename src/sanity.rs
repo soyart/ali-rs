@@ -11,20 +11,21 @@ pub fn check(manifest: &Manifest) -> Result<(), AyiError> {
         }
     }
 
-    let rootfs_fs = &manifest.rootfs.0.fs_type;
-    if !in_path(rootfs_fs) {
+    let mkfs_rootfs = &format!("mkfs.{}", manifest.rootfs.fs_type);
+    if !in_path(mkfs_rootfs) {
         return Err(AyiError::CmdFailed(
             None,
-            format!("no such program to create rootfs: {rootfs_fs}"),
+            format!("no such program to create rootfs: {mkfs_rootfs}"),
         ));
     }
 
     for archfs in manifest.filesystems.iter() {
-        if !in_path(&archfs.fs_type) {
+        let mkfs_cmd = &format!("mkfs.{}", archfs.fs_type);
+        if !in_path(mkfs_cmd) {
             let device = &archfs.device;
             return Err(AyiError::CmdFailed(
                 None,
-                format!("no such program to create filesystem for device {device}: {rootfs_fs}"),
+                format!("no such program to create filesystem for device {device}: {mkfs_cmd}"),
             ));
         }
     }
