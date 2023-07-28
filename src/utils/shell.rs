@@ -1,3 +1,5 @@
+use std::env;
+use std::fs;
 use std::process::Command;
 
 use crate::errors::AyiError;
@@ -21,6 +23,19 @@ pub fn exec(cmd: &str, args: &[&str]) -> Result<(), AyiError> {
             format!("command ${cmd} failed to spawn"),
         )),
     }
+}
+
+pub fn in_path(program: &str) -> bool {
+    if let Ok(path) = env::var("PATH") {
+        for p in path.split(":") {
+            let p_str = format!("{}/{}", p, program);
+            if fs::metadata(p_str).is_ok() {
+                return true;
+            }
+        }
+    }
+
+    false
 }
 
 #[test]

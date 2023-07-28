@@ -5,9 +5,7 @@ use crate::utils::fs::file_exists;
 
 pub fn do_disks(disks: &[manifest::ManifestDisk]) -> Result<(), AyiError> {
     for disk in disks.iter() {
-        if !file_exists(&disk.device) {
-            return Err(AyiError::NoSuchDevice(disk.device.to_string()));
-        }
+        do_disk(disk)?;
     }
 
     Ok(())
