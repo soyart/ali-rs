@@ -43,9 +43,8 @@ fn sanity_check(manifest: &Manifest) -> Result<(), AyiError> {
     }
 
     for archfs in manifest.filesystems.iter() {
-        let device = &archfs.device;
-
         if !in_path(&archfs.fs_type) {
+            let device = &archfs.device;
             return Err(AyiError::CmdFailed(
                 None,
                 format!("no such program to create filesystem for device {device}: {rootfs_fs}"),
