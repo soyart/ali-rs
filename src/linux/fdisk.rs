@@ -17,16 +17,16 @@ pub fn create_partition_cmd(
 ) -> String {
     let size = match part.size {
         Some(ref s) => format!("+{s}"),
-        None => "\n".to_string(),
+        None => "".to_string(),
     };
 
     match table {
-        PartitionTable::Gpt => assemble_and_w(&["n", &part_num.to_string(), "\n", &size]),
+        PartitionTable::Gpt => assemble_and_w(&["n", &part_num.to_string(), "", &size]),
         PartitionTable::Mbr => assemble_and_w(&[
             "n",
             "p", // Only create primary msdos partition for now
             &part_num.to_string(),
-            "\n",
+            "",
             &size,
         ]),
     }
@@ -81,81 +81,86 @@ fn assemble_and_w(slice: &[&str]) -> String {
     return joined;
 }
 
-#[test]
-fn test_create_part_cmd() {
-    struct Test<'a> {
-        table: PartitionTable,
-        num: usize,
-        part: ManifestPartition,
-        expected: &'a str,
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_create_part_cmd() {
+        struct Test<'a> {
+            table: PartitionTable,
+            num: usize,
+            part: ManifestPartition,
+            expected: &'a str,
+        }
+
+        let tests: Vec<Test> = vec![
+            Test {
+                table: PartitionTable::Gpt,
+                num: 1,
+                part: ManifestPartition {
+                    label: "foo".to_string(),
+                    size: Some("200M".to_string()),
+                    part_type: "8e".to_string(),
+                },
+                expected: "n\n1\n\n+200M\nw\n",
+            },
+            Test {
+                table: PartitionTable::Mbr,
+                num: 1,
+                part: ManifestPartition {
+                    label: "foo".to_string(),
+                    size: None,
+                    part_type: "8e".to_string(),
+                },
+                expected: "n\np\n1\n\n\nw\n",
+            },
+        ];
+
+        for test in tests {
+            let result = create_partition_cmd(&test.table, test.num, &test.part);
+            assert_eq!(test.expected, result);
+        }
     }
 
-    let tests: Vec<Test> = vec![
-        Test {
-            table: PartitionTable::Gpt,
-            num: 1,
-            part: ManifestPartition {
-                label: "foo".to_string(),
-                size: Some("200M".to_string()),
-                part_type: "8e".to_string(),
-            },
-            expected: "n\n1\n\n\n+200M\nw\n",
-        },
-        Test {
-            table: PartitionTable::Mbr,
-            num: 1,
-            part: ManifestPartition {
-                label: "foo".to_string(),
-                size: None,
-                part_type: "8e".to_string(),
-            },
-            expected: "n\np\n1\n\n\n\n\nw\n",
-        },
-    ];
+    #[test]
+    #[cfg(not(target_os = "windows"))]
+    #[cfg(not(target_os = "macos"))]
+    fn test_run_fdisk_cmd() {
+        use crate::utils::shell::exec;
 
-    for test in tests {
-        let result = create_partition_cmd(&test.table, test.num, &test.part);
-        assert_eq!(test.expected, result);
+        let fname = "fake-disk.img";
+        exec(
+            "dd",
+            &["if=/dev/zero", &format!("of={fname}"), "bs=100M", "count=5"],
+        )
+        .expect("failed to create blank disk");
+
+        let create_gpt_table = create_table_cmd(fname, &PartitionTable::Gpt);
+        run_fdisk_cmd(fname, &create_gpt_table).expect("failed to create gpt table");
+
+        let manifest_p1 = ManifestPartition {
+            label: "efi".to_string(),
+            size: Some("20M".to_string()),
+            part_type: "1".to_string(),
+        };
+
+        let manifest_p2 = ManifestPartition {
+            label: "root_part".to_string(),
+            size: None,
+            part_type: "8e".to_string(),
+        };
+
+        let create_gpt_p1 = create_partition_cmd(&PartitionTable::Gpt, 1, &manifest_p1);
+        let create_gpt_p2 = create_partition_cmd(&PartitionTable::Gpt, 2, &manifest_p2);
+
+        run_fdisk_cmd(fname, &create_gpt_p1).expect("failed to create p1");
+        run_fdisk_cmd(fname, &create_gpt_p2).expect("failed to create p2");
+
+        let set_type_p1 = set_partition_type_cmd(1, &manifest_p1);
+        let set_type_p2 = set_partition_type_cmd(2, &manifest_p2);
+
+        run_fdisk_cmd(fname, &set_type_p1).expect("failed to set p1 type");
+        run_fdisk_cmd(fname, &set_type_p2).expect("failed to set p2 type");
     }
-}
-
-#[test]
-#[cfg(not(target_os = "windows"))]
-#[cfg(not(target_os = "macos"))]
-fn test_run_fdisk_cmd() {
-    use crate::utils::shell::exec;
-
-    let fname = "fake-disk.img";
-    exec(
-        "dd",
-        &["if=/dev/zero", &format!("of={fname}"), "bs=10M", "count=10"],
-    )
-    .expect("failed to create blank disk");
-
-    let create_gpt_table = create_table_cmd(fname, &PartitionTable::Gpt);
-    run_fdisk_cmd(fname, &create_gpt_table).expect("failed to create gpt table");
-
-    let manifest_p1 = ManifestPartition {
-        label: "efi".to_string(),
-        size: None,
-        part_type: "1".to_string(),
-    };
-
-    let manifest_p2 = ManifestPartition {
-        label: "root_part".to_string(),
-        size: None,
-        part_type: "8e".to_string(),
-    };
-
-    let create_gpt_p1 = create_partition_cmd(&PartitionTable::Gpt, 1, &manifest_p1);
-    let create_gpt_p2 = create_partition_cmd(&PartitionTable::Gpt, 2, &manifest_p2);
-
-    run_fdisk_cmd(fname, &create_gpt_p1).expect("failed to create p1");
-    run_fdisk_cmd(fname, &create_gpt_p2).expect("failed to create p2");
-
-    let set_type_p1 = set_partition_type_cmd(1, &manifest_p1);
-    let set_type_p2 = set_partition_type_cmd(2, &manifest_p2);
-
-    run_fdisk_cmd(fname, &set_type_p1).expect("failed to set p1 type");
-    run_fdisk_cmd(fname, &set_type_p2).expect("failed to set p2 type");
 }
