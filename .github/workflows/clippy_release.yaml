@@ -1,0 +1,27 @@
+name: Release clippy warnings
+
+on:
+  push:
+    tags: ["**"]
+    
+jobs:
+  test:
+    name: Find clippy warnings in release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          profile: minimal
+          components: clippy
+          override: true # Make cargo workflows uses nightly
+
+      - name: Find warnings with `cargo clippy -- -D warnings`
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: -- -D warnings

@@ -1,0 +1,26 @@
+name: Lint code with clippy
+
+on: [push]
+    
+jobs:
+  test:
+    name: Lint Rust code
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          profile: minimal
+          components: clippy
+          override: true # Make cargo workflows uses nightly
+
+      - name: Check with clippy
+        uses: actions-rs/clippy-check@v1
+        with:
+          args: --all-features
+          token: ${{ secrets.GITHUB_TOKEN }}
+        
