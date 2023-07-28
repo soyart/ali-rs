@@ -1,10 +1,11 @@
 use crate::errors::AyiError;
 use crate::linux;
 use crate::manifest;
+use crate::utils::fs::file_exists;
 
 pub fn do_disks(disks: &[manifest::ManifestDisk]) -> Result<(), AyiError> {
     for disk in disks.iter() {
-        if !linux::file_exists(&disk.device) {
+        if !file_exists(&disk.device) {
             return Err(AyiError::NoSuchDevice(disk.device.to_string()));
         }
     }

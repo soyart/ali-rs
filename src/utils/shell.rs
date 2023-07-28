@@ -25,6 +25,7 @@ pub fn exec(cmd: &str, args: &[&str]) -> Result<(), AyiError> {
 
 #[test]
 fn test_exec() {
-    exec("ls", &["-a", "-l"]).expect("failed to execute `ls -a -l` command");
-    exec("ls", &["-al"]).expect("failed to execute `ls -al` command");
+    exec("echo", &["hello, world!"]).expect("failed to execute `echo \"hello, world!\"` command");
+    exec("echo", &["hello", " world!"])
+        .expect("failed to execute `echo \"hello\" \" world!\"` command");
 }
