@@ -1,4 +1,5 @@
 #![feature(fs_try_exists)]
+#![feature(exit_status_error)]
 
 mod cli;
 mod disks;

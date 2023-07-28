@@ -12,7 +12,7 @@ pub enum AyiError {
     BadManifest(String),
 
     #[error("shell command failed")]
-    CmdFailed(std::io::Error, String),
+    CmdFailed(Option<std::io::Error>, String),
 
     #[error("bad cli arguments")]
     BadArgs(String),
