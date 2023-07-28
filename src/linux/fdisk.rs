@@ -78,7 +78,7 @@ fn assemble_and_w(slice: &[&str]) -> String {
     let mut joined = slice.join("\n");
     joined.push_str("\nw\n");
 
-    return joined;
+    joined
 }
 
 #[cfg(test)]
