@@ -48,7 +48,7 @@ pub fn run_fdisk_cmd(device: &str, cmd: &str) -> Result<(), AyiError> {
 
 fn join_newlines(slice: &[&str]) -> String {
     let mut joined = slice.join("\n");
-    joined.push_str("\n");
+    joined.push_str("\nw\n");
 
     return joined;
 }
@@ -71,7 +71,7 @@ fn test_create_part_cmd() {
                 size: Some("200M".to_string()),
                 part_type: "8e".to_string(),
             },
-            expected: "n\n1\n\n\n+200M\nt\n8e\n",
+            expected: "n\n1\n\n\n+200M\nt\n8e\nw\n",
         },
         Test {
             table: PartitionTable::Mbr,
@@ -81,7 +81,7 @@ fn test_create_part_cmd() {
                 size: None,
                 part_type: "8e".to_string(),
             },
-            expected: "n\np\n1\n\n\n\n\nt\n8e\n",
+            expected: "n\np\n1\n\n\n\n\nt\n8e\nw\n",
         },
     ];
 
@@ -89,4 +89,26 @@ fn test_create_part_cmd() {
         let result = create_partition_cmd(&test.table, test.num, &test.part);
         assert_eq!(test.expected, result);
     }
+}
+
+#[test]
+#[cfg(not(target_os = "windows"))]
+#[cfg(not(target_os = "macos"))]
+fn test_run_fdisk_cmd() {
+    use crate::utils::shell::exec;
+
+    let fname = "fake-disk.img";
+    exec(
+        "dd",
+        &[
+            "if = /dev/zero",
+            &format!("of={fname}"),
+            "bs=10M",
+            "count=10",
+        ],
+    )
+    .expect("failed to create blank disk");
+
+    let create_gpt_table = create_table_cmd(fname, &PartitionTable::Gpt);
+    run_fdisk_cmd(fname, &create_gpt_table).expect("failed to create gpt table");
 }
