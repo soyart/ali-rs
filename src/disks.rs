@@ -1,7 +1,6 @@
 use crate::errors::AyiError;
 use crate::linux;
 use crate::manifest;
-use crate::utils::fs::file_exists;
 
 pub fn do_disks(disks: &[manifest::ManifestDisk]) -> Result<(), AyiError> {
     for disk in disks.iter() {

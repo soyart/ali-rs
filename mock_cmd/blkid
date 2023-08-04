@@ -1,0 +1,8 @@
+#!/bin/bash
+
+cat << EOF
+/dev/mapper/archvg-swaplv: LABEL="archswap" UUID="8737b84e-e1b5-4782-b9d3-c7e889eedc57" TYPE="swap"
+/dev/mapper/archvg-rootlv: LABEL="archrootfs" UUID="46fb118b-7215-4fe5-85a3-efb9d935bcfe" UUID_SUB="367ac990-0570-4f5f-9642-f58c9c9e235d" BLOCK_SIZE="4096" TYPE="btrfs"
+/dev/vda1: UUID="AAYqGG-sPTf-Kymm-I2fb-EAeK-WSsl-5cNdKf" TYPE="LVM2_member" PARTUUID="c6bbd30c-01"
+
+EOF

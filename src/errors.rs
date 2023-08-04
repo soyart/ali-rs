@@ -19,4 +19,7 @@ pub enum AyiError {
 
     #[error("not implemented")]
     NotImplemented,
+
+    #[error("ayi-rs bug")]
+    AyiRsBug(String),
 }

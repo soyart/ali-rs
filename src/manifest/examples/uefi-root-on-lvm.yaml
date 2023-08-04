@@ -1,0 +1,91 @@
+hostname: arch-server
+timezone: Asia/Bangkok
+
+# Create GPT table on /dev/vda,
+# and create 2 partitions:
+# (1) vda1 => 300M, of type EF00
+# (2) vda2 => all blocks after end of vda1, of type 8E
+#
+# Note: disks.partitions.label is unused
+disks:
+  - device: /dev/vda
+    table: gpt
+    partitions:
+      - label: boot
+        size: 300M
+        type: ef # EFI
+      - label: root
+        type: 8e # Linux LVM
+
+# Create/prepare device mapper
+dm:
+  - type: lvm
+    # Create a LVM PV device on /dev/vda2
+    pvs:
+      - /dev/vda2
+
+    # Create LVM VGs
+    vgs:
+      # Create LVM VG `archvg` with /dev/vda2 as the underlying PV
+      - name: archvg
+        pvs:
+          - /dev/vda2
+    # Create LVM LVs
+    lvs:
+      # Create /dev/archvg/swaplv of size 8GB
+      - name: swaplv
+        vg: archvg
+        size: 8G
+      # Create /dev/archvg/rootlv of size archvg - size(swaplv)
+      - name: rootlv
+        vg: archvg
+
+# Create root filesystem on /dev/archvg/rootlv
+# with command:
+# mkfs.btrfs -L /dev/archvg/rootlv
+#
+# And mount it to /mnt of live system with:
+# mount -o compress:zstd:3 /dev/archvg/roolv
+rootfs:
+  device: /dev/archvg/rootlv # Use the LVM device created above
+  fstype: btrfs
+  fsopts: -L rootfs
+  mntopts: "compress:zstd:3"
+
+# Create extra filesystems
+# This time, it's a boot partition:
+# mkfs.vfat -F 32 -L BOOT /dev/vda1
+#
+# And mount it with:
+# mount /dev/vda1 /boot
+fs:
+  - device: /dev/vda1
+    fstype: vfat
+    fsopts: -F 32 -L BOOT
+    mnt: /boot
+    mntopts:
+
+# Create swap with:
+# mkswap /dev/archvg/swaplv
+#
+# And mount it with:
+# swapon /dev/archvg/swaplv
+swap:
+  - /dev/archvg/swaplv
+
+pacstrap:
+  - base
+  - base-devel
+  - git
+  - helix
+
+# Commands to run in chroot
+chroot:
+  - "bootctl --path=/boot install"
+  - "curl https://example.com/arch/boot-entries > /boot/loader/entries/main.conf"
+  - "curl https://example.com/arch/boot-entries > setup-boot.sh"
+  - "chmod +x setup-boot.sh"
+  - "./setup-boot.sh"
+
+# Command to run on the live system
+postinstall:

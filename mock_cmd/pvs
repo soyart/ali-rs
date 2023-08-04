@@ -1,0 +1,10 @@
+#!/bin/bash
+
+cat << EOF
+
+  PV         VG     Fmt  Attr PSize   PFree
+  /dev/vda1  archvg lvm2 a--  <25.00g    0
+  /dev/sda1  somevg lvm2 a--  <10.00g    0
+  /dev/sda2  archvg lvm2 a--  <10.00g    0
+
+EOF

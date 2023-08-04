@@ -1,0 +1,10 @@
+#!/bin/bash
+
+cat << EOF
+
+  LV     VG     Attr       LSize    Pool Origin Data%  Meta%  Move Log Cpy%Sync Convert
+  rootlv archvg -wi-ao----   49.00g
+  swaplv archvg -wi-ao---- 1020.00m
+  datalv somevg -wi-ao----   10.00g
+
+EOF
