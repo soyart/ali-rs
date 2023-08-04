@@ -132,11 +132,15 @@ pub fn validate_blk(
     cmd_lvs: &str,   // Allow override in tests
     cmd_pvs: &str,   // Allow override in tests
 ) -> Result<(), AyiError> {
+    // Get full blkid output
+    let output_blkid = run_blkid(cmd_blkid)?;
+
     // A hash map of existing block device and its filesystems
-    let mut existing_fs_devs = trace_existing_fs(cmd_blkid);
+    let existing_fs_devs = trace_existing_fs(&output_blkid);
+
     // Get all paths of existing LVM devices.
     // Unknown disks are not tracked - only LVM devices and their bases.
-    let mut existing_devs = trace_existing_lvms(cmd_lvs, cmd_pvs);
+    let existing_devs = trace_existing_lvms(cmd_lvs, cmd_pvs);
 
     // manifest_devs tracks devices and their dependencies in the manifest,
     // with key being the lowest-level device known.
@@ -246,7 +250,7 @@ pub fn validate_blk(
                     continue 'validate_dm;
                 }
 
-                for (lvm_base, lists) in existing_devs.iter_mut() {
+                for (lvm_base, lists) in existing_devs.iter() {
                     for list in lists {
                         let top_most = list
                             .back()
@@ -269,13 +273,14 @@ pub fn validate_blk(
                             )));
                         }
 
+                        // Copy and update list
+                        // from existing_devs to manifest_devs
+                        let mut list = list.clone();
                         list.push_back(BlockDev {
                             device: luks_path.clone(),
                             device_type: TYPE_LUKS,
                         });
-
-                        // Copy list from existing_devs to manifest_devs
-                        manifest_devs.insert(luks_base_path.clone(), list.clone());
+                        manifest_devs.insert(luks_base_path.clone(), list);
 
                         continue 'validate_dm;
                     }
@@ -349,7 +354,7 @@ pub fn validate_blk(
                         continue 'validate_pv;
                     }
 
-                    for lists in existing_devs.values_mut() {
+                    for lists in existing_devs.values() {
                         for list in lists {
                             let top_most = list
                                 .back()
@@ -372,12 +377,12 @@ pub fn validate_blk(
                                 )));
                             }
 
+                            let mut list = list.clone();
                             list.push_back(BlockDev {
                                 device: pv_path.clone(),
                                 device_type: TYPE_PV,
                             });
-
-                            manifest_devs.insert(pv_path.clone(), list.clone());
+                            manifest_devs.insert(pv_path.clone(), list);
 
                             continue 'validate_pv;
                         }
@@ -446,7 +451,7 @@ pub fn validate_blk(
                             continue 'validate_vg_pv;
                         }
 
-                        for lists in existing_devs.values_mut() {
+                        for lists in existing_devs.values() {
                             for list in lists {
                                 let top_most = list
                                     .back()
@@ -470,6 +475,7 @@ pub fn validate_blk(
                                     )));
                                 }
 
+                                let mut list = list.clone();
                                 list.push_back(vg_dev.clone());
                                 manifest_devs.insert(pv_base.clone(), list.clone());
 
@@ -525,7 +531,7 @@ pub fn validate_blk(
                         continue 'validate_lv;
                     }
 
-                    for (base, lists) in existing_devs.iter_mut() {
+                    for (base, lists) in existing_devs.iter() {
                         for list in lists {
                             let top_most = list
                                 .back()
@@ -548,8 +554,9 @@ pub fn validate_blk(
                                 )));
                             }
 
+                            let mut list = list.clone();
                             list.push_back(lv_dev);
-                            manifest_devs.insert(base.clone(), list.clone());
+                            manifest_devs.insert(base.clone(), list);
 
                             continue 'validate_lv;
                         }
@@ -565,14 +572,21 @@ pub fn validate_blk(
 
     // Holds a tuple of string (block device name)
     // and its suitability to host a filesystem (true).
+    //
+    // We collect all ready devices into fs_ready_devs,
+    // and then use it to validate manifest filesystems
     let mut fs_ready_devs = HashSet::<(String, bool)>::new();
 
-    // TODO: trace fs_ready_devs
-    for fs_dev in existing_fs_devs.keys() {
-        fs_ready_devs.insert((fs_dev.clone(), true));
+    // A hash map of existing block device that can be directly
+    // formatted with a filesystem
+    let existing_fs_ready_devs = trace_existing_fs_ready(&output_blkid);
+
+    // Copy existing fs-ready devices from fs_ready_devs
+    for sys_fs_dev in existing_fs_ready_devs.keys() {
+        fs_ready_devs.insert((sys_fs_dev.clone(), true));
     }
 
-    let mut msg = "rootfs validation failed";
+    let mut msg = "fs-ready device validation failed";
     for list in manifest_devs.values_mut() {
         let top_most = list
             .back()
@@ -580,64 +594,52 @@ pub fn validate_blk(
 
         let is_fs_ready = is_fs_base(&top_most.device_type);
 
-        // If device was already in use on the system as filesystem
-        if !fs_ready_devs.insert((top_most.device.clone(), is_fs_ready)) {
-            let existing_fs = existing_fs_devs
+        // If duplicate, then insertion will return false
+        let duplicate = !fs_ready_devs.insert((top_most.device.clone(), is_fs_ready));
+        if duplicate {
+            // If device was already in use on the system as filesystem
+            let sys_fs = existing_fs_devs
                 .get(&top_most.device)
                 .expect("missing device in fs_devs");
 
             return Err(AyiError::BadManifest(format!(
-                "{msg}: filesystem device {} is already used as {existing_fs}",
+                "{msg}: filesystem device {} is already used as {sys_fs}",
                 top_most.device
             )));
         }
     }
 
-    if fs_ready_devs.contains(&(manifest.rootfs.device.clone(), true)) {
+    msg = "rootfs validation failed";
+    if !fs_ready_devs.contains(&(manifest.rootfs.device.clone(), true)) {
         return Err(AyiError::BadManifest(format!(
-            "{msg}: no top-level device ready for rootfs: {}",
+            "{msg}: no top-level fs-ready device for rootfs: {}",
             manifest.rootfs.device,
         )));
     }
-
-    existing_fs_devs.insert(
-        manifest.rootfs.device.clone(),
-        BlockDevType::Fs(manifest.rootfs.fs_type.clone()),
-    );
 
     msg = "fs validation failed";
     for (i, fs) in manifest.filesystems.iter().enumerate() {
         if !fs_ready_devs.contains(&(fs.device.clone(), true)) {
             return Err(AyiError::BadManifest(format!(
-                "{msg}: no device {} for fs #{} ({})",
-                manifest.rootfs.device,
+                "{msg}: device {} for fs #{} ({}) is not fs-ready",
+                fs.device,
                 i + 1,
                 fs.fs_type,
             )));
         }
-
-        existing_fs_devs.insert(fs.device.clone(), BlockDevType::Fs(fs.fs_type.clone()));
     }
 
     msg = "swap validation failed";
     if let Some(devices) = manifest.swap.clone() {
         for (i, device) in devices.into_iter().enumerate() {
-            // dev_type already has some filesystem
+            // device already has some filesystem
             if let Some(BlockDevType::Fs(fs_type)) = existing_fs_devs.get(&device) {
-                if fs_type.as_str() == "swap" {
-                    println!("found duplicate swap device {device}, ignoring");
-
-                    continue;
-                }
-
                 return Err(AyiError::BadManifest(format!(
-                    "{msg}: swap device {device} already contains fs {fs_type}"
+                    "{msg}: swap device {device} on the system already contains fs {fs_type}"
                 )));
             }
 
             if fs_ready_devs.contains(&(device.clone(), true)) {
-                existing_fs_devs.insert(device.clone(), BlockDevType::Fs("swap".to_string()));
-
                 continue;
             }
 
@@ -657,24 +659,68 @@ pub fn validate_blk(
 
 // For parsing Linux blkid output
 #[derive(Serialize, Deserialize)]
-struct OutputBlkid {
+struct EntryBlkid {
     #[serde(rename = "UUID")]
-    uuid: String,
+    uuid: Option<String>,
+
+    #[serde(rename = "PARTUUID")]
+    part_uuid: Option<String>,
 
     #[serde(rename = "TYPE")]
-    dev_type: String,
+    dev_type: Option<String>,
 
     #[serde(rename = "LABEL")]
     label: Option<String>,
 }
 
-// Trace existing block devices with filesystems. Non-FS devices will be omitted.
-fn trace_existing_fs(blkid_cmd: &str) -> HashMap<String, BlockDevType> {
-    let cmd_blkid = Command::new(blkid_cmd)
-        .output()
-        .expect("failed to run `blkid`");
+fn run_blkid(cmd_blkid: &str) -> Result<String, AyiError> {
+    let cmd_blkid = Command::new(cmd_blkid).output().map_err(|err| {
+        AyiError::CmdFailed(Some(err), format!("blkid command {cmd_blkid} failed"))
+    })?;
 
-    let output_blkid = String::from_utf8(cmd_blkid.stdout).expect("output is not utf-8");
+    String::from_utf8(cmd_blkid.stdout)
+        .map_err(|err| AyiError::NayiRsBug(format!("blkid output not string: {}", err.to_string())))
+}
+
+fn trace_existing_fs_ready(output_blkid: &str) -> HashMap<String, BlockDevType> {
+    let lines_blkid: Vec<&str> = output_blkid.lines().collect();
+
+    let mut fs_ready = HashMap::new();
+    for line in lines_blkid {
+        if line.len() == 0 {
+            continue;
+        }
+
+        let line_elems: Vec<&str> = line.split(':').collect();
+        let dev_name = line_elems[0];
+
+        // Make dev_data looks like TOML
+        // KEY1=VAL1
+        // KEY2=VAL2
+
+        let dev_entry: Vec<&str> = line_elems[1].split_whitespace().collect();
+        let dev_entry = dev_entry.join("\n");
+
+        let dev_entry: EntryBlkid =
+            toml::from_str(&dev_entry).expect("failed to unmarshal blkid output");
+
+        // Non-LVM fs-ready devs should not have type yet
+        if dev_entry.dev_type.is_some() {
+            continue;
+        }
+
+        if dev_entry.part_uuid.is_none() {
+            continue;
+        }
+
+        fs_ready.insert(dev_name.to_string(), BlockDevType::DiskOrPart);
+    }
+
+    fs_ready
+}
+
+// Trace existing block devices with filesystems. Non-FS devices will be omitted.
+fn trace_existing_fs(output_blkid: &str) -> HashMap<String, BlockDevType> {
     let lines_blkid: Vec<&str> = output_blkid.lines().collect();
 
     let mut fs = HashMap::new();
@@ -690,19 +736,17 @@ fn trace_existing_fs(blkid_cmd: &str) -> HashMap<String, BlockDevType> {
         // KEY1=VAL1
         // KEY2=VAL2
 
-        let dev_data: Vec<&str> = line_elems[1].split_whitespace().collect();
-        let dev_data = dev_data.join("\n");
+        let dev_entry: Vec<&str> = line_elems[1].split_whitespace().collect();
+        let dev_entry = dev_entry.join("\n");
 
-        let dev_data: OutputBlkid =
-            toml::from_str(&dev_data).expect("failed to unmarshal blkid output");
+        let dev_entry: EntryBlkid =
+            toml::from_str(&dev_entry).expect("failed to unmarshal blkid output");
 
-        match dev_data.dev_type.as_str() {
-            "squashfs" | "LVM2_member" | "dos" | "gpt" => {
-                continue;
-            }
-            _ => {
-                fs.insert(dev_name.to_string(), BlockDevType::Fs(dev_data.dev_type));
-            }
+        if let Some(dev_type) = dev_entry.dev_type {
+            match dev_type.as_str() {
+                "iso9660" | "LVM2_member" | "crypto_LUKS" | "squashfs" => continue,
+                _ => fs.insert(dev_name.to_string(), BlockDevType::Fs(dev_type.to_string())),
+            };
         }
     }
 
@@ -846,153 +890,174 @@ impl std::fmt::Display for BlockDevType {
     }
 }
 
-#[test]
-fn test_trace_existing_fs() {
-    // Hard-coded expected values from ./mock_cmd/blkid
-    let mut expected_results = HashMap::new();
-    expected_results.insert(
-        "/dev/mapper/archvg-swaplv".to_string(),
-        BlockDevType::Fs("swap".to_string()),
-    );
-    expected_results.insert(
-        "/dev/mapper/archvg-rootlv".to_string(),
-        BlockDevType::Fs("btrfs".to_string()),
-    );
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    let traced = trace_existing_fs("./mock_cmd/blkid");
-    for (k, v) in traced.into_iter() {
-        let expected = expected_results.get(&k);
-        assert!(expected.is_some());
+    #[test]
+    fn test_trace_existing_fs_ready() {
+        let mut expected_results = HashMap::new();
+        expected_results.insert("/dev/vda2".to_string(), BlockDevType::DiskOrPart);
 
-        assert_eq!(expected.unwrap().clone(), v);
-    }
-}
+        let output_blkid = run_blkid("./mock_cmd/blkid").expect("run_blkid failed");
+        let traced = trace_existing_fs_ready(&output_blkid);
+        for (k, v) in traced.into_iter() {
+            let expected = expected_results.get(&k);
 
-#[test]
-fn test_trace_existing_lvms() {
-    // Hard-coded expected values from ./mock_cmd/{lvs,pvs}
-    let traced = trace_existing_lvms("./mock_cmd/lvs", "./mock_cmd/pvs");
-
-    // Hard-coded expected values
-    let lists_vda1 = vec![
-        LinkedList::from([
-            BlockDev {
-                device: "/dev/vda1".to_string(),
-                device_type: TYPE_UNKNOWN,
-            },
-            BlockDev {
-                device: "/dev/vda1".to_string(),
-                device_type: TYPE_PV,
-            },
-            BlockDev {
-                device: "/dev/archvg".to_string(),
-                device_type: TYPE_VG,
-            },
-            BlockDev {
-                device: "/dev/archvg/rootlv".to_string(),
-                device_type: TYPE_LV,
-            },
-        ]),
-        LinkedList::from([
-            BlockDev {
-                device: "/dev/vda1".to_string(),
-                device_type: TYPE_UNKNOWN,
-            },
-            BlockDev {
-                device: "/dev/vda1".to_string(),
-                device_type: TYPE_PV,
-            },
-            BlockDev {
-                device: "/dev/archvg".to_string(),
-                device_type: TYPE_VG,
-            },
-            BlockDev {
-                device: "/dev/archvg/swaplv".to_string(),
-                device_type: TYPE_LV,
-            },
-        ]),
-    ];
-
-    let lists_sda2 = vec![
-        LinkedList::from([
-            BlockDev {
-                device: "/dev/sda2".to_string(),
-                device_type: TYPE_UNKNOWN,
-            },
-            BlockDev {
-                device: "/dev/sda2".to_string(),
-                device_type: TYPE_PV,
-            },
-            BlockDev {
-                device: "/dev/archvg".to_string(),
-                device_type: TYPE_VG,
-            },
-            BlockDev {
-                device: "/dev/archvg/rootlv".to_string(),
-                device_type: TYPE_LV,
-            },
-        ]),
-        LinkedList::from([
-            BlockDev {
-                device: "/dev/sda2".to_string(),
-                device_type: TYPE_UNKNOWN,
-            },
-            BlockDev {
-                device: "/dev/sda2".to_string(),
-                device_type: TYPE_PV,
-            },
-            BlockDev {
-                device: "/dev/archvg".to_string(),
-                device_type: TYPE_VG,
-            },
-            BlockDev {
-                device: "/dev/archvg/swaplv".to_string(),
-                device_type: TYPE_LV,
-            },
-        ]),
-    ];
-
-    let lists_sda1 = vec![LinkedList::from([
-        BlockDev {
-            device: "/dev/sda1".to_string(),
-            device_type: TYPE_UNKNOWN,
-        },
-        BlockDev {
-            device: "/dev/sda1".to_string(),
-            device_type: TYPE_PV,
-        },
-        BlockDev {
-            device: "/dev/somevg".to_string(),
-            device_type: TYPE_VG,
-        },
-        BlockDev {
-            device: "/dev/somevg/datalv".to_string(),
-            device_type: TYPE_LV,
-        },
-    ])];
-
-    for (k, v) in traced {
-        let mut expecteds = match k.as_str() {
-            "/dev/vda1" => lists_vda1.clone(),
-            "/dev/sda1" => lists_sda1.clone(),
-            "/dev/sda2" => lists_sda2.clone(),
-            _ => panic!("bad key {k}"),
-        };
-
-        for (i, list) in v.into_iter().enumerate() {
-            let expected = expecteds
-                .get_mut(i)
-                .expect(&format!("no such expected list {i} for key {k}"));
-
-            for (j, item) in list.into_iter().enumerate() {
-                let expected_item = expected.pop_front().expect(&format!(
-                    "no such expected item {j} on list {i} for key {k}",
-                ));
-
-                assert_eq!(expected_item, item);
-            }
+            assert!(expected.is_some());
+            assert_eq!(expected.unwrap().clone(), v);
         }
+    }
 
-        println!();
+    #[test]
+    fn test_trace_existing_fs() {
+        // Hard-coded expected values from ./mock_cmd/blkid
+        let mut expected_results = HashMap::new();
+        expected_results.insert(
+            "/dev/mapper/archvg-swaplv".to_string(),
+            BlockDevType::Fs("swap".to_string()),
+        );
+        expected_results.insert(
+            "/dev/mapper/archvg-rootlv".to_string(),
+            BlockDevType::Fs("btrfs".to_string()),
+        );
+
+        let output_blkid = run_blkid("./mock_cmd/blkid").expect("run_blkid failed");
+        let traced = trace_existing_fs(&output_blkid);
+        for (k, v) in traced.into_iter() {
+            let expected = expected_results.get(&k);
+            assert!(expected.is_some());
+
+            assert_eq!(expected.unwrap().clone(), v);
+        }
+    }
+
+    #[test]
+    fn test_trace_existing_lvms() {
+        // Hard-coded expected values from ./mock_cmd/{lvs,pvs}
+        let traced = trace_existing_lvms("./mock_cmd/lvs", "./mock_cmd/pvs");
+
+        // Hard-coded expected values
+        let lists_vda1 = vec![
+            LinkedList::from([
+                BlockDev {
+                    device: "/dev/vda1".to_string(),
+                    device_type: TYPE_UNKNOWN,
+                },
+                BlockDev {
+                    device: "/dev/vda1".to_string(),
+                    device_type: TYPE_PV,
+                },
+                BlockDev {
+                    device: "/dev/archvg".to_string(),
+                    device_type: TYPE_VG,
+                },
+                BlockDev {
+                    device: "/dev/archvg/rootlv".to_string(),
+                    device_type: TYPE_LV,
+                },
+            ]),
+            LinkedList::from([
+                BlockDev {
+                    device: "/dev/vda1".to_string(),
+                    device_type: TYPE_UNKNOWN,
+                },
+                BlockDev {
+                    device: "/dev/vda1".to_string(),
+                    device_type: TYPE_PV,
+                },
+                BlockDev {
+                    device: "/dev/archvg".to_string(),
+                    device_type: TYPE_VG,
+                },
+                BlockDev {
+                    device: "/dev/archvg/swaplv".to_string(),
+                    device_type: TYPE_LV,
+                },
+            ]),
+        ];
+
+        let lists_sda2 = vec![
+            LinkedList::from([
+                BlockDev {
+                    device: "/dev/sda2".to_string(),
+                    device_type: TYPE_UNKNOWN,
+                },
+                BlockDev {
+                    device: "/dev/sda2".to_string(),
+                    device_type: TYPE_PV,
+                },
+                BlockDev {
+                    device: "/dev/archvg".to_string(),
+                    device_type: TYPE_VG,
+                },
+                BlockDev {
+                    device: "/dev/archvg/rootlv".to_string(),
+                    device_type: TYPE_LV,
+                },
+            ]),
+            LinkedList::from([
+                BlockDev {
+                    device: "/dev/sda2".to_string(),
+                    device_type: TYPE_UNKNOWN,
+                },
+                BlockDev {
+                    device: "/dev/sda2".to_string(),
+                    device_type: TYPE_PV,
+                },
+                BlockDev {
+                    device: "/dev/archvg".to_string(),
+                    device_type: TYPE_VG,
+                },
+                BlockDev {
+                    device: "/dev/archvg/swaplv".to_string(),
+                    device_type: TYPE_LV,
+                },
+            ]),
+        ];
+
+        let lists_sda1 = vec![LinkedList::from([
+            BlockDev {
+                device: "/dev/sda1".to_string(),
+                device_type: TYPE_UNKNOWN,
+            },
+            BlockDev {
+                device: "/dev/sda1".to_string(),
+                device_type: TYPE_PV,
+            },
+            BlockDev {
+                device: "/dev/somevg".to_string(),
+                device_type: TYPE_VG,
+            },
+            BlockDev {
+                device: "/dev/somevg/datalv".to_string(),
+                device_type: TYPE_LV,
+            },
+        ])];
+
+        for (k, v) in traced {
+            let mut expecteds = match k.as_str() {
+                "/dev/vda1" => lists_vda1.clone(),
+                "/dev/sda1" => lists_sda1.clone(),
+                "/dev/sda2" => lists_sda2.clone(),
+                _ => panic!("bad key {k}"),
+            };
+
+            for (i, list) in v.into_iter().enumerate() {
+                let expected = expecteds
+                    .get_mut(i)
+                    .expect(&format!("no such expected list {i} for key {k}"));
+
+                for (j, item) in list.into_iter().enumerate() {
+                    let expected_item = expected.pop_front().expect(&format!(
+                        "no such expected item {j} on list {i} for key {k}",
+                    ));
+
+                    assert_eq!(expected_item, item);
+                }
+            }
+
+            println!();
+        }
     }
 }
