@@ -9,13 +9,8 @@ use crate::manifest::{Dm, Manifest};
 use crate::utils::fs::file_exists;
 use crate::utils::shell::in_path;
 
-pub struct ValidationResult {
-    pub has_lvm: bool,   // Add lvm2 to manifest.pacstrap
-    pub has_btrfs: bool, // Add btrfs-progs to manifest.pacstrap
-}
-
-pub fn validate(manifest: &Manifest) -> Result<ValidationResult, AyiError> {
-    let result = validate_blk(&manifest, "blkid", "lvs", "pvs")?;
+pub fn validate(manifest: &Manifest) -> Result<(), AyiError> {
+    validate_blk(&manifest, "blkid", "lvs", "pvs")?;
 
     let mkfs_rootfs = &format!("mkfs.{}", manifest.rootfs.fs_type);
     if !in_path(mkfs_rootfs) {
@@ -42,7 +37,7 @@ pub fn validate(manifest: &Manifest) -> Result<ValidationResult, AyiError> {
         )));
     }
 
-    Ok(result)
+    Ok(())
 }
 
 #[derive(Debug, PartialEq, Eq, std::hash::Hash, Clone)]
@@ -136,12 +131,7 @@ pub fn validate_blk(
     cmd_blkid: &str, // Allow override in tests
     cmd_lvs: &str,   // Allow override in tests
     cmd_pvs: &str,   // Allow override in tests
-) -> Result<ValidationResult, AyiError> {
-    let mut result = ValidationResult {
-        has_lvm: false,
-        has_btrfs: false,
-    };
-
+) -> Result<(), AyiError> {
     // A hash map of existing block device and its filesystems
     let mut existing_fs_devs = trace_existing_fs(cmd_blkid);
     // Get all paths of existing LVM devices.
@@ -314,7 +304,6 @@ pub fn validate_blk(
             // Validate LVM devices from PVs -> VGs -> LVs
             Dm::Lvm(lvm) => {
                 let mut msg = "lvm pv validation failed";
-                result.has_lvm = true;
 
                 'validate_pv: for pv_path in lvm.pvs.iter() {
                     // Validate LVM PV devices
@@ -611,10 +600,6 @@ pub fn validate_blk(
         )));
     }
 
-    if manifest.rootfs.fs_type.as_str() == "btrfs" {
-        result.has_btrfs = true;
-    }
-
     existing_fs_devs.insert(
         manifest.rootfs.device.clone(),
         BlockDevType::Fs(manifest.rootfs.fs_type.clone()),
@@ -629,10 +614,6 @@ pub fn validate_blk(
                 i + 1,
                 fs.fs_type,
             )));
-        }
-
-        if fs.fs_type.as_str() == "btrfs" {
-            result.has_btrfs = true;
         }
 
         existing_fs_devs.insert(fs.device.clone(), BlockDevType::Fs(fs.fs_type.clone()));
@@ -671,7 +652,7 @@ pub fn validate_blk(
         }
     }
 
-    Ok(result)
+    Ok(())
 }
 
 // For parsing Linux blkid output
