@@ -1,11 +1,14 @@
 pub mod validation;
 
+use std::collections::HashSet;
+
 use serde::{Deserialize, Serialize};
 
 use crate::errors::AyiError;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Manifest {
+    #[serde(alias = "name")]
     pub hostname: String,
     pub timezone: String,
 
@@ -13,16 +16,22 @@ pub struct Manifest {
     pub dm: Vec<Dm>,
     pub rootfs: ManifestRootFs,
 
-    #[serde(rename = "fs")]
+    #[serde(alias = "fs")]
     pub filesystems: Vec<ManifestFs>,
 
     pub swap: Option<Vec<String>>,
 
-    #[serde(rename = "pacstrap")]
-    pub pacstraps: Vec<String>,
+    #[serde(
+        alias = "pacstrap",
+        alias = "packages",
+        alias = "install",
+        alias = "installs"
+    )]
+    pub pacstraps: HashSet<String>,
 
-    pub chroot: Vec<String>,
-    pub postinstall: Vec<String>,
+    #[serde(alias = "arch-chroot")]
+    pub chroot: Option<Vec<String>>,
+    pub postinstall: Option<Vec<String>>,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -54,13 +63,16 @@ pub struct ManifestPartition {
 pub struct ManifestFs {
     pub device: String,
 
-    #[serde(rename = "fstype")]
+    #[serde(alias = "mount_point")]
+    pub mnt: String,
+
+    #[serde(alias = "fstype")]
     pub fs_type: String,
 
-    #[serde(rename = "fsopts")]
+    #[serde(alias = "fsopts")]
     pub fs_opts: String,
 
-    #[serde(rename = "mntopts")]
+    #[serde(alias = "mntopts")]
     pub mnt_opts: String,
 }
 

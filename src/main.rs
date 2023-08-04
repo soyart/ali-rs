@@ -23,6 +23,7 @@ fn main() -> Result<(), errors::AyiError> {
     update_manifest(&mut manifest);
 
     println!("{:?}", manifest);
+
     Ok(())
 }
 
@@ -59,14 +60,10 @@ fn update_manifest(manifest: &mut Manifest) {
     }
 
     if has_lvm {
-        if !manifest.pacstraps.contains(&lvm2) {
-            manifest.pacstraps.push(lvm2);
-        }
+        manifest.pacstraps.insert(lvm2);
     }
 
     if has_btrfs {
-        if !manifest.pacstraps.contains(&btrfs_progs) {
-            manifest.pacstraps.push(btrfs_progs);
-        }
+        manifest.pacstraps.insert(btrfs_progs);
     }
 }

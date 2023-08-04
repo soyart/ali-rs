@@ -56,6 +56,7 @@ rootfs:
   device: /dev/archvg/rootlv # Use the LVM device created above
   fstype: btrfs
   fsopts: -L rootfs
+  mnt: /
   mntopts: "compress:zstd:3"
 
 # Create extra filesystems
