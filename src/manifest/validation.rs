@@ -26,9 +26,9 @@ pub fn validate(manifest: &Manifest) -> Result<(), AyiError> {
 
     validate_blk(
         &manifest,
-        existing_fs_ready_devs,
-        existing_fs_devs,
-        existing_lvms,
+        &existing_fs_ready_devs,
+        &existing_fs_devs,
+        &existing_lvms,
     )?;
 
     let mkfs_rootfs = &format!("mkfs.{}", manifest.rootfs.fs_type);
@@ -147,9 +147,9 @@ fn is_fs_base(dev_type: &BlockDevType) -> bool {
 /// Validate storage defined in manifest.
 fn validate_blk(
     manifest: &Manifest,
-    existing_fs_ready_devs: HashMap<String, BlockDevType>, // Maps device path to fs type
-    existing_fs_devs: HashMap<String, BlockDevType>,       // Maps device path to device type
-    existing_lvms: HashMap<String, Vec<LinkedList<BlockDev>>>, // Maps pv path to all possible LV paths
+    existing_fs_ready_devs: &HashMap<String, BlockDevType>, // Maps device path to fs type
+    existing_fs_devs: &HashMap<String, BlockDevType>,       // Maps device path to device type
+    existing_lvms: &HashMap<String, Vec<LinkedList<BlockDev>>>, // Maps pv path to all possible LV paths
 ) -> Result<(), AyiError> {
     // manifest_devs tracks devices and their dependencies in the manifest,
     // with key being the lowest-level device known.
@@ -397,8 +397,28 @@ fn validate_blk(
                         }
                     }
 
+                    if existing_fs_ready_devs.contains_key(pv_path) {
+                        manifest_devs.insert(
+                            pv_path.clone(),
+                            LinkedList::from([
+                                BlockDev {
+                                    device: pv_path.to_string(),
+                                    device_type: TYPE_UNKNOWN,
+                                },
+                                BlockDev {
+                                    device: pv_path.to_string(),
+                                    device_type: TYPE_PV,
+                                },
+                            ]),
+                        );
+
+                        continue 'validate_pv;
+                    }
+
                     if !file_exists(pv_path) {
-                        return Err(AyiError::NoSuchDevice(pv_path.clone()));
+                        return Err(AyiError::BadManifest(format!(
+                            "{msg}: no such pv device: {pv_path}"
+                        )));
                     }
 
                     // TODO: This may introduce error if such file is not a proper block device.
@@ -591,6 +611,20 @@ fn validate_blk(
         fs_ready_devs.insert((sys_fs_dev.clone(), true));
     }
 
+    for lists in existing_lvms.values() {
+        for list in lists {
+            match list.back() {
+                None => continue,
+                Some(lvm_device) => match lvm_device.device_type {
+                    TYPE_LV => {
+                        fs_ready_devs.insert((lvm_device.device.to_string(), true));
+                    }
+                    _ => continue,
+                },
+            }
+        }
+    }
+
     let mut msg = "fs-ready device validation failed";
     for list in manifest_devs.values_mut() {
         let top_most = list
@@ -603,14 +637,12 @@ fn validate_blk(
         let duplicate = !fs_ready_devs.insert((top_most.device.clone(), is_fs_ready));
         if duplicate {
             // If device was already in use on the system as filesystem
-            let sys_fs = existing_fs_devs
-                .get(&top_most.device)
-                .expect("missing device in fs_devs");
-
-            return Err(AyiError::BadManifest(format!(
-                "{msg}: filesystem device {} is already used as {sys_fs}",
-                top_most.device
-            )));
+            if let Some(existing_fs) = existing_fs_devs.get(&top_most.device) {
+                return Err(AyiError::BadManifest(format!(
+                    "{msg}: filesystem device {} is already used as {existing_fs}",
+                    top_most.device,
+                )));
+            }
         }
     }
 
@@ -898,6 +930,8 @@ impl std::fmt::Display for BlockDevType {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::manifest::*;
+    use std::collections::HashSet;
 
     #[test]
     fn test_trace_existing_fs_ready() {
@@ -1063,6 +1097,261 @@ mod tests {
             }
 
             println!();
+        }
+    }
+
+    #[derive(Debug)]
+    struct Test {
+        manifest: Manifest,
+        existing_fs_ready_devs: HashMap<String, BlockDevType>,
+        existing_fs_devs: HashMap<String, BlockDevType>,
+        existing_lvms: HashMap<String, Vec<LinkedList<BlockDev>>>,
+    }
+
+    #[test]
+    fn test_validate_blk() {
+        let tests_should_ok = vec![
+            // Root on Btrfs /dev/sda1 (existing partition)
+            // Swap on /dev/nvme0n1p2 (existing partition)
+            Test {
+                manifest: Manifest {
+                    hostname: "foo".into(),
+                    timezone: "foo".into(),
+                    disks: vec![],
+                    dm: vec![],
+                    rootfs: ManifestRootFs(ManifestFs {
+                        device: "/dev/sda1".into(),
+                        mnt: "/".into(),
+                        fs_type: "btrfs".into(),
+                        fs_opts: "".into(),
+                        mnt_opts: "".into(),
+                    }),
+                    filesystems: vec![],
+                    swap: Some(vec!["/dev/nvme0n1p2".into()]),
+                    pacstraps: HashSet::new(),
+                    chroot: None,
+                    postinstall: None,
+                },
+                existing_fs_ready_devs: HashMap::from([
+                    ("/dev/sda1".into(), BlockDevType::DiskOrPart),
+                    ("/dev/nvme0n1p2".into(), BlockDevType::DiskOrPart),
+                ]),
+                existing_fs_devs: HashMap::new(),
+                existing_lvms: HashMap::new(),
+            },
+            // Root on Btrfs /dev/myvg/mylv (existing LV)
+            // Swap on /dev/nvme0n1p2 (existing partition)
+            Test {
+                manifest: Manifest {
+                    hostname: "foo".into(),
+                    timezone: "foo".into(),
+                    disks: vec![],
+                    dm: vec![],
+                    rootfs: ManifestRootFs(ManifestFs {
+                        device: "/dev/myvg/mylv".into(),
+                        mnt: "/".into(),
+                        fs_type: "btrfs".into(),
+                        fs_opts: "".into(),
+                        mnt_opts: "".into(),
+                    }),
+                    filesystems: vec![],
+                    swap: Some(vec!["/dev/nvme0n1p2".into()]),
+                    pacstraps: HashSet::new(),
+                    chroot: None,
+                    postinstall: None,
+                },
+                existing_fs_ready_devs: HashMap::from([(
+                    "/dev/nvme0n1p2".into(),
+                    BlockDevType::DiskOrPart,
+                )]),
+                existing_fs_devs: HashMap::new(),
+                existing_lvms: HashMap::from([(
+                    "/dev/sda1".into(),
+                    vec![LinkedList::from([
+                        BlockDev {
+                            device: "/dev/sda1".into(),
+                            device_type: TYPE_PV,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg".into(),
+                            device_type: TYPE_VG,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg/mylv".into(),
+                            device_type: TYPE_LV,
+                        },
+                    ])],
+                )]),
+            },
+            // Root on Btrfs /dev/myvg/mylv (existing LV)
+            // Swap on /dev/nvme0n1p2 (manifest partition)
+            Test {
+                manifest: Manifest {
+                    hostname: "foo".into(),
+                    timezone: "foo".into(),
+                    disks: vec![],
+                    dm: vec![],
+                    rootfs: ManifestRootFs(ManifestFs {
+                        device: "/dev/myvg/mylv".into(),
+                        mnt: "/".into(),
+                        fs_type: "btrfs".into(),
+                        fs_opts: "".into(),
+                        mnt_opts: "".into(),
+                    }),
+                    filesystems: vec![],
+                    swap: Some(vec!["/dev/nvme0n1p2".into()]),
+                    pacstraps: HashSet::new(),
+                    chroot: None,
+                    postinstall: None,
+                },
+                existing_fs_ready_devs: HashMap::from([
+                    ("/dev/sda1".into(), BlockDevType::DiskOrPart),
+                    ("/dev/nvme0n1p2".into(), BlockDevType::DiskOrPart),
+                ]),
+                existing_fs_devs: HashMap::new(),
+                existing_lvms: HashMap::from([(
+                    "/dev/sda1".into(),
+                    vec![LinkedList::from([
+                        BlockDev {
+                            device: "/dev/sda1".into(),
+                            device_type: TYPE_PV,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg".into(),
+                            device_type: TYPE_VG,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg/mylv".into(),
+                            device_type: TYPE_LV,
+                        },
+                    ])],
+                )]),
+            },
+            // Root on Btrfs /dev/myvg/mylv (manifest LV)
+            // Swap on /dev/nvme0n1p2 (manifest partition)
+            Test {
+                manifest: Manifest {
+                    hostname: "foo".into(),
+                    timezone: "foo".into(),
+                    disks: vec![],
+                    dm: vec![Dm::Lvm(ManifestLvm {
+                        pvs: vec!["/dev/sda1".into()],
+                        vgs: vec![ManifestLvmVg {
+                            name: "myvg".into(),
+                            pvs: vec!["/dev/sda1".into()],
+                        }],
+                        lvs: vec![ManifestLvmLv {
+                            name: "mylv".into(),
+                            vg: "myvg".into(),
+                            size: None,
+                        }],
+                    })],
+                    rootfs: ManifestRootFs(ManifestFs {
+                        device: "/dev/myvg/mylv".into(),
+                        mnt: "/".into(),
+                        fs_type: "btrfs".into(),
+                        fs_opts: "".into(),
+                        mnt_opts: "".into(),
+                    }),
+                    filesystems: vec![],
+                    swap: Some(vec!["/dev/nvme0n1p2".into()]),
+                    pacstraps: HashSet::new(),
+                    chroot: None,
+                    postinstall: None,
+                },
+                existing_fs_ready_devs: HashMap::from([
+                    ("/dev/sda1".into(), BlockDevType::DiskOrPart),
+                    ("/dev/nvme0n1p2".into(), BlockDevType::DiskOrPart),
+                ]),
+                existing_fs_devs: HashMap::new(),
+                existing_lvms: HashMap::new(),
+            },
+        ];
+
+        let tests_should_err: Vec<Test> = vec![
+            Test {
+                // Root on /dev/sda2 (non-existent)
+                // Swap on /dev/nvme0n1p1 (non-existent)
+                manifest: Manifest {
+                    hostname: "foo".into(),
+                    timezone: "foo".into(),
+                    disks: vec![],
+                    dm: vec![],
+                    rootfs: ManifestRootFs(ManifestFs {
+                        device: "/dev/sda1".into(),
+                        mnt: "/".into(),
+                        fs_type: "btrfs".into(),
+                        fs_opts: "".into(),
+                        mnt_opts: "".into(),
+                    }),
+                    filesystems: vec![],
+                    swap: Some(vec!["/dev/nvme0n1p2".to_string()]),
+                    pacstraps: HashSet::new(),
+                    chroot: None,
+                    postinstall: None,
+                },
+                existing_fs_ready_devs: HashMap::new(),
+                existing_fs_devs: HashMap::new(),
+                existing_lvms: HashMap::new(),
+            },
+            Test {
+                // Root on /dev/sda2 (already used as ext4)
+                // Swap on /dev/nvme0n1p1 (non-existent)
+                manifest: Manifest {
+                    hostname: "foo".into(),
+                    timezone: "foo".into(),
+                    disks: vec![],
+                    dm: vec![],
+                    rootfs: ManifestRootFs(ManifestFs {
+                        device: "/dev/sda1".into(),
+                        mnt: "/".into(),
+                        fs_type: "btrfs".into(),
+                        fs_opts: "".into(),
+                        mnt_opts: "".into(),
+                    }),
+                    filesystems: vec![],
+                    swap: Some(vec!["/dev/nvme0n1p2".to_string()]),
+                    pacstraps: HashSet::new(),
+                    chroot: None,
+                    postinstall: None,
+                },
+                existing_fs_ready_devs: HashMap::new(),
+                existing_fs_devs: HashMap::from([(
+                    "/dev/sda1".to_string(),
+                    BlockDevType::Fs("btrfs".to_string()),
+                )]),
+                existing_lvms: HashMap::new(),
+            },
+        ];
+
+        for (i, test) in tests_should_ok.iter().enumerate() {
+            let result = validate_blk(
+                &test.manifest,
+                &test.existing_fs_ready_devs,
+                &test.existing_fs_devs,
+                &test.existing_lvms,
+            );
+
+            if result.is_err() {
+                eprintln!("Unexpected error from test case {}: {:?}", i + 1, result);
+            }
+
+            assert!(result.is_ok());
+        }
+
+        for (i, test) in tests_should_err.iter().enumerate() {
+            let result = validate_blk(
+                &test.manifest,
+                &test.existing_fs_ready_devs,
+                &test.existing_fs_devs,
+                &test.existing_lvms,
+            );
+
+            if result.is_ok() {
+                eprintln!("Unexpected ok result from test case {}: {:?}", i + 1, test);
+            }
+
+            assert!(result.is_err());
         }
     }
 }
