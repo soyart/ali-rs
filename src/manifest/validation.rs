@@ -10,7 +10,26 @@ use crate::utils::fs::file_exists;
 use crate::utils::shell::in_path;
 
 pub fn validate(manifest: &Manifest) -> Result<(), AyiError> {
-    validate_blk(&manifest, "blkid", "lvs", "pvs")?;
+    // Get full blkid output
+    let output_blkid = run_blkid("blkid")?;
+
+    // A hash map of existing block device that can be directly
+    // formatted with a filesystem
+    let existing_fs_ready_devs = trace_existing_fs_ready(&output_blkid);
+
+    // A hash map of existing block device and its filesystems
+    let existing_fs_devs = trace_existing_fs(&output_blkid);
+
+    // Get all paths of existing LVM devices.
+    // Unknown disks are not tracked - only LVM devices and their bases.
+    let existing_lvms = trace_existing_lvms("lvs", "pvs");
+
+    validate_blk(
+        &manifest,
+        existing_fs_ready_devs,
+        existing_fs_devs,
+        existing_lvms,
+    )?;
 
     let mkfs_rootfs = &format!("mkfs.{}", manifest.rootfs.fs_type);
     if !in_path(mkfs_rootfs) {
@@ -126,22 +145,12 @@ fn is_fs_base(dev_type: &BlockDevType) -> bool {
 }
 
 /// Validate storage defined in manifest.
-pub fn validate_blk(
+fn validate_blk(
     manifest: &Manifest,
-    cmd_blkid: &str, // Allow override in tests
-    cmd_lvs: &str,   // Allow override in tests
-    cmd_pvs: &str,   // Allow override in tests
+    existing_fs_ready_devs: HashMap<String, BlockDevType>, // Maps device path to fs type
+    existing_fs_devs: HashMap<String, BlockDevType>,       // Maps device path to device type
+    existing_lvms: HashMap<String, Vec<LinkedList<BlockDev>>>, // Maps pv path to all possible LV paths
 ) -> Result<(), AyiError> {
-    // Get full blkid output
-    let output_blkid = run_blkid(cmd_blkid)?;
-
-    // A hash map of existing block device and its filesystems
-    let existing_fs_devs = trace_existing_fs(&output_blkid);
-
-    // Get all paths of existing LVM devices.
-    // Unknown disks are not tracked - only LVM devices and their bases.
-    let existing_lvms = trace_existing_lvms(cmd_lvs, cmd_pvs);
-
     // manifest_devs tracks devices and their dependencies in the manifest,
     // with key being the lowest-level device known.
     //
@@ -576,10 +585,6 @@ pub fn validate_blk(
     // We collect all ready devices into fs_ready_devs,
     // and then use it to validate manifest filesystems
     let mut fs_ready_devs = HashSet::<(String, bool)>::new();
-
-    // A hash map of existing block device that can be directly
-    // formatted with a filesystem
-    let existing_fs_ready_devs = trace_existing_fs_ready(&output_blkid);
 
     // Copy existing fs-ready devices from fs_ready_devs
     for sys_fs_dev in existing_fs_ready_devs.keys() {
