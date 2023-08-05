@@ -13,9 +13,12 @@ use clap::Parser;
 
 use manifest::{validation, Manifest};
 
+use crate::errors::NayiError;
+
 fn main() -> Result<(), errors::NayiError> {
     let args = cli::Args::parse();
-    let manifest_yaml = std::fs::read_to_string(args.manifest).unwrap();
+    let manifest_yaml = std::fs::read_to_string(&args.manifest)
+        .map_err(|err| NayiError::NoSuchFile(err, args.manifest))?;
 
     let mut manifest = manifest::parse(&manifest_yaml).expect("failed to parse manifest yaml");
     validation::validate(&manifest)?;

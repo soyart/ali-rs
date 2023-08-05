@@ -1,5 +1,7 @@
 use clap::Parser;
 
+use crate::errors::NayiError;
+
 #[derive(Debug, Parser)]
 #[clap(author = "github.com/soyart", version, about = "Rust-based ayi parser")]
 pub struct Args {
@@ -10,9 +12,9 @@ pub struct Args {
     pub dry_run: bool,
 }
 
-fn validate_filename(name: &str) -> Result<String, String> {
+fn validate_filename(name: &str) -> Result<String, NayiError> {
     if name.is_empty() {
-        return Err(String::from("empty filename"));
+        return Err(NayiError::BadArgs(String::from("empty filename")));
     }
 
     Ok(name.to_string())
