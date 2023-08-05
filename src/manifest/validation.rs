@@ -4,12 +4,12 @@ use std::process::Command;
 use serde::{Deserialize, Serialize};
 use toml;
 
-use crate::errors::AyiError;
+use crate::errors::NayiError;
 use crate::manifest::{Dm, Manifest};
 use crate::utils::fs::file_exists;
 use crate::utils::shell::in_path;
 
-pub fn validate(manifest: &Manifest) -> Result<(), AyiError> {
+pub fn validate(manifest: &Manifest) -> Result<(), NayiError> {
     // Get full blkid output
     let output_blkid = run_blkid("blkid")?;
 
@@ -33,7 +33,7 @@ pub fn validate(manifest: &Manifest) -> Result<(), AyiError> {
 
     let mkfs_rootfs = &format!("mkfs.{}", manifest.rootfs.fs_type);
     if !in_path(mkfs_rootfs) {
-        return Err(AyiError::BadManifest(format!(
+        return Err(NayiError::BadManifest(format!(
             "no such program to create rootfs: {mkfs_rootfs}"
         )));
     }
@@ -43,7 +43,7 @@ pub fn validate(manifest: &Manifest) -> Result<(), AyiError> {
         if !in_path(mkfs_cmd) {
             let device = &archfs.device;
 
-            return Err(AyiError::BadManifest(format!(
+            return Err(NayiError::BadManifest(format!(
                 "no such program to create filesystem for device {device}: {mkfs_cmd}"
             )));
         }
@@ -51,7 +51,7 @@ pub fn validate(manifest: &Manifest) -> Result<(), AyiError> {
 
     let zone_info = format!("/usr/share/zoneinfo/{}", manifest.timezone);
     if !file_exists(&zone_info) {
-        return Err(AyiError::BadManifest(format!(
+        return Err(NayiError::BadManifest(format!(
             "no zone info file {zone_info}"
         )));
     }
@@ -150,7 +150,7 @@ fn validate_blk(
     existing_fs_ready_devs: &HashMap<String, BlockDevType>, // Maps device path to fs type
     existing_fs_devs: &HashMap<String, BlockDevType>,       // Maps device path to device type
     existing_lvms: &HashMap<String, Vec<LinkedList<BlockDev>>>, // Maps pv path to all possible LV paths
-) -> Result<(), AyiError> {
+) -> Result<(), NayiError> {
     // manifest_devs tracks devices and their dependencies in the manifest,
     // with key being the lowest-level device known.
     //
@@ -164,7 +164,7 @@ fn validate_blk(
     // Collect all manifest disks into manifest_devs as base/entrypoint
     for disk in manifest.disks.iter() {
         if !file_exists(&disk.device) {
-            return Err(AyiError::BadManifest(format!(
+            return Err(NayiError::BadManifest(format!(
                 "no such disk device: {}",
                 disk.device
             )));
@@ -183,7 +183,7 @@ fn validate_blk(
             let partition_name = format!("{partition_prefix}/{}", i + 1);
 
             if let Some(existing_fs) = existing_fs_devs.get(&partition_name) {
-                return Err(AyiError::BadManifest(format!(
+                return Err(NayiError::BadManifest(format!(
                     "partition {partition_name} is already used as {existing_fs}"
                 )));
             }
@@ -217,13 +217,13 @@ fn validate_blk(
                     (&luks.device, format!("/dev/mapper/{}", luks.name));
 
                 if file_exists(&luks_path) {
-                    return Err(AyiError::BadManifest(format!(
+                    return Err(NayiError::BadManifest(format!(
                         "{msg}: device {luks_path} already exists"
                     )));
                 }
 
                 if let Some(fs_type) = existing_fs_devs.get(luks_base_path) {
-                    return Err(AyiError::BadManifest(format!(
+                    return Err(NayiError::BadManifest(format!(
                         "{msg}: luks {} base {luks_base_path} was already in use as {fs_type}",
                         luks.name
                     )));
@@ -239,13 +239,13 @@ fn validate_blk(
                     }
 
                     if top_most.device_type == TYPE_LUKS {
-                        return Err(AyiError::BadManifest(format!(
+                        return Err(NayiError::BadManifest(format!(
                             "duplicate luks {luks_path} in manifest"
                         )));
                     }
 
                     if !is_luks_base(&top_most.device_type) {
-                        return Err(AyiError::BadManifest(format!(
+                        return Err(NayiError::BadManifest(format!(
                             "{msg}: luks {} base {luks_base_path} cannot have type {}",
                             luks.name, top_most.device_type,
                         )));
@@ -270,13 +270,13 @@ fn validate_blk(
                         }
 
                         if top_most.device_type == TYPE_LUKS {
-                            return Err(AyiError::BadManifest(format!(
+                            return Err(NayiError::BadManifest(format!(
                                 "{msg}: luks {luks_path} already exists"
                             )));
                         }
 
                         if !is_luks_base(&top_most.device_type) {
-                            return Err(AyiError::BadManifest(format!(
+                            return Err(NayiError::BadManifest(format!(
                                 "{msg}: luks base {} (itself is an LVM from {}) cannot have type {}",
                                 luks_base_path, lvm_base, top_most.device_type
                             )));
@@ -297,7 +297,7 @@ fn validate_blk(
 
                 // TODO: This may introduce error if such file is not a proper block device.
                 if !file_exists(luks_base_path) {
-                    return Err(AyiError::NoSuchDevice(luks_base_path.to_string()));
+                    return Err(NayiError::NoSuchDevice(luks_base_path.to_string()));
                 }
 
                 let luks_base_dev = BlockDev {
@@ -328,7 +328,7 @@ fn validate_blk(
                     // (4) find its base device as device file (file_exists)
 
                     if let Some(fs_type) = existing_fs_devs.get(pv_path) {
-                        return Err(AyiError::BadManifest(format!(
+                        return Err(NayiError::BadManifest(format!(
                             "{msg}: pv {pv_path} base was already used as {fs_type}",
                         )));
                     }
@@ -343,13 +343,13 @@ fn validate_blk(
                         }
 
                         if top_most.device_type == TYPE_PV {
-                            return Err(AyiError::BadManifest(format!(
+                            return Err(NayiError::BadManifest(format!(
                                 "{msg}: duplicate pv {pv_path} in manifest"
                             )));
                         }
 
                         if !is_pv_base(&top_most.device_type) {
-                            return Err(AyiError::BadManifest(format!(
+                            return Err(NayiError::BadManifest(format!(
                                 "{msg}: pv {} base cannot have type {}",
                                 pv_path, top_most.device_type,
                             )));
@@ -374,13 +374,13 @@ fn validate_blk(
                             }
 
                             if top_most.device_type == TYPE_PV {
-                                return Err(AyiError::BadManifest(format!(
+                                return Err(NayiError::BadManifest(format!(
                                     "{msg}: pv {pv_path} already exists"
                                 )));
                             }
 
                             if !is_pv_base(&top_most.device_type) {
-                                return Err(AyiError::BadManifest(format!(
+                                return Err(NayiError::BadManifest(format!(
                                     "{msg}: pv {} base cannot have type {}",
                                     pv_path, top_most.device_type,
                                 )));
@@ -416,7 +416,7 @@ fn validate_blk(
                     }
 
                     if !file_exists(pv_path) {
-                        return Err(AyiError::BadManifest(format!(
+                        return Err(NayiError::BadManifest(format!(
                             "{msg}: no such pv device: {pv_path}"
                         )));
                     }
@@ -458,7 +458,7 @@ fn validate_blk(
                                 .expect("no back node in linked list from manifest_devs");
 
                             if *top_most == vg_dev {
-                                return Err(AyiError::BadManifest(format!(
+                                return Err(NayiError::BadManifest(format!(
                                     "{msg}: duplicate vg {} in manifest",
                                     vg.name,
                                 )));
@@ -469,7 +469,7 @@ fn validate_blk(
                             }
 
                             if !is_vg_base(&top_most.device_type) {
-                                return Err(AyiError::BadManifest(format!(
+                                return Err(NayiError::BadManifest(format!(
                                     "{msg}: vg {} pv base {pv_base} cannot have type {}",
                                     vg.name, top_most.device_type,
                                 )));
@@ -487,7 +487,7 @@ fn validate_blk(
                                     .expect("no back node in linked list from existing_devs");
 
                                 if *top_most == vg_dev {
-                                    return Err(AyiError::BadManifest(format!(
+                                    return Err(NayiError::BadManifest(format!(
                                         "{msg}: vg {} already exists",
                                         vg.name,
                                     )));
@@ -498,7 +498,7 @@ fn validate_blk(
                                 }
 
                                 if !is_vg_base(&top_most.device_type) {
-                                    return Err(AyiError::BadManifest(format!(
+                                    return Err(NayiError::BadManifest(format!(
                                         "{msg}: vg {} pv base {pv_base} cannot have type {}",
                                         vg.name, top_most.device_type
                                     )));
@@ -512,7 +512,7 @@ fn validate_blk(
                             }
                         }
 
-                        return Err(AyiError::BadManifest(format!(
+                        return Err(NayiError::BadManifest(format!(
                             "{msg}: no pv device matching {pv_base} in manifest or in the system"
                         )));
                     }
@@ -539,7 +539,7 @@ fn validate_blk(
                             .expect("no back node for linked list in manifest_devs");
 
                         if *top_most == lv_dev {
-                            return Err(AyiError::BadManifest(format!(
+                            return Err(NayiError::BadManifest(format!(
                                 "{msg}: duplicate lv {lv_name} in manifest"
                             )));
                         }
@@ -549,7 +549,7 @@ fn validate_blk(
                         }
 
                         if !is_lv_base(&top_most.device_type) {
-                            return Err(AyiError::BadManifest(format!(
+                            return Err(NayiError::BadManifest(format!(
                                 "{msg}: lv {lv_name} vg base {vg_name} cannot have type {}",
                                 top_most.device_type
                             )));
@@ -567,7 +567,7 @@ fn validate_blk(
                                 .expect("no back node for linked list in existing_devs");
 
                             if *top_most == lv_dev {
-                                return Err(AyiError::BadManifest(format!(
+                                return Err(NayiError::BadManifest(format!(
                                     "{msg}: lv {lv_name} already exists"
                                 )));
                             }
@@ -577,7 +577,7 @@ fn validate_blk(
                             }
 
                             if !is_lv_base(&top_most.device_type) {
-                                return Err(AyiError::BadManifest(format!(
+                                return Err(NayiError::BadManifest(format!(
                                     "{msg}: lv {lv_name} vg base {vg_name} cannot have type {}",
                                     top_most.device_type
                                 )));
@@ -591,7 +591,7 @@ fn validate_blk(
                         }
                     }
 
-                    return Err(AyiError::BadManifest(format!(
+                    return Err(NayiError::BadManifest(format!(
                         "{msg}: no vg device matching {vg_name} in manifest or in the system"
                     )));
                 }
@@ -638,7 +638,7 @@ fn validate_blk(
         if duplicate {
             // If device was already in use on the system as filesystem
             if let Some(existing_fs) = existing_fs_devs.get(&top_most.device) {
-                return Err(AyiError::BadManifest(format!(
+                return Err(NayiError::BadManifest(format!(
                     "{msg}: filesystem device {} is already used as {existing_fs}",
                     top_most.device,
                 )));
@@ -648,7 +648,7 @@ fn validate_blk(
 
     msg = "rootfs validation failed";
     if !fs_ready_devs.contains(&(manifest.rootfs.device.clone(), true)) {
-        return Err(AyiError::BadManifest(format!(
+        return Err(NayiError::BadManifest(format!(
             "{msg}: no top-level fs-ready device for rootfs: {}",
             manifest.rootfs.device,
         )));
@@ -657,7 +657,7 @@ fn validate_blk(
     msg = "fs validation failed";
     for (i, fs) in manifest.filesystems.iter().enumerate() {
         if !fs_ready_devs.contains(&(fs.device.clone(), true)) {
-            return Err(AyiError::BadManifest(format!(
+            return Err(NayiError::BadManifest(format!(
                 "{msg}: device {} for fs #{} ({}) is not fs-ready",
                 fs.device,
                 i + 1,
@@ -671,7 +671,7 @@ fn validate_blk(
         for (i, device) in devices.into_iter().enumerate() {
             // device already has some filesystem
             if let Some(BlockDevType::Fs(fs_type)) = existing_fs_devs.get(&device) {
-                return Err(AyiError::BadManifest(format!(
+                return Err(NayiError::BadManifest(format!(
                     "{msg}: swap device {device} on the system already contains fs {fs_type}"
                 )));
             }
@@ -685,7 +685,7 @@ fn validate_blk(
                 continue;
             }
 
-            return Err(AyiError::BadManifest(format!(
+            return Err(NayiError::BadManifest(format!(
                 "{msg}: manifest swap #{i} device {device} is not a valid swap device",
             )));
         }
@@ -710,13 +710,14 @@ struct EntryBlkid {
     label: Option<String>,
 }
 
-fn run_blkid(cmd_blkid: &str) -> Result<String, AyiError> {
+fn run_blkid(cmd_blkid: &str) -> Result<String, NayiError> {
     let cmd_blkid = Command::new(cmd_blkid).output().map_err(|err| {
-        AyiError::CmdFailed(Some(err), format!("blkid command {cmd_blkid} failed"))
+        NayiError::CmdFailed(Some(err), format!("blkid command {cmd_blkid} failed"))
     })?;
 
-    String::from_utf8(cmd_blkid.stdout)
-        .map_err(|err| AyiError::NayiRsBug(format!("blkid output not string: {}", err.to_string())))
+    String::from_utf8(cmd_blkid.stdout).map_err(|err| {
+        NayiError::NayiRsBug(format!("blkid output not string: {}", err.to_string()))
+    })
 }
 
 fn trace_existing_fs_ready(output_blkid: &str) -> HashMap<String, BlockDevType> {

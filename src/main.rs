@@ -13,7 +13,7 @@ use clap::Parser;
 
 use manifest::{validation, Manifest};
 
-fn main() -> Result<(), errors::AyiError> {
+fn main() -> Result<(), errors::NayiError> {
     let args = cli::Args::parse();
     let manifest_yaml = std::fs::read_to_string(args.manifest).unwrap();
 

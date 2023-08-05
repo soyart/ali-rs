@@ -2,23 +2,23 @@ use std::env;
 use std::fs;
 use std::process::Command;
 
-use crate::errors::AyiError;
+use crate::errors::NayiError;
 
-pub fn exec(cmd: &str, args: &[&str]) -> Result<(), AyiError> {
+pub fn exec(cmd: &str, args: &[&str]) -> Result<(), NayiError> {
     match Command::new(cmd).args(args).spawn() {
         Ok(mut result) => match result.wait() {
             Ok(r) => r.exit_ok().map_err(|err| {
-                AyiError::CmdFailed(
+                NayiError::CmdFailed(
                     None,
                     format!("command {cmd} exited with bad status {}", err.to_string()),
                 )
             }),
-            Err(err) => Err(AyiError::CmdFailed(
+            Err(err) => Err(NayiError::CmdFailed(
                 Some(err),
                 format!("command ${cmd} failed to run"),
             )),
         },
-        Err(err) => Err(AyiError::CmdFailed(
+        Err(err) => Err(NayiError::CmdFailed(
             Some(err),
             format!("command ${cmd} failed to spawn"),
         )),

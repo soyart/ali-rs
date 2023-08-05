@@ -1,6 +1,6 @@
 use std::process::{Command, Stdio};
 
-use crate::errors::AyiError;
+use crate::errors::NayiError;
 use crate::manifest::{ManifestPartition, PartitionTable};
 
 /// Returns fdisk cmd string for creating gpt/msdos partition table
@@ -48,7 +48,7 @@ pub fn set_partition_type_cmd(part_num: usize, part: &ManifestPartition) -> Stri
 /// ```shell
 /// printf $cmd | fdisk $device
 /// ```
-pub fn run_fdisk_cmd(device: &str, cmd: &str) -> Result<(), AyiError> {
+pub fn run_fdisk_cmd(device: &str, cmd: &str) -> Result<(), NayiError> {
     let printf_cmd = Command::new("printf")
         .arg(cmd)
         .stdout(Stdio::piped())
@@ -63,7 +63,7 @@ pub fn run_fdisk_cmd(device: &str, cmd: &str) -> Result<(), AyiError> {
 
     match fdisk_cmd.wait() {
         Ok(result) => match result.success() {
-            false => Err(AyiError::CmdFailed(
+            false => Err(NayiError::CmdFailed(
                 None,
                 format!(
                     "fdisk command exited with bad status: {}",
@@ -72,7 +72,7 @@ pub fn run_fdisk_cmd(device: &str, cmd: &str) -> Result<(), AyiError> {
             )),
             _ => Ok(()),
         },
-        Err(err) => Err(AyiError::CmdFailed(
+        Err(err) => Err(NayiError::CmdFailed(
             None,
             format!("fdisk command failed to run: {}", err.to_string()),
         )),

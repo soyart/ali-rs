@@ -1,7 +1,7 @@
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum AyiError {
+pub enum NayiError {
     #[error("no such file")]
     NoSuchFile(std::io::Error, String),
 

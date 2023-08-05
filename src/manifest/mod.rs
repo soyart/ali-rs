@@ -4,7 +4,7 @@ use std::collections::HashSet;
 
 use serde::{Deserialize, Serialize};
 
-use crate::errors::AyiError;
+use crate::errors::NayiError;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Manifest {
@@ -123,8 +123,8 @@ pub enum Dm {
     Lvm(ManifestLvm),
 }
 
-pub fn parse(manifest: &str) -> Result<Manifest, AyiError> {
-    serde_yaml::from_str(manifest).map_err(|err| AyiError::BadManifest(err.to_string()))
+pub fn parse(manifest: &str) -> Result<Manifest, NayiError> {
+    serde_yaml::from_str(manifest).map_err(|err| NayiError::BadManifest(err.to_string()))
 }
 
 #[test]
