@@ -38,10 +38,10 @@ pub fn validate(manifest: &Manifest) -> Result<(), NayiError> {
         )));
     }
 
-    for archfs in manifest.filesystems.iter() {
-        let mkfs_cmd = &format!("mkfs.{}", archfs.fs_type);
+    for fs in &manifest.filesystems {
+        let mkfs_cmd = &format!("mkfs.{}", fs.fs_type);
         if !in_path(mkfs_cmd) {
-            let device = &archfs.device;
+            let device = &fs.device;
 
             return Err(NayiError::BadManifest(format!(
                 "no such program to create filesystem for device {device}: {mkfs_cmd}"
@@ -169,7 +169,7 @@ fn validate_blk(
     let mut manifest_devs = HashMap::<String, LinkedList<BlockDev>>::new();
 
     // Collect all manifest disks into manifest_devs as base/entrypoint
-    for disk in manifest.disks.iter() {
+    for disk in &manifest.disks {
         if !file_exists(&disk.device) {
             return Err(NayiError::BadManifest(format!(
                 "no such disk device: {}",
@@ -217,7 +217,7 @@ fn validate_blk(
     //
     // It first checks if the base device was in manifest_devs,
     // and if not, it checks existing_devs.
-    'validate_dm: for dm in manifest.dm.iter() {
+    'validate_dm: for dm in &manifest.dm {
         match dm {
             // Validate LUKS devices
             //
@@ -274,7 +274,7 @@ fn validate_blk(
                     continue 'validate_dm;
                 }
 
-                for (lvm_base, lists) in existing_lvms.iter() {
+                for (lvm_base, lists) in existing_lvms {
                     for list in lists {
                         let top_most = list
                             .back()
@@ -334,7 +334,7 @@ fn validate_blk(
             Dm::Lvm(lvm) => {
                 let mut msg = "lvm pv validation failed";
 
-                'validate_pv: for pv_path in lvm.pvs.iter() {
+                'validate_pv: for pv_path in &lvm.pvs {
                     // Validate LVM PV devices
                     //
                     // (1) check if it conflicts with existing_fs_devs
@@ -453,7 +453,7 @@ fn validate_blk(
                 }
 
                 msg = "lvm vg validation failed";
-                for vg in lvm.vgs.iter() {
+                for vg in &lvm.vgs {
                     // Validate LVM VG devices
                     //
                     // (1) find its pv_base in manifest_devs
@@ -466,7 +466,7 @@ fn validate_blk(
                         device_type: TYPE_VG,
                     };
 
-                    'validate_vg_pv: for pv_base in vg.pvs.iter() {
+                    'validate_vg_pv: for pv_base in &vg.pvs {
                         for list in manifest_devs.values_mut() {
                             let top_most = list
                                 .back()
@@ -534,7 +534,7 @@ fn validate_blk(
                 }
 
                 msg = "lvm lv validation failed";
-                'validate_lv: for lv in lvm.lvs.iter() {
+                'validate_lv: for lv in &lvm.lvs {
                     // Validate LV devices
                     //
                     // (1) a known vg in manifest_devs
@@ -575,7 +575,7 @@ fn validate_blk(
                         continue 'validate_lv;
                     }
 
-                    for (base, lists) in existing_lvms.iter() {
+                    for (base, lists) in existing_lvms {
                         for list in lists {
                             let top_most = list
                                 .back()
