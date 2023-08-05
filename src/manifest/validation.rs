@@ -82,8 +82,11 @@ enum DmType {
 
 #[derive(Debug, PartialEq, Eq, std::hash::Hash, Clone)]
 enum BlockDevType {
-    // Disks or partitions
-    DiskOrPart,
+    // Disks
+    Disk,
+
+    // Disk partitions (GPT/MS-DOS)
+    Partition,
 
     // UnknownBlock is anything that be can build filesystem, LUKS, and LVM PV on
     UnknownBlock,
@@ -95,7 +98,8 @@ enum BlockDevType {
     Fs(String),
 }
 
-const TYPE_DISK: BlockDevType = BlockDevType::DiskOrPart;
+const TYPE_DISK: BlockDevType = BlockDevType::Disk;
+const TYPE_PART: BlockDevType = BlockDevType::Partition;
 const TYPE_UNKNOWN: BlockDevType = BlockDevType::UnknownBlock;
 const TYPE_LUKS: BlockDevType = BlockDevType::Dm(DmType::Luks);
 const TYPE_PV: BlockDevType = BlockDevType::Dm(DmType::Pv);
@@ -104,7 +108,8 @@ const TYPE_LV: BlockDevType = BlockDevType::Dm(DmType::Lv);
 
 fn is_pv_base(dev_type: &BlockDevType) -> bool {
     match dev_type {
-        BlockDevType::DiskOrPart => true,
+        BlockDevType::Disk => true,
+        BlockDevType::Partition => true,
         BlockDevType::UnknownBlock => true,
         BlockDevType::Dm(DmType::Luks) => true,
         _ => false,
@@ -127,7 +132,8 @@ fn is_lv_base(dev_type: &BlockDevType) -> bool {
 
 fn is_luks_base(dev_type: &BlockDevType) -> bool {
     match dev_type {
-        BlockDevType::DiskOrPart => true,
+        BlockDevType::Disk => true,
+        BlockDevType::Partition => true,
         BlockDevType::UnknownBlock => true,
         BlockDevType::Dm(DmType::Lv) => true,
         _ => false,
@@ -136,7 +142,8 @@ fn is_luks_base(dev_type: &BlockDevType) -> bool {
 
 fn is_fs_base(dev_type: &BlockDevType) -> bool {
     match dev_type {
-        BlockDevType::DiskOrPart => true,
+        BlockDevType::Disk => true,
+        BlockDevType::Partition => true,
         BlockDevType::UnknownBlock => true,
         BlockDevType::Dm(DmType::Luks) => true,
         BlockDevType::Dm(DmType::Lv) => true,
@@ -192,7 +199,7 @@ fn validate_blk(
                 partition_name.clone(),
                 LinkedList::from([BlockDev {
                     device: partition_name,
-                    device_type: BlockDevType::DiskOrPart,
+                    device_type: TYPE_PART,
                 }]),
             );
         }
@@ -760,7 +767,7 @@ fn trace_existing_fs_ready(output_blkid: &str) -> HashMap<String, BlockDevType> 
             continue;
         }
 
-        fs_ready.insert(dev_name.to_string(), BlockDevType::DiskOrPart);
+        fs_ready.insert(dev_name.to_string(), BlockDevType::UnknownBlock);
     }
 
     fs_ready
@@ -929,7 +936,8 @@ impl std::fmt::Display for DmType {
 impl std::fmt::Display for BlockDevType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::DiskOrPart => write!(f, "DISK/PART"),
+            Self::Disk => write!(f, "DISK"),
+            Self::Partition => write!(f, "PARTITION"),
             Self::UnknownBlock => write!(f, "UNKNOWN_FS_BASE"),
             Self::Dm(dm_type) => write!(f, "DM_{}", dm_type),
             Self::Fs(fs_type) => write!(f, "FS_{}", fs_type),
@@ -946,7 +954,7 @@ mod tests {
     #[test]
     fn test_trace_existing_fs_ready() {
         let mut expected_results = HashMap::new();
-        expected_results.insert("/dev/vda2".to_string(), BlockDevType::DiskOrPart);
+        expected_results.insert("/dev/vda2".to_string(), BlockDevType::UnknownBlock);
 
         let output_blkid = run_blkid("./mock_cmd/blkid").expect("run_blkid failed");
         let traced = trace_existing_fs_ready(&output_blkid);
@@ -1143,8 +1151,8 @@ mod tests {
                     postinstall: None,
                 },
                 existing_fs_ready_devs: HashMap::from([
-                    ("/dev/sda1".into(), BlockDevType::DiskOrPart),
-                    ("/dev/nvme0n1p2".into(), BlockDevType::DiskOrPart),
+                    ("/dev/sda1".into(), BlockDevType::Disk),
+                    ("/dev/nvme0n1p2".into(), BlockDevType::Disk),
                 ]),
                 existing_fs_devs: HashMap::new(),
                 existing_lvms: HashMap::new(),
@@ -1172,7 +1180,7 @@ mod tests {
                 },
                 existing_fs_ready_devs: HashMap::from([(
                     "/dev/nvme0n1p2".into(),
-                    BlockDevType::DiskOrPart,
+                    BlockDevType::Disk,
                 )]),
                 existing_fs_devs: HashMap::new(),
                 existing_lvms: HashMap::from([(
@@ -1215,8 +1223,8 @@ mod tests {
                     postinstall: None,
                 },
                 existing_fs_ready_devs: HashMap::from([
-                    ("/dev/sda1".into(), BlockDevType::DiskOrPart),
-                    ("/dev/nvme0n1p2".into(), BlockDevType::DiskOrPart),
+                    ("/dev/sda1".into(), BlockDevType::Disk),
+                    ("/dev/nvme0n1p2".into(), BlockDevType::Disk),
                 ]),
                 existing_fs_devs: HashMap::new(),
                 existing_lvms: HashMap::from([(
@@ -1270,8 +1278,8 @@ mod tests {
                     postinstall: None,
                 },
                 existing_fs_ready_devs: HashMap::from([
-                    ("/dev/sda1".into(), BlockDevType::DiskOrPart),
-                    ("/dev/nvme0n1p2".into(), BlockDevType::DiskOrPart),
+                    ("/dev/sda1".into(), BlockDevType::Disk),
+                    ("/dev/nvme0n1p2".into(), BlockDevType::Disk),
                 ]),
                 existing_fs_devs: HashMap::new(),
                 existing_lvms: HashMap::new(),
@@ -1325,7 +1333,7 @@ mod tests {
                 },
                 existing_fs_ready_devs: HashMap::from([(
                     "/dev/nvme0n1p2".into(),
-                    BlockDevType::DiskOrPart,
+                    BlockDevType::Disk,
                 )]),
                 existing_fs_devs: HashMap::new(),
                 existing_lvms: HashMap::new(),
