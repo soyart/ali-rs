@@ -1120,6 +1120,7 @@ mod tests {
 
     #[derive(Debug)]
     struct Test {
+        case: String,
         manifest: Manifest,
         existing_fs_ready_devs: HashMap<String, BlockDevType>,
         existing_fs_devs: HashMap<String, BlockDevType>,
@@ -1129,9 +1130,8 @@ mod tests {
     #[test]
     fn test_validate_blk() {
         let tests_should_ok = vec![
-            // Root on Btrfs /dev/sda1 (existing partition)
-            // Swap on /dev/nvme0n1p2 (existing partition)
             Test {
+                case: "Root and swap on existing partition".into(),
                 manifest: Manifest {
                     hostname: "foo".into(),
                     timezone: "foo".into(),
@@ -1157,9 +1157,8 @@ mod tests {
                 existing_fs_devs: HashMap::new(),
                 existing_lvms: HashMap::new(),
             },
-            // Root on Btrfs /dev/myvg/mylv (existing LV)
-            // Swap on /dev/nvme0n1p2 (existing partition)
             Test {
+                case: "Root on existing LV, swap on existing partition".into(),
                 manifest: Manifest {
                     hostname: "foo".into(),
                     timezone: "foo".into(),
@@ -1201,9 +1200,8 @@ mod tests {
                     ])],
                 )]),
             },
-            // Root on Btrfs /dev/myvg/mylv (existing LV)
-            // Swap on /dev/nvme0n1p2 (manifest partition)
             Test {
+                case: "Root on existing LV, swap on manifest partition".into(),
                 manifest: Manifest {
                     hostname: "foo".into(),
                     timezone: "foo".into(),
@@ -1245,9 +1243,10 @@ mod tests {
                     ])],
                 )]),
             },
-            // Root on Btrfs /dev/myvg/mylv (manifest LVM on existing partition /dev/sda1)
-            // Swap on /dev/nvme0n1p2 (existing partition)
             Test {
+                case:
+                    "Root on manifest LVM, built on existing partition. Swap on existing partition"
+                        .into(),
                 manifest: Manifest {
                     hostname: "foo".into(),
                     timezone: "foo".into(),
@@ -1284,9 +1283,10 @@ mod tests {
                 existing_fs_devs: HashMap::new(),
                 existing_lvms: HashMap::new(),
             },
-            // Root on Btrfs /dev/myvg/mylv (manifest LV on manifest partition)
-            // Swap on /dev/nvme0n1p2 (manifest partition)
             Test {
+                case:
+                    "Root on manifest LVM, built on manifest partition. Swap on manifest partition"
+                        .into(),
                 manifest: Manifest {
                     hostname: "foo".into(),
                     timezone: "foo".into(),
@@ -1342,8 +1342,7 @@ mod tests {
 
         let tests_should_err: Vec<Test> = vec![
             Test {
-                // Root on /dev/sda2 (non-existent)
-                // Swap on /dev/nvme0n1p1 (non-existent)
+                case: "No manifest disks, root on non-existent, swap on non-existent".into(),
                 manifest: Manifest {
                     hostname: "foo".into(),
                     timezone: "foo".into(),
@@ -1367,8 +1366,7 @@ mod tests {
                 existing_lvms: HashMap::new(),
             },
             Test {
-                // Root on /dev/sda2 (already used as ext4)
-                // Swap on /dev/nvme0n1p1 (non-existent)
+                case: "No manifest disks, root on existing ext4 fs, swap on non-existent".into(),
                 manifest: Manifest {
                     hostname: "foo".into(),
                     timezone: "foo".into(),
@@ -1394,6 +1392,56 @@ mod tests {
                 )]),
                 existing_lvms: HashMap::new(),
             },
+            // Root on Btrfs /dev/myvg/mylv (manifest LV on manifest partition, but missing LV)
+            Test {
+                case: "Root on LVM, built on manifest partitions, but missing LV manifest".into(),
+                manifest: Manifest {
+                    hostname: "foo".into(),
+                    timezone: "foo".into(),
+                    disks: vec![ManifestDisk {
+                        device: "./mock_devs/sda".to_string(),
+                        table: PartitionTable::Gpt,
+                        partitions: vec![
+                            ManifestPartition {
+                                label: "PART_EFI".into(),
+                                size: Some("500M".into()),
+                                part_type: "ef".into(),
+                            },
+                            ManifestPartition {
+                                label: "PART_PV".into(),
+                                size: None,
+                                part_type: "8e".into(),
+                            },
+                        ],
+                    }],
+                    dm: vec![Dm::Lvm(ManifestLvm {
+                        pvs: vec!["./mock_devs/sda2".into()],
+                        vgs: vec![ManifestLvmVg {
+                            name: "myvg".into(),
+                            pvs: vec!["./mock_devs/sda2".into()],
+                        }],
+                        lvs: vec![],
+                    })],
+                    rootfs: ManifestRootFs(ManifestFs {
+                        device: "/dev/myvg/mylv".into(),
+                        mnt: "/".into(),
+                        fs_type: "btrfs".into(),
+                        fs_opts: "".into(),
+                        mnt_opts: "".into(),
+                    }),
+                    filesystems: vec![],
+                    swap: Some(vec!["/dev/nvme0n1p2".into()]),
+                    pacstraps: HashSet::new(),
+                    chroot: None,
+                    postinstall: None,
+                },
+                existing_fs_ready_devs: HashMap::from([(
+                    "/dev/nvme0n1p2".into(),
+                    BlockDevType::Disk,
+                )]),
+                existing_fs_devs: HashMap::new(),
+                existing_lvms: HashMap::new(),
+            },
         ];
 
         for (i, test) in tests_should_ok.iter().enumerate() {
@@ -1405,7 +1453,8 @@ mod tests {
             );
 
             if result.is_err() {
-                eprintln!("Unexpected error from test case {}: {:?}", i + 1, result);
+                eprintln!("Unexpected error from test case {}: {}", i + 1, test.case);
+                eprintln!("Error: {result:?}");
             }
 
             assert!(result.is_ok());
@@ -1420,7 +1469,12 @@ mod tests {
             );
 
             if result.is_ok() {
-                eprintln!("Unexpected ok result from test case {}: {:?}", i + 1, test);
+                eprintln!(
+                    "Unexpected ok result from test case {}: {}",
+                    i + 1,
+                    test.case
+                );
+                eprintln!("Test structure: {test:?}");
             }
 
             assert!(result.is_err());
