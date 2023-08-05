@@ -180,13 +180,21 @@ fn validate_blk(
 
         // Check if this partition is already in use
         for (i, _) in disk.partitions.iter().enumerate() {
-            let partition_name = format!("{partition_prefix}/{}", i + 1);
+            let partition_name = format!("{partition_prefix}{}", i + 1);
 
             if let Some(existing_fs) = existing_fs_devs.get(&partition_name) {
                 return Err(NayiError::BadManifest(format!(
                     "partition {partition_name} is already used as {existing_fs}"
                 )));
             }
+
+            manifest_devs.insert(
+                partition_name.clone(),
+                LinkedList::from([BlockDev {
+                    device: partition_name,
+                    device_type: BlockDevType::DiskOrPart,
+                }]),
+            );
         }
 
         let list = LinkedList::<BlockDev>::from([BlockDev {
@@ -686,7 +694,8 @@ fn validate_blk(
             }
 
             return Err(NayiError::BadManifest(format!(
-                "{msg}: manifest swap #{i} device {device} is not a valid swap device",
+                "{msg}: manifest swap #{} device {device} is not a valid swap device",
+                i + 1,
             )));
         }
     }
@@ -1228,8 +1237,8 @@ mod tests {
                     ])],
                 )]),
             },
-            // Root on Btrfs /dev/myvg/mylv (manifest LV)
-            // Swap on /dev/nvme0n1p2 (manifest partition)
+            // Root on Btrfs /dev/myvg/mylv (manifest LVM on existing partition /dev/sda1)
+            // Swap on /dev/nvme0n1p2 (existing partition)
             Test {
                 manifest: Manifest {
                     hostname: "foo".into(),
@@ -1264,6 +1273,60 @@ mod tests {
                     ("/dev/sda1".into(), BlockDevType::DiskOrPart),
                     ("/dev/nvme0n1p2".into(), BlockDevType::DiskOrPart),
                 ]),
+                existing_fs_devs: HashMap::new(),
+                existing_lvms: HashMap::new(),
+            },
+            // Root on Btrfs /dev/myvg/mylv (manifest LV on manifest partition)
+            // Swap on /dev/nvme0n1p2 (manifest partition)
+            Test {
+                manifest: Manifest {
+                    hostname: "foo".into(),
+                    timezone: "foo".into(),
+                    disks: vec![ManifestDisk {
+                        device: "./mock_devs/sda".to_string(),
+                        table: PartitionTable::Gpt,
+                        partitions: vec![
+                            ManifestPartition {
+                                label: "PART_EFI".into(),
+                                size: Some("500M".into()),
+                                part_type: "ef".into(),
+                            },
+                            ManifestPartition {
+                                label: "PART_PV".into(),
+                                size: None,
+                                part_type: "8e".into(),
+                            },
+                        ],
+                    }],
+                    dm: vec![Dm::Lvm(ManifestLvm {
+                        pvs: vec!["./mock_devs/sda2".into()],
+                        vgs: vec![ManifestLvmVg {
+                            name: "myvg".into(),
+                            pvs: vec!["./mock_devs/sda2".into()],
+                        }],
+                        lvs: vec![ManifestLvmLv {
+                            name: "mylv".into(),
+                            vg: "myvg".into(),
+                            size: None,
+                        }],
+                    })],
+                    rootfs: ManifestRootFs(ManifestFs {
+                        device: "/dev/myvg/mylv".into(),
+                        mnt: "/".into(),
+                        fs_type: "btrfs".into(),
+                        fs_opts: "".into(),
+                        mnt_opts: "".into(),
+                    }),
+                    filesystems: vec![],
+                    swap: Some(vec!["/dev/nvme0n1p2".into()]),
+                    pacstraps: HashSet::new(),
+                    chroot: None,
+                    postinstall: None,
+                },
+                existing_fs_ready_devs: HashMap::from([(
+                    "/dev/nvme0n1p2".into(),
+                    BlockDevType::DiskOrPart,
+                )]),
                 existing_fs_devs: HashMap::new(),
                 existing_lvms: HashMap::new(),
             },
