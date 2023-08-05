@@ -140,7 +140,7 @@ pub fn validate_blk(
 
     // Get all paths of existing LVM devices.
     // Unknown disks are not tracked - only LVM devices and their bases.
-    let existing_devs = trace_existing_lvms(cmd_lvs, cmd_pvs);
+    let existing_lvms = trace_existing_lvms(cmd_lvs, cmd_pvs);
 
     // manifest_devs tracks devices and their dependencies in the manifest,
     // with key being the lowest-level device known.
@@ -199,7 +199,7 @@ pub fn validate_blk(
             //
             // (1) check if it conflicts with existing_fs_devs
             // (2) find its base device in manifest_devs
-            // (3) find its base device in existing_devs (if validated, update manifest_devs)
+            // (3) find its base device in existing_lvms (if validated, update manifest_devs)
             // (4) find its base device as device file (file_exists)
             Dm::Luks(luks) => {
                 let msg = "luks validation failed";
@@ -250,7 +250,7 @@ pub fn validate_blk(
                     continue 'validate_dm;
                 }
 
-                for (lvm_base, lists) in existing_devs.iter() {
+                for (lvm_base, lists) in existing_lvms.iter() {
                     for list in lists {
                         let top_most = list
                             .back()
@@ -274,7 +274,7 @@ pub fn validate_blk(
                         }
 
                         // Copy and update list
-                        // from existing_devs to manifest_devs
+                        // from existing_lvms to manifest_devs
                         let mut list = list.clone();
                         list.push_back(BlockDev {
                             device: luks_path.clone(),
@@ -315,7 +315,7 @@ pub fn validate_blk(
                     //
                     // (1) check if it conflicts with existing_fs_devs
                     // (2) find its base device in manifest_devs
-                    // (3) find its base device in existing_devs (and make sure that there's no such existing PV)
+                    // (3) find its base device in existing_lvms (and make sure that there's no such existing PV)
                     // (4) find its base device as device file (file_exists)
 
                     if let Some(fs_type) = existing_fs_devs.get(pv_path) {
@@ -354,7 +354,7 @@ pub fn validate_blk(
                         continue 'validate_pv;
                     }
 
-                    for lists in existing_devs.values() {
+                    for lists in existing_lvms.values() {
                         for list in lists {
                             let top_most = list
                                 .back()
@@ -413,7 +413,7 @@ pub fn validate_blk(
                     // Validate LVM VG devices
                     //
                     // (1) find its pv_base in manifest_devs
-                    // (2) find its pv_base in existing_devs (and make sure that there's no such existing VG)
+                    // (2) find its pv_base in existing_lvms (and make sure that there's no such existing VG)
                     //
                     // Note: Error if an existing VG exists on the pv_base
 
@@ -451,7 +451,7 @@ pub fn validate_blk(
                             continue 'validate_vg_pv;
                         }
 
-                        for lists in existing_devs.values() {
+                        for lists in existing_lvms.values() {
                             for list in lists {
                                 let top_most = list
                                     .back()
@@ -531,7 +531,7 @@ pub fn validate_blk(
                         continue 'validate_lv;
                     }
 
-                    for (base, lists) in existing_devs.iter() {
+                    for (base, lists) in existing_lvms.iter() {
                         for list in lists {
                             let top_most = list
                                 .back()
