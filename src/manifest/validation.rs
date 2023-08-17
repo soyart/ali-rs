@@ -310,6 +310,24 @@ fn validate_blk(
                     }
                 }
 
+                if existing_fs_ready_devs.contains_key(luks_base_path) {
+                    manifest_devs.insert(
+                        luks_base_path.clone(),
+                        LinkedList::from([
+                            BlockDev {
+                                device: luks_base_path.clone(),
+                                device_type: TYPE_UNKNOWN,
+                            },
+                            BlockDev {
+                                device: luks_path,
+                                device_type: TYPE_LUKS,
+                            },
+                        ]),
+                    );
+
+                    continue 'validate_dm;
+                }
+
                 // TODO: This may introduce error if such file is not a proper block device.
                 if !file_exists(luks_base_path) {
                     return Err(NayiError::NoSuchDevice(luks_base_path.to_string()));
@@ -1366,10 +1384,10 @@ mod tests {
                         ],
                     }],
                     dm: vec![Dm::Lvm(ManifestLvm {
-                        pvs: vec!["./mock_devs/sda2".into(), "/dev/nvme0n1p2".into()],
+                        pvs: vec!["./mock_devs/sda2".into(), "/dev/nvme0n1p1".into()],
                         vgs: vec![ManifestLvmVg {
                             name: "myvg".into(),
-                            pvs: vec!["./mock_devs/sda2".into(), "/dev/nvme0n1p2".into()],
+                            pvs: vec!["./mock_devs/sda2".into(), "/dev/nvme0n1p1".into()],
                         }],
                         lvs: vec![ManifestLvmLv {
                             name: "mylv".into(),
