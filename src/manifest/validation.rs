@@ -15,21 +15,16 @@ pub fn validate(manifest: &Manifest) -> Result<(), NayiError> {
 
     // A hash map of existing block device that can be directly
     // formatted with a filesystem
-    let existing_fs_ready_devs = trace_existing_fs_ready(&output_blkid);
+    let sys_fs_ready_devs = trace_existing_fs_ready(&output_blkid);
 
     // A hash map of existing block device and its filesystems
-    let existing_fs_devs = trace_existing_fs(&output_blkid);
+    let sys_fs_devs = trace_existing_fs(&output_blkid);
 
     // Get all paths of existing LVM devices.
     // Unknown disks are not tracked - only LVM devices and their bases.
-    let existing_lvms = trace_existing_lvms("lvs", "pvs");
+    let sys_lvms = trace_existing_lvms("lvs", "pvs");
 
-    validate_blk(
-        &manifest,
-        &existing_fs_ready_devs,
-        &existing_fs_devs,
-        &existing_lvms,
-    )?;
+    validate_blk(&manifest, &sys_fs_devs, sys_fs_ready_devs, sys_lvms)?;
 
     let mkfs_rootfs = &format!("mkfs.{}", manifest.rootfs.fs_type);
     if !in_path(mkfs_rootfs) {
@@ -151,24 +146,18 @@ fn is_fs_base(dev_type: &BlockDevType) -> bool {
     }
 }
 
-/// Validate storage defined in manifest.
+// Validates manifest block storage.
+// sys_fs_ready_devs and sys_lvms are copied from caller,
+// and are made mutable because we need to remove used up elements
 fn validate_blk(
     manifest: &Manifest,
-    existing_fs_ready_devs: &HashMap<String, BlockDevType>, // Maps device path to fs type
-    existing_fs_devs: &HashMap<String, BlockDevType>,       // Maps device path to device type
-    existing_lvms: &HashMap<String, Vec<LinkedList<BlockDev>>>, // Maps pv path to all possible LV paths
+    sys_fs_devs: &HashMap<String, BlockDevType>, // Maps fs devs to their FS type (e.g. Btrfs)
+    mut sys_fs_ready_devs: HashMap<String, BlockDevType>, // Maps fs-ready devs to their types (e.g. partition)
+    mut sys_lvms: HashMap<String, Vec<LinkedList<BlockDev>>>, // Maps pv path to all possible LV paths
 ) -> Result<(), NayiError> {
-    // manifest_devs tracks devices and their dependencies in the manifest,
-    // with key being the lowest-level device known.
-    //
-    // If a manifest device uses a non-manifest device,
-    // then add the whole linked list from start to top-most device
-    //
-    // The 1st item in the list is usually a manifest disk,
-    // but it could also be some existing device from existing_devs
-    let mut manifest_devs = HashMap::<String, LinkedList<BlockDev>>::new();
+    // valids collects all valid known devices to be created in the manifest
+    let mut valids = Vec::<LinkedList<BlockDev>>::new();
 
-    // Collect all manifest disks into manifest_devs as base/entrypoint
     for disk in &manifest.disks {
         if !file_exists(&disk.device) {
             return Err(NayiError::BadManifest(format!(
@@ -176,7 +165,6 @@ fn validate_blk(
                 disk.device
             )));
         }
-
         let partition_prefix: String = {
             if disk.device.contains("nvme") || disk.device.contains("mmcblk") {
                 format!("{}p", disk.device)
@@ -185,48 +173,43 @@ fn validate_blk(
             }
         };
 
-        // Check if this partition is already in use
-        for (i, _) in disk.partitions.iter().enumerate() {
-            let partition_name = format!("{partition_prefix}{}", i + 1);
-
-            if let Some(existing_fs) = existing_fs_devs.get(&partition_name) {
-                return Err(NayiError::BadManifest(format!(
-                    "partition {partition_name} is already used as {existing_fs}"
-                )));
-            }
-
-            manifest_devs.insert(
-                partition_name.clone(),
-                LinkedList::from([BlockDev {
-                    device: partition_name,
-                    device_type: TYPE_PART,
-                }]),
-            );
-        }
-
-        let list = LinkedList::<BlockDev>::from([BlockDev {
-            device: disk.device.to_string(),
+        // Base disk
+        let base = LinkedList::from([BlockDev {
+            device: disk.device.clone(),
             device_type: TYPE_DISK,
         }]);
 
-        manifest_devs.insert(disk.device.clone(), list);
+        // Check if this partition is already in use
+        let msg = "partition validation failed";
+        for (i, _) in disk.partitions.iter().enumerate() {
+            let partition_name = format!("{partition_prefix}{}", i + 1);
+
+            if let Some(existing_part) = sys_fs_ready_devs.get(&partition_name) {
+                return Err(NayiError::BadManifest(format!(
+                    "{msg}: partition {partition_name} already exists on system"
+                )));
+            }
+
+            if let Some(existing_fs) = sys_fs_devs.get(&partition_name) {
+                return Err(NayiError::BadManifest(format!(
+                    "{msg}: partition {partition_name} is already used as {existing_fs}"
+                )));
+            }
+
+            let mut partition = base.clone();
+            partition.push_back(BlockDev {
+                device: partition_name,
+                device_type: TYPE_PART,
+            });
+
+            valids.push(partition);
+        }
     }
 
-    // Collect and validate ManifestDm,
-    // in the order that they appear in the manifest.
-    //
-    // It first checks if the base device was in manifest_devs,
-    // and if not, it checks existing_devs.
     'validate_dm: for dm in &manifest.dm {
         match dm {
-            // Validate LUKS devices
-            //
-            // (1) check if it conflicts with existing_fs_devs
-            // (2) find its base device in manifest_devs
-            // (3) find its base device in existing_lvms (if validated, update manifest_devs)
-            // (4) find its base device as device file (file_exists)
             Dm::Luks(luks) => {
-                let msg = "luks validation failed";
+                let msg = "dm luks validation failed";
 
                 let (luks_base_path, luks_path) =
                     (&luks.device, format!("/dev/mapper/{}", luks.name));
@@ -237,26 +220,19 @@ fn validate_blk(
                     )));
                 }
 
-                if let Some(fs_type) = existing_fs_devs.get(luks_base_path) {
+                if let Some(fs_type) = sys_fs_devs.get(luks_base_path) {
                     return Err(NayiError::BadManifest(format!(
                         "{msg}: luks {} base {luks_base_path} was already in use as {fs_type}",
                         luks.name
                     )));
                 }
 
-                for list in manifest_devs.values_mut() {
-                    let top_most = list
-                        .back()
-                        .expect("no back node in linked list from manifest_devs");
+                // Find base device for LUKS
+                for list in valids.iter_mut() {
+                    let top_most = list.back().expect("no back node in linked list in v");
 
                     if top_most.device.as_str() != luks_base_path {
                         continue;
-                    }
-
-                    if top_most.device_type == TYPE_LUKS {
-                        return Err(NayiError::BadManifest(format!(
-                            "duplicate luks {luks_path} in manifest"
-                        )));
                     }
 
                     if !is_luks_base(&top_most.device_type) {
@@ -274,20 +250,18 @@ fn validate_blk(
                     continue 'validate_dm;
                 }
 
-                for (lvm_base, lists) in existing_lvms {
-                    for list in lists {
-                        let top_most = list
-                            .back()
-                            .expect("no back node in linked list from existing_devs");
+                // Find base LV in existing LVM
+                for (lvm_base, sys_lvm_lists) in sys_lvms.iter_mut() {
+                    for sys_lvm in sys_lvm_lists {
+                        let top_most = sys_lvm.back();
 
-                        if top_most.device.as_str() != luks_base_path {
+                        if top_most.is_none() {
                             continue;
                         }
 
-                        if top_most.device_type == TYPE_LUKS {
-                            return Err(NayiError::BadManifest(format!(
-                                "{msg}: luks {luks_path} already exists"
-                            )));
+                        let top_most = top_most.unwrap();
+                        if top_most.device.as_str() != luks_base_path {
+                            continue;
                         }
 
                         if !is_luks_base(&top_most.device_type) {
@@ -297,34 +271,36 @@ fn validate_blk(
                             )));
                         }
 
-                        // Copy and update list
-                        // from existing_lvms to manifest_devs
-                        let mut list = list.clone();
+                        // Copy and update list from existing_lvms to valids
+                        let mut list = sys_lvm.clone();
+
                         list.push_back(BlockDev {
                             device: luks_path.clone(),
                             device_type: TYPE_LUKS,
                         });
-                        manifest_devs.insert(luks_base_path.clone(), list);
+
+                        // Push to v, and clear used up sys LVM device
+                        valids.push(list);
+                        sys_lvm.clear();
 
                         continue 'validate_dm;
                     }
                 }
 
-                if existing_fs_ready_devs.contains_key(luks_base_path) {
-                    manifest_devs.insert(
-                        luks_base_path.clone(),
-                        LinkedList::from([
-                            BlockDev {
-                                device: luks_base_path.clone(),
-                                device_type: TYPE_UNKNOWN,
-                            },
-                            BlockDev {
-                                device: luks_path,
-                                device_type: TYPE_LUKS,
-                            },
-                        ]),
-                    );
+                if sys_fs_ready_devs.contains_key(luks_base_path) {
+                    valids.push(LinkedList::from([
+                        BlockDev {
+                            device: luks_base_path.clone(),
+                            device_type: TYPE_UNKNOWN,
+                        },
+                        BlockDev {
+                            device: luks_path,
+                            device_type: TYPE_LUKS,
+                        },
+                    ]));
 
+                    // Clear used up sys fs_ready device
+                    sys_fs_ready_devs.remove(luks_base_path);
                     continue 'validate_dm;
                 }
 
@@ -333,40 +309,47 @@ fn validate_blk(
                     return Err(NayiError::NoSuchDevice(luks_base_path.to_string()));
                 }
 
-                let luks_base_dev = BlockDev {
-                    device: luks_base_path.clone(),
-                    device_type: TYPE_UNKNOWN,
-                };
-
-                let luks_dev = BlockDev {
-                    device: luks_path,
-                    device_type: TYPE_LUKS,
-                };
-
-                let list = LinkedList::from([luks_base_dev, luks_dev]);
-
-                manifest_devs.insert(luks_base_path.to_string(), list);
+                valids.push(LinkedList::from([
+                    BlockDev {
+                        device: luks_base_path.clone(),
+                        device_type: TYPE_UNKNOWN,
+                    },
+                    BlockDev {
+                        device: luks_path,
+                        device_type: TYPE_LUKS,
+                    },
+                ]));
             }
 
-            // Validate LVM devices from PVs -> VGs -> LVs
+            // We validate a LVM manifest block by adding valid devices in these exact order:
+            // PV -> VG -> LV
+            // This gives us certainty that during VG validation, any known PV would have been in valids.
             Dm::Lvm(lvm) => {
                 let mut msg = "lvm pv validation failed";
 
                 'validate_pv: for pv_path in &lvm.pvs {
-                    // Validate LVM PV devices
-                    //
-                    // (1) check if it conflicts with existing_fs_devs
-                    // (2) find its base device in manifest_devs
-                    // (3) find its base device in existing_lvms (and make sure that there's no such existing PV)
-                    // (4) find its base device as device file (file_exists)
-
-                    if let Some(fs_type) = existing_fs_devs.get(pv_path) {
+                    if let Some(fs_type) = sys_fs_devs.get(pv_path) {
                         return Err(NayiError::BadManifest(format!(
                             "{msg}: pv {pv_path} base was already used as {fs_type}",
                         )));
                     }
 
-                    for list in manifest_devs.values_mut() {
+                    // Find and invalidate duplicate PV if it was used for other VG
+                    if let Some(sys_pv_lvms) = sys_lvms.get(pv_path) {
+                        for sys_pv_path in sys_pv_lvms {
+                            for node in sys_pv_path {
+                                if node.device_type == TYPE_VG {
+                                    return Err(NayiError::BadManifest(format!(
+                                        "{msg}: pv {pv_path} was already used for other vg {}",
+                                        node.device,
+                                    )));
+                                }
+                            }
+                        }
+                    }
+
+                    // Find PV base from top-most values in v
+                    for list in valids.iter_mut() {
                         let top_most = list
                             .back()
                             .expect("no back node in linked list from manifest_devs");
@@ -396,96 +379,68 @@ fn validate_blk(
                         continue 'validate_pv;
                     }
 
-                    for lists in existing_lvms.values() {
-                        for list in lists {
-                            let top_most = list
-                                .back()
-                                .expect("no back node in linked list from existing_devs");
-
-                            if top_most.device.as_str() != pv_path {
-                                continue;
-                            }
-
-                            if top_most.device_type == TYPE_PV {
-                                return Err(NayiError::BadManifest(format!(
-                                    "{msg}: pv {pv_path} already exists"
-                                )));
-                            }
-
-                            if !is_pv_base(&top_most.device_type) {
-                                return Err(NayiError::BadManifest(format!(
-                                    "{msg}: pv {} base cannot have type {}",
-                                    pv_path, top_most.device_type,
-                                )));
-                            }
-
-                            let mut list = list.clone();
-                            list.push_back(BlockDev {
-                                device: pv_path.clone(),
+                    // Check if PV base device is in sys_fs_ready_devs
+                    if sys_fs_ready_devs.contains_key(pv_path) {
+                        // Add both base and PV
+                        valids.push(LinkedList::from([
+                            BlockDev {
+                                device: pv_path.to_string(),
+                                device_type: TYPE_UNKNOWN,
+                            },
+                            BlockDev {
+                                device: pv_path.to_string(),
                                 device_type: TYPE_PV,
-                            });
-                            manifest_devs.insert(pv_path.clone(), list);
+                            },
+                        ]));
 
-                            continue 'validate_pv;
-                        }
-                    }
-
-                    if existing_fs_ready_devs.contains_key(pv_path) {
-                        manifest_devs.insert(
-                            pv_path.clone(),
-                            LinkedList::from([
-                                BlockDev {
-                                    device: pv_path.to_string(),
-                                    device_type: TYPE_UNKNOWN,
-                                },
-                                BlockDev {
-                                    device: pv_path.to_string(),
-                                    device_type: TYPE_PV,
-                                },
-                            ]),
-                        );
-
+                        // Removed used up sys fs_ready device
+                        sys_fs_ready_devs.remove(pv_path);
                         continue 'validate_pv;
                     }
 
+                    // TODO: This may introduce error if such file is not a proper block device.
                     if !file_exists(pv_path) {
                         return Err(NayiError::BadManifest(format!(
                             "{msg}: no such pv device: {pv_path}"
                         )));
                     }
 
-                    // TODO: This may introduce error if such file is not a proper block device.
-                    let pv_base_dev = BlockDev {
-                        device: pv_path.clone(),
-                        device_type: TYPE_UNKNOWN,
-                    };
-
-                    let pv_dev = BlockDev {
-                        device: pv_path.clone(),
-                        device_type: TYPE_PV,
-                    };
-
-                    let list = LinkedList::from([pv_base_dev, pv_dev]);
-
-                    manifest_devs.insert(pv_path.clone(), list);
+                    valids.push(LinkedList::from([
+                        BlockDev {
+                            device: pv_path.clone(),
+                            device_type: TYPE_UNKNOWN,
+                        },
+                        BlockDev {
+                            device: pv_path.clone(),
+                            device_type: TYPE_PV,
+                        },
+                    ]));
                 }
 
                 msg = "lvm vg validation failed";
                 for vg in &lvm.vgs {
-                    // Validate LVM VG devices
-                    //
-                    // (1) find its pv_base in manifest_devs
-                    // (2) find its pv_base in existing_lvms (and make sure that there's no such existing VG)
-                    //
-                    // Note: Error if an existing VG exists on the pv_base
-
                     let vg_dev = BlockDev {
                         device: format!("/dev/{}", vg.name),
                         device_type: TYPE_VG,
                     };
 
                     'validate_vg_pv: for pv_base in &vg.pvs {
-                        for list in manifest_devs.values_mut() {
+                        // Invalidate VG if its PV was already used in sys LVM
+                        if let Some(sys_pv_lvms) = sys_lvms.get(pv_base) {
+                            for sys_pv_path in sys_pv_lvms {
+                                for node in sys_pv_path {
+                                    if node.device_type == TYPE_VG {
+                                        return Err(NayiError::BadManifest(format!(
+                                            "{msg}: vg {} base {} was already used for other vg {}",
+                                            vg.name, pv_base, node.device,
+                                        )));
+                                    }
+                                }
+                            }
+                        }
+
+                        // Check if top-most device is PV
+                        for list in valids.iter_mut() {
                             let top_most = list
                                 .back()
                                 .expect("no back node in linked list from manifest_devs");
@@ -506,12 +461,16 @@ fn validate_blk(
                             continue 'validate_vg_pv;
                         }
 
-                        for lists in existing_lvms.values() {
-                            for list in lists {
-                                let top_most = list
-                                    .back()
-                                    .expect("no back node in linked list from existing_devs");
+                        // Find sys_lvm PV to base on
+                        for sys_lvm_lists in sys_lvms.values_mut() {
+                            for sys_lvm in sys_lvm_lists {
+                                let top_most = sys_lvm.back();
 
+                                if top_most.is_none() {
+                                    continue;
+                                }
+
+                                let top_most = top_most.unwrap();
                                 if *top_most == vg_dev {
                                     return Err(NayiError::BadManifest(format!(
                                         "{msg}: vg {} already exists",
@@ -530,9 +489,12 @@ fn validate_blk(
                                     )));
                                 }
 
-                                let mut list = list.clone();
-                                list.push_back(vg_dev.clone());
-                                manifest_devs.insert(pv_base.clone(), list.clone());
+                                let mut new_list = sys_lvm.clone();
+                                new_list.push_back(vg_dev.clone());
+
+                                // Push to valids, and remove used up sys_lvms path
+                                valids.push(new_list);
+                                sys_lvm.clear();
 
                                 continue 'validate_vg_pv;
                             }
@@ -546,11 +508,6 @@ fn validate_blk(
 
                 msg = "lvm lv validation failed";
                 'validate_lv: for lv in &lvm.lvs {
-                    // Validate LV devices
-                    //
-                    // (1) a known vg in manifest_devs
-                    // (2) some existing vg in existing_devs
-
                     let vg_name = format!("/dev/{}", lv.vg);
                     let lv_name = format!("{vg_name}/{}", lv.name);
 
@@ -559,7 +516,43 @@ fn validate_blk(
                         device_type: TYPE_LV,
                     };
 
-                    for list in manifest_devs.values_mut() {
+                    for sys_lvm_lists in sys_lvms.values_mut() {
+                        for sys_lvm_list in sys_lvm_lists.iter_mut() {
+                            let top_most = sys_lvm_list.back();
+
+                            if top_most.is_none() {
+                                continue;
+                            }
+
+                            let top_most = top_most.unwrap();
+                            if *top_most == lv_dev {
+                                return Err(NayiError::BadManifest(format!(
+                                    "{msg}: lv {lv_name} already exists"
+                                )));
+                            }
+
+                            if top_most.device != vg_name {
+                                continue;
+                            }
+
+                            if !is_lv_base(&top_most.device_type) {
+                                return Err(NayiError::BadManifest(format!(
+                                    "{msg}: lv {lv_name} vg base {vg_name} cannot have type {}",
+                                    top_most.device_type
+                                )));
+                            }
+
+                            let mut list = sys_lvm_list.clone();
+                            list.push_back(lv_dev);
+
+                            valids.push(list);
+                            sys_lvm_list.clear();
+
+                            continue 'validate_lv;
+                        }
+                    }
+
+                    for list in valids.iter_mut() {
                         let top_most = list
                             .back()
                             .expect("no back node for linked list in manifest_devs");
@@ -581,40 +574,11 @@ fn validate_blk(
                             )));
                         }
 
+                        // Copy the path to VG, and leave it in-place
+                        // for other LVs that sits on this VG to later use.
                         list.push_back(lv_dev);
 
                         continue 'validate_lv;
-                    }
-
-                    for (base, lists) in existing_lvms {
-                        for list in lists {
-                            let top_most = list
-                                .back()
-                                .expect("no back node for linked list in existing_devs");
-
-                            if *top_most == lv_dev {
-                                return Err(NayiError::BadManifest(format!(
-                                    "{msg}: lv {lv_name} already exists"
-                                )));
-                            }
-
-                            if top_most.device != vg_name {
-                                continue;
-                            }
-
-                            if !is_lv_base(&top_most.device_type) {
-                                return Err(NayiError::BadManifest(format!(
-                                    "{msg}: lv {lv_name} vg base {vg_name} cannot have type {}",
-                                    top_most.device_type
-                                )));
-                            }
-
-                            let mut list = list.clone();
-                            list.push_back(lv_dev);
-                            manifest_devs.insert(base.clone(), list);
-
-                            continue 'validate_lv;
-                        }
                     }
 
                     return Err(NayiError::BadManifest(format!(
@@ -625,54 +589,30 @@ fn validate_blk(
         }
     }
 
-    // Holds a tuple of string (block device name)
-    // and its suitability to host a filesystem (true).
-    //
-    // We collect all ready devices into fs_ready_devs,
-    // and then use it to validate manifest filesystems
+    // fs_ready_devs is used to validate manifest.fs
     let mut fs_ready_devs = HashSet::<(String, bool)>::new();
 
-    // Copy existing fs-ready devices from fs_ready_devs
-    for sys_fs_dev in existing_fs_ready_devs.keys() {
-        fs_ready_devs.insert((sys_fs_dev.clone(), true));
+    // Collect remaining sys_fs_ready_devs
+    for (dev, dev_type) in sys_fs_ready_devs {
+        fs_ready_devs.insert((dev, is_fs_base(&dev_type)));
     }
 
-    for lists in existing_lvms.values() {
-        for list in lists {
-            match list.back() {
-                None => continue,
-                Some(lvm_device) => match lvm_device.device_type {
-                    TYPE_LV => {
-                        fs_ready_devs.insert((lvm_device.device.to_string(), true));
-                    }
-                    _ => continue,
-                },
+    // Collect remaining sys_lvms
+    for sys_lvm_lists in sys_lvms.into_values() {
+        for list in sys_lvm_lists {
+            if let Some(top_most) = list.back() {
+                fs_ready_devs.insert((top_most.device.clone(), is_fs_base(&top_most.device_type)));
             }
         }
     }
 
-    let mut msg = "fs-ready device validation failed";
-    for list in manifest_devs.values_mut() {
-        let top_most = list
-            .back()
-            .expect("no back node in linked list from manifest_devs");
-
-        let is_fs_ready = is_fs_base(&top_most.device_type);
-
-        // If duplicate, then insertion will return false
-        let duplicate = !fs_ready_devs.insert((top_most.device.clone(), is_fs_ready));
-        if duplicate {
-            // If device was already in use on the system as filesystem
-            if let Some(existing_fs) = existing_fs_devs.get(&top_most.device) {
-                return Err(NayiError::BadManifest(format!(
-                    "{msg}: filesystem device {} is already used as {existing_fs}",
-                    top_most.device,
-                )));
-            }
-        }
+    for list in valids {
+        let top_most = list.back().expect("v is missing top-most device");
+        fs_ready_devs.insert((top_most.device.clone(), is_fs_base(&top_most.device_type)));
     }
 
-    msg = "rootfs validation failed";
+    // Validate root FS, other FS, and swap against fs_ready_devs
+    let mut msg = "rootfs validation failed";
     if !fs_ready_devs.contains(&(manifest.rootfs.device.clone(), true)) {
         return Err(NayiError::BadManifest(format!(
             "{msg}: no top-level fs-ready device for rootfs: {}",
@@ -693,43 +633,25 @@ fn validate_blk(
     }
 
     msg = "swap validation failed";
-    if let Some(devices) = manifest.swap.clone() {
-        for (i, device) in devices.into_iter().enumerate() {
-            // device already has some filesystem
-            if let Some(BlockDevType::Fs(fs_type)) = existing_fs_devs.get(&device) {
-                return Err(NayiError::BadManifest(format!(
-                    "{msg}: swap device {device} on the system already contains fs {fs_type}"
-                )));
-            }
-
-            if let Some(manifest_list) = manifest_devs.get(&device) {
-                if let Some(top_most) = manifest_list.back() {
-                    if !is_fs_base(&top_most.device_type) {
-                        return Err(NayiError::BadManifest(format!(
-                            "swap device {device} cannot have type {}",
-                            top_most.device_type
-                        )));
-                    }
-                }
-            }
-
-            if fs_ready_devs.contains(&(device.clone(), true)) {
-                continue;
-            }
-
-            // TODO: remove?
-            if file_exists(&device) {
+    if let Some(ref swaps) = manifest.swap {
+        for (i, swap) in swaps.iter().enumerate() {
+            if is_fs_ready(&fs_ready_devs, swap.clone()) {
                 continue;
             }
 
             return Err(NayiError::BadManifest(format!(
-                "{msg}: manifest swap #{} device {device} is not a valid swap device",
+                "{msg}: device {swap} for swap #{} is not fs-ready",
                 i + 1,
             )));
         }
     }
 
     Ok(())
+}
+
+#[inline]
+fn is_fs_ready(fs_ready_devs: &HashSet<(String, bool)>, device: String) -> bool {
+    return fs_ready_devs.contains(&(device, true));
 }
 
 // For parsing Linux blkid output
@@ -833,14 +755,17 @@ fn trace_existing_fs(output_blkid: &str) -> HashMap<String, BlockDevType> {
 // returning a hash map with key mapped to LVM PV name (as a disk),
 // and values being paths from base -> pv -> vg -> lv.
 //
+// We trace LVM devices by first getting all LVs, then all PVs,
+// and we construct VGs based on LVs and PVs
+//
 // Note: Takes in `lvs_cmd` and `pvs_cmd` to allow tests.
-// TODO: Trace normal block devices too
+// TODO: New trace output schema
 fn trace_existing_lvms(lvs_cmd: &str, pvs_cmd: &str) -> HashMap<String, Vec<LinkedList<BlockDev>>> {
     let cmd_lvs = Command::new(lvs_cmd).output().expect("failed to run `lvs`");
     let output_lvs = String::from_utf8(cmd_lvs.stdout).expect("output is not utf-8");
     let lines_lvs: Vec<&str> = output_lvs.lines().skip(1).collect();
 
-    let mut tmp = Vec::<LinkedList<BlockDev>>::new();
+    let mut lv_paths = Vec::<LinkedList<BlockDev>>::new();
 
     for line in lines_lvs {
         if line.len() == 0 {
@@ -860,21 +785,16 @@ fn trace_existing_lvms(lvs_cmd: &str, pvs_cmd: &str) -> HashMap<String, Vec<Link
         let lv_name = line.get(0).expect("missing 1st string on output");
         let vg_name = line.get(1).expect("missing 2nd string on output");
 
-        let vg_name = format!("/dev/{vg_name}");
-        let lv_name = format!("{vg_name}/{lv_name}");
-
-        let vg = BlockDev {
-            device: vg_name,
-            device_type: BlockDevType::Dm(DmType::Vg),
-        };
-
-        let lv = BlockDev {
-            device: lv_name.clone(),
-            device_type: BlockDevType::Dm(DmType::Lv),
-        };
-
-        let list = LinkedList::<BlockDev>::from([lv, vg.clone()]);
-        tmp.push(list);
+        lv_paths.push(LinkedList::<BlockDev>::from([
+            BlockDev {
+                device: format!("/dev/{vg_name}"),
+                device_type: BlockDevType::Dm(DmType::Vg),
+            },
+            BlockDev {
+                device: format!("{vg_name}/{lv_name}"),
+                device_type: BlockDevType::Dm(DmType::Lv),
+            },
+        ]));
     }
 
     let cmd_pvs = Command::new(pvs_cmd).output().expect("failed to run `pvs`");
@@ -923,11 +843,11 @@ fn trace_existing_lvms(lvs_cmd: &str, pvs_cmd: &str) -> HashMap<String, Vec<Link
         };
 
         let mut lists = Vec::new();
-        for t in &mut tmp.clone() {
-            let vg_tmp = t.pop_back().expect("None vg_tmp");
+        for lv_path in &mut lv_paths.clone() {
+            let vg_tmp = lv_path.pop_back().expect("None vg_tmp");
             if vg_tmp == vg {
                 let mut list = LinkedList::new();
-                let lv_tmp = t.pop_back().expect("None lv_tmp");
+                let lv_tmp = lv_path.pop_back().expect("None lv_tmp");
 
                 list.push_back(pv_base.clone());
                 list.push_back(pv.clone());
@@ -1144,9 +1064,9 @@ mod tests {
     struct Test {
         case: String,
         manifest: Manifest,
-        existing_fs_ready_devs: HashMap<String, BlockDevType>,
-        existing_fs_devs: HashMap<String, BlockDevType>,
-        existing_lvms: HashMap<String, Vec<LinkedList<BlockDev>>>,
+        sys_fs_ready_devs: HashMap<String, BlockDevType>,
+        sys_fs_devs: HashMap<String, BlockDevType>,
+        sys_lvms: HashMap<String, Vec<LinkedList<BlockDev>>>,
     }
 
     #[test]
@@ -1172,12 +1092,12 @@ mod tests {
                     chroot: None,
                     postinstall: None,
                 },
-                existing_fs_ready_devs: HashMap::from([
+                sys_fs_ready_devs: HashMap::from([
                     ("/dev/sda1".into(), BlockDevType::Disk),
                     ("/dev/nvme0n1p2".into(), BlockDevType::Disk),
                 ]),
-                existing_fs_devs: HashMap::new(),
-                existing_lvms: HashMap::new(),
+                sys_fs_devs: HashMap::new(),
+                sys_lvms: HashMap::new(),
             },
             Test {
                 case: "Root on existing LV, swap on existing partition".into(),
@@ -1199,12 +1119,12 @@ mod tests {
                     chroot: None,
                     postinstall: None,
                 },
-                existing_fs_ready_devs: HashMap::from([(
+                sys_fs_ready_devs: HashMap::from([(
                     "/dev/nvme0n1p2".into(),
                     BlockDevType::Disk,
                 )]),
-                existing_fs_devs: HashMap::new(),
-                existing_lvms: HashMap::from([(
+                sys_fs_devs: HashMap::new(),
+                sys_lvms: HashMap::from([(
                     "/dev/sda1".into(),
                     vec![LinkedList::from([
                         BlockDev {
@@ -1242,12 +1162,12 @@ mod tests {
                     chroot: None,
                     postinstall: None,
                 },
-                existing_fs_ready_devs: HashMap::from([
+                sys_fs_ready_devs: HashMap::from([
                     ("/dev/sda1".into(), BlockDevType::Disk),
                     ("/dev/nvme0n1p2".into(), BlockDevType::Disk),
                 ]),
-                existing_fs_devs: HashMap::new(),
-                existing_lvms: HashMap::from([(
+                sys_fs_devs: HashMap::new(),
+                sys_lvms: HashMap::from([(
                     "/dev/sda1".into(),
                     vec![LinkedList::from([
                         BlockDev {
@@ -1298,12 +1218,12 @@ mod tests {
                     chroot: None,
                     postinstall: None,
                 },
-                existing_fs_ready_devs: HashMap::from([
+                sys_fs_ready_devs: HashMap::from([
                     ("/dev/sda1".into(), BlockDevType::Disk),
                     ("/dev/nvme0n1p2".into(), BlockDevType::Disk),
                 ]),
-                existing_fs_devs: HashMap::new(),
-                existing_lvms: HashMap::new(),
+                sys_fs_devs: HashMap::new(),
+                sys_lvms: HashMap::new(),
             },
             Test {
                 case:
@@ -1353,12 +1273,12 @@ mod tests {
                     chroot: None,
                     postinstall: None,
                 },
-                existing_fs_ready_devs: HashMap::from([(
+                sys_fs_ready_devs: HashMap::from([(
                     "/dev/nvme0n1p2".into(),
                     BlockDevType::Disk,
                 )]),
-                existing_fs_devs: HashMap::new(),
-                existing_lvms: HashMap::new(),
+                sys_fs_devs: HashMap::new(),
+                sys_lvms: HashMap::new(),
             },
             Test {
                 case:
@@ -1408,9 +1328,9 @@ mod tests {
                     chroot: None,
                     postinstall: None,
                 },
-                existing_fs_ready_devs: HashMap::from([("/dev/nvme0n1p1".into(), TYPE_PART), ("/dev/nvme0n1p2".into(), TYPE_PART)]),
-                existing_fs_devs: HashMap::new(),
-                existing_lvms: HashMap::new(),
+                sys_fs_ready_devs: HashMap::from([("/dev/nvme0n1p1".into(), TYPE_PART), ("/dev/nvme0n1p2".into(), TYPE_PART)]),
+                sys_fs_devs: HashMap::new(),
+                sys_lvms: HashMap::new(),
             },
             Test {
                 case:
@@ -1470,9 +1390,9 @@ mod tests {
                     chroot: None,
                     postinstall: None,
                 },
-                existing_fs_ready_devs: HashMap::from([("/dev/nvme0n1p1".into(), TYPE_PART), ("/dev/nvme0n1p2".into(), TYPE_PART)]),
-                existing_fs_devs: HashMap::new(),
-                existing_lvms: HashMap::new(),
+                sys_fs_ready_devs: HashMap::from([("/dev/nvme0n1p1".into(), TYPE_PART), ("/dev/nvme0n1p2".into(), TYPE_PART)]),
+                sys_fs_devs: HashMap::new(),
+                sys_lvms: HashMap::new(),
             },
         ];
 
@@ -1497,9 +1417,9 @@ mod tests {
                     chroot: None,
                     postinstall: None,
                 },
-                existing_fs_ready_devs: HashMap::new(),
-                existing_fs_devs: HashMap::new(),
-                existing_lvms: HashMap::new(),
+                sys_fs_ready_devs: HashMap::new(),
+                sys_fs_devs: HashMap::new(),
+                sys_lvms: HashMap::new(),
             },
             Test {
                 case: "No manifest disks, root on existing ext4 fs, swap on non-existent".into(),
@@ -1521,12 +1441,12 @@ mod tests {
                     chroot: None,
                     postinstall: None,
                 },
-                existing_fs_ready_devs: HashMap::new(),
-                existing_fs_devs: HashMap::from([(
+                sys_fs_ready_devs: HashMap::new(),
+                sys_fs_devs: HashMap::from([(
                     "/dev/sda1".to_string(),
                     BlockDevType::Fs("btrfs".to_string()),
                 )]),
-                existing_lvms: HashMap::new(),
+                sys_lvms: HashMap::new(),
             },
             // Root on Btrfs /dev/myvg/mylv (manifest LV on manifest partition, but missing LV)
             Test {
@@ -1571,12 +1491,12 @@ mod tests {
                     chroot: None,
                     postinstall: None,
                 },
-                existing_fs_ready_devs: HashMap::from([(
+                sys_fs_ready_devs: HashMap::from([(
                     "/dev/nvme0n1p2".into(),
                     BlockDevType::Disk,
                 )]),
-                existing_fs_devs: HashMap::new(),
-                existing_lvms: HashMap::new(),
+                sys_fs_devs: HashMap::new(),
+                sys_lvms: HashMap::new(),
             },
              Test {
                 case:
@@ -1636,9 +1556,9 @@ mod tests {
                     chroot: None,
                     postinstall: None,
                 },
-                existing_fs_ready_devs: HashMap::from([("/dev/nvme0n1p1".into(), TYPE_PART), ("/dev/nvme0n1p2".into(), TYPE_PART)]),
-                existing_fs_devs: HashMap::new(),
-                existing_lvms: HashMap::new(),
+                sys_fs_ready_devs: HashMap::from([("/dev/nvme0n1p1".into(), TYPE_PART), ("/dev/nvme0n1p2".into(), TYPE_PART)]),
+                sys_fs_devs: HashMap::new(),
+                sys_lvms: HashMap::new(),
             },
             Test {
                 case:
@@ -1698,18 +1618,18 @@ mod tests {
                     chroot: None,
                     postinstall: None,
                 },
-                existing_fs_ready_devs: HashMap::from([("/dev/nvme0n1p1".into(), TYPE_PART)]),
-                existing_fs_devs: HashMap::new(),
-                existing_lvms: HashMap::new(),
+                sys_fs_ready_devs: HashMap::from([("/dev/nvme0n1p1".into(), TYPE_PART)]),
+                sys_fs_devs: HashMap::new(),
+                sys_lvms: HashMap::new(),
             },
         ];
 
         for (i, test) in tests_should_ok.iter().enumerate() {
             let result = validate_blk(
                 &test.manifest,
-                &test.existing_fs_ready_devs,
-                &test.existing_fs_devs,
-                &test.existing_lvms,
+                &test.sys_fs_devs,
+                test.sys_fs_ready_devs.clone(),
+                test.sys_lvms.clone(),
             );
 
             if result.is_err() {
@@ -1723,9 +1643,9 @@ mod tests {
         for (i, test) in tests_should_err.iter().enumerate() {
             let result = validate_blk(
                 &test.manifest,
-                &test.existing_fs_ready_devs,
-                &test.existing_fs_devs,
-                &test.existing_lvms,
+                &test.sys_fs_devs,
+                test.sys_fs_ready_devs.clone(),
+                test.sys_lvms.clone(),
             );
 
             if result.is_ok() {
