@@ -34,6 +34,13 @@ pub struct Manifest {
     pub postinstall: Option<Vec<String>>,
 }
 
+impl Manifest {
+    #[inline]
+    pub fn from_yaml(manifest_yaml: &str) -> Result<Self, NayiError> {
+        parse(manifest_yaml)
+    }
+}
+
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub enum PartitionTable {
     #[serde(rename = "gpt")]
@@ -123,6 +130,7 @@ pub enum Dm {
     Lvm(ManifestLvm),
 }
 
+#[inline]
 pub fn parse(manifest: &str) -> Result<Manifest, NayiError> {
     serde_yaml::from_str(manifest).map_err(|err| NayiError::BadManifest(err.to_string()))
 }

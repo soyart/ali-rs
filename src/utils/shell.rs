@@ -7,17 +7,30 @@ use crate::errors::NayiError;
 pub fn exec(cmd: &str, args: &[&str]) -> Result<(), NayiError> {
     match Command::new(cmd).args(args).spawn() {
         Ok(mut result) => match result.wait() {
-            Ok(r) => r.exit_ok().map_err(|err| {
-                NayiError::CmdFailed(
+            // Spawned but may still fail
+            Ok(r) => match r.code() {
+                Some(code) => {
+                    if code != 0 {
+                        return Err(NayiError::CmdFailed(
+                            None,
+                            format!("command {cmd} exited with non-zero status {code}"),
+                        ));
+                    }
+
+                    Ok(())
+                }
+                None => Err(NayiError::CmdFailed(
                     None,
-                    format!("command {cmd} exited with bad status {}", err.to_string()),
-                )
-            }),
+                    format!("command {cmd} terminated by signal"),
+                )),
+            },
             Err(err) => Err(NayiError::CmdFailed(
                 Some(err),
                 format!("command ${cmd} failed to run"),
             )),
         },
+
+        // Failed to spawn
         Err(err) => Err(NayiError::CmdFailed(
             Some(err),
             format!("command ${cmd} failed to spawn"),

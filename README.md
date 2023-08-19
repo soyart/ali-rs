@@ -8,7 +8,7 @@ before attempting to change anything on-disk.
 If a manifest instruction suggests it might wipe an existing
 block device, nayi-rs stops and throw an error.
 
-## Validation
+## [Validation](./src/manifest/validation/)
 
 Although nayi does specifies how YAML manifests should be parsed,
 and define steps an implementation should follow, it does not
