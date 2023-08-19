@@ -1,59 +1,29 @@
+use std::time::Duration;
+
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+
 use crate::cli;
 use crate::errors::NayiError;
 use crate::manifest::{self, validation, Manifest};
 
 #[derive(Debug)]
-pub(super) enum Action {
-    CreatePartitionTable {
-        device: String,
-        table: manifest::PartitionTable,
-    },
-
-    CreatePartition {
-        device: String,
-        number: usize,
-        size: usize,
-    },
-
-    CreateDmLuks {
-        device: String,
-    },
-
-    CreateDmLvmPv(String),
-
-    CreateDmLvmVg {
-        pv: String,
-        vg: String,
-    },
-
-    CreateDmLvmLv {
-        vg: String,
-        lv: String,
-    },
-
-    CreateFs {
-        device: String,
-        fs_type: String,
-        mountpoint: String,
-    },
-
-    InstallPackages {
-        packages: Vec<String>,
-    },
-
-    RunCommandsChroot {
-        commands: Vec<String>,
-    },
-
-    RunCommandsPostInstall {
-        commands: Vec<String>,
-    },
-}
-
-#[derive(Debug)]
 pub(super) struct Report {
     pub actions: Vec<Action>,
-    pub duration: std::time::Duration,
+    pub duration: Duration,
+}
+
+impl Report {
+    pub(super) fn to_json(&self) -> serde_json::Value {
+        json!({
+            "actions": self.actions,
+            "elaspedTime": self.duration,
+        })
+    }
+
+    pub(super) fn to_json_string(&self) -> String {
+        self.to_json().to_string()
+    }
 }
 
 pub(super) fn run(args: cli::Args) -> Result<Report, NayiError> {
@@ -117,4 +87,79 @@ fn update_manifest(manifest: &mut Manifest) {
     if has_btrfs {
         manifest.pacstraps.insert(btrfs_progs);
     }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub(super) enum Action {
+    #[serde(rename = "createPartitionTable")]
+    CreatePartitionTable {
+        device: String,
+        table: manifest::PartitionTable,
+    },
+
+    #[serde(rename = "createPartition")]
+    CreatePartition {
+        device: String,
+        number: usize,
+        size: String,
+    },
+
+    #[serde(rename = "createDmLuks")]
+    CreateDmLuks { device: String },
+
+    #[serde(rename = "createLvmPv")]
+    CreateDmLvmPv(String),
+
+    #[serde(rename = "createLvmVg")]
+    CreateDmLvmVg { pv: String, vg: String },
+
+    #[serde(rename = "createLvmLv")]
+    CreateDmLvmLv { vg: String, lv: String },
+
+    #[serde(rename = "createFilesystem")]
+    CreateFs {
+        device: String,
+        fs_type: String,
+        mountpoint: String,
+    },
+
+    #[serde(rename = "installPackages")]
+    InstallPackages { packages: Vec<String> },
+
+    #[serde(rename = "commandsChroot")]
+    RunCommandsChroot { commands: Vec<String> },
+
+    #[serde(rename = "commandsPostInstall")]
+    RunCommandsPostInstall { commands: Vec<String> },
+}
+
+#[ignore = "Ignored because just dummy print JSON"]
+#[test]
+// Dummy function to see JSON result
+fn test_json_actions() {
+    use manifest::PartitionTable;
+
+    let actions = vec![
+        Action::CreatePartitionTable {
+            device: "/dev/sda".into(),
+            table: PartitionTable::Gpt,
+        },
+        Action::CreatePartition {
+            device: "/dev/sda1".into(),
+            number: 1,
+            size: "8G".into(),
+        },
+        Action::CreateFs {
+            device: "/dev/sda1".into(),
+            fs_type: "btrfs".into(),
+            mountpoint: "/".into(),
+        },
+    ];
+
+    let report = Report {
+        actions,
+        duration: Duration::from_secs(20),
+    };
+
+    println!("{}", report.to_json_string());
 }

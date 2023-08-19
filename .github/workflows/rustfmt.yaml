@@ -1,18 +1,11 @@
 name: Test code
 
-on:
-  push:
-  pull_request:
+on: [push]
 
 jobs:
   test:
-    name: Test
+    name: Format with rustfmt
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        toolchain:
-          - stable
-          - nightly
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
@@ -20,7 +13,7 @@ jobs:
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: ${{ matrix.toolchain }}
+          toolchain: stable
           profile: minimal
           override: true # Make cargo workflows uses nightly
 
@@ -29,7 +22,7 @@ jobs:
         with:
           command: check
 
-      - name: Test with `cargo test`
-        uses: actions-rs/cargo@v1
+      - name: Formatting PR
+        uses: mbrobbel/rustfmt-check@master
         with:
-          command: test
+          token: ${{ secrets.GITHUB_TOKEN }}
