@@ -703,6 +703,7 @@ mod tests {
     #[derive(Debug)]
     struct Test {
         case: String,
+        context: Option<String>, // Extra info about the test
         manifest: Manifest,
         sys_fs_ready_devs: HashMap<String, BlockDevType>,
         sys_fs_devs: HashMap<String, BlockDevType>,
@@ -714,9 +715,15 @@ mod tests {
         let tests_should_ok = vec![
             Test {
                 case: "Root and swap on existing partition".into(),
+                context: None,
+                sys_fs_ready_devs: HashMap::from([
+                    ("/dev/sda1".into(), BlockDevType::Disk),
+                    ("/dev/nvme0n1p2".into(), BlockDevType::Disk),
+                ]),
+                sys_fs_devs: HashMap::new(),
+                sys_lvms: HashMap::new(),
+
                 manifest: Manifest {
-                    hostname: "foo".into(),
-                    timezone: "foo".into(),
                     disks: vec![],
                     dm: vec![],
                     rootfs: ManifestRootFs(ManifestFs {
@@ -731,34 +738,14 @@ mod tests {
                     pacstraps: HashSet::new(),
                     chroot: None,
                     postinstall: None,
-                },
-                sys_fs_ready_devs: HashMap::from([
-                    ("/dev/sda1".into(), BlockDevType::Disk),
-                    ("/dev/nvme0n1p2".into(), BlockDevType::Disk),
-                ]),
-                sys_fs_devs: HashMap::new(),
-                sys_lvms: HashMap::new(),
-            },
-            Test {
-                case: "Root on existing LV, swap on existing partition".into(),
-                manifest: Manifest {
                     hostname: "foo".into(),
                     timezone: "foo".into(),
-                    disks: vec![],
-                    dm: vec![],
-                    rootfs: ManifestRootFs(ManifestFs {
-                        device: "/dev/myvg/mylv".into(),
-                        mnt: "/".into(),
-                        fs_type: "btrfs".into(),
-                        fs_opts: "".into(),
-                        mnt_opts: "".into(),
-                    }),
-                    filesystems: vec![],
-                    swap: Some(vec!["/dev/nvme0n1p2".into()]),
-                    pacstraps: HashSet::new(),
-                    chroot: None,
-                    postinstall: None,
                 },
+            },
+
+            Test {
+                case: "Root on existing LV, swap on existing partition".into(),
+                context: None,
                 sys_fs_ready_devs: HashMap::from([(
                     "/dev/nvme0n1p2".into(),
                     BlockDevType::Disk,
@@ -781,12 +768,8 @@ mod tests {
                         },
                     ])],
                 )]),
-            },
-            Test {
-                case: "Root on existing LV, swap on manifest partition".into(),
+
                 manifest: Manifest {
-                    hostname: "foo".into(),
-                    timezone: "foo".into(),
                     disks: vec![],
                     dm: vec![],
                     rootfs: ManifestRootFs(ManifestFs {
@@ -801,7 +784,14 @@ mod tests {
                     pacstraps: HashSet::new(),
                     chroot: None,
                     postinstall: None,
+                    hostname: "foo".into(),
+                    timezone: "foo".into(),
                 },
+            },
+
+            Test {
+                case: "Root on existing LV, swap on manifest partition".into(),
+                context: None,
                 sys_fs_ready_devs: HashMap::from([
                     ("/dev/sda1".into(), BlockDevType::Disk),
                     ("/dev/nvme0n1p2".into(), BlockDevType::Disk),
@@ -824,14 +814,38 @@ mod tests {
                         },
                     ])],
                 )]),
-            },
-            Test {
-                case:
-                    "Root on manifest LVM, built on existing partition. Swap on existing partition"
-                        .into(),
+
                 manifest: Manifest {
+                    disks: vec![],
+                    dm: vec![],
+                    rootfs: ManifestRootFs(ManifestFs {
+                        device: "/dev/myvg/mylv".into(),
+                        mnt: "/".into(),
+                        fs_type: "btrfs".into(),
+                        fs_opts: "".into(),
+                        mnt_opts: "".into(),
+                    }),
+                    filesystems: vec![],
+                    swap: Some(vec!["/dev/nvme0n1p2".into()]),
+                    pacstraps: HashSet::new(),
+                    chroot: None,
+                    postinstall: None,
                     hostname: "foo".into(),
                     timezone: "foo".into(),
+                },
+            },
+
+            Test {
+                case: "Root on manifest LVM, built on existing partition. Swap on existing partition".into(),
+                context: None,
+                sys_fs_ready_devs: HashMap::from([
+                    ("/dev/sda1".into(), BlockDevType::Disk),
+                    ("/dev/nvme0n1p2".into(), BlockDevType::Disk),
+                ]),
+                sys_fs_devs: HashMap::new(),
+                sys_lvms: HashMap::new(),
+
+                manifest: Manifest {
                     disks: vec![],
                     dm: vec![Dm::Lvm(ManifestLvm {
                         pvs: vec!["/dev/sda1".into()],
@@ -857,21 +871,24 @@ mod tests {
                     pacstraps: HashSet::new(),
                     chroot: None,
                     postinstall: None,
+                    hostname: "foo".into(),
+                    timezone: "foo".into(),
                 },
-                sys_fs_ready_devs: HashMap::from([
-                    ("/dev/sda1".into(), BlockDevType::Disk),
-                    ("/dev/nvme0n1p2".into(), BlockDevType::Disk),
-                ]),
-                sys_fs_devs: HashMap::new(),
-                sys_lvms: HashMap::new(),
             },
+
             Test {
                 case:
                     "Root on manifest LVM, built on manifest partition. Swap on manifest partition"
                         .into(),
+                context: None,
+                sys_fs_ready_devs: HashMap::from([(
+                    "/dev/nvme0n1p2".into(),
+                    BlockDevType::Disk,
+                )]),
+                sys_fs_devs: HashMap::new(),
+                sys_lvms: HashMap::new(),
+
                 manifest: Manifest {
-                    hostname: "foo".into(),
-                    timezone: "foo".into(),
                     disks: vec![ManifestDisk {
                         device: "./mock_devs/sda".into(),
                         table: PartitionTable::Gpt,
@@ -912,18 +929,20 @@ mod tests {
                     pacstraps: HashSet::new(),
                     chroot: None,
                     postinstall: None,
+                    hostname: "foo".into(),
+                    timezone: "foo".into(),
                 },
-                sys_fs_ready_devs: HashMap::from([(
-                    "/dev/nvme0n1p2".into(),
-                    BlockDevType::Disk,
-                )]),
+            },
+
+            Test {
+                case: "Root on manifest LVM on manifest partition/existing partition. Swap on manifest partition".into(),
+                context: None,
+                sys_fs_ready_devs: HashMap::from([
+                    ("/dev/nvme0n1p1".into(), TYPE_PART), ("/dev/nvme0n1p2".into(), TYPE_PART),
+                ]),
                 sys_fs_devs: HashMap::new(),
                 sys_lvms: HashMap::new(),
-            },
-            Test {
-                case:
-                    "Root on manifest LVM, built on manifest partition and existing partition. Swap on manifest partition"
-                        .into(),
+
                 manifest: Manifest {
                     hostname: "foo".into(),
                     timezone: "foo".into(),
@@ -974,19 +993,20 @@ mod tests {
                     chroot: None,
                     postinstall: None,
                 },
+            },
+
+            Test {
+                case:
+                    "Root on manifest LVM, built on manifest/existing partition. Swap on manifest partition".into(),
+                context: None,
                 sys_fs_ready_devs: HashMap::from([
-                    ("/dev/nvme0n1p1".into(), TYPE_PART), ("/dev/nvme0n1p2".into(), TYPE_PART),
+                    ("/dev/nvme0n1p1".into(), TYPE_PART),
+                    ("/dev/nvme0n1p2".into(), TYPE_PART),
                 ]),
                 sys_fs_devs: HashMap::new(),
                 sys_lvms: HashMap::new(),
-            },
-            Test {
-                case:
-                    "Root on manifest LVM, built on manifest partitions and existing partition. Swap on manifest partition"
-                        .into(),
+
                 manifest: Manifest {
-                    hostname: "foo".into(),
-                    timezone: "foo".into(),
                     disks: vec![ManifestDisk {
                         device: "./mock_devs/sda".into(),
                         table: PartitionTable::Gpt,
@@ -1045,21 +1065,22 @@ mod tests {
                     pacstraps: HashSet::new(),
                     chroot: None,
                     postinstall: None,
-                },
-                sys_fs_ready_devs: HashMap::from([
-                    ("/dev/nvme0n1p1".into(), TYPE_PART),
-                    ("/dev/nvme0n1p2".into(), TYPE_PART),
-                ]),
-                sys_fs_devs: HashMap::new(),
-                sys_lvms: HashMap::new(),
-            },
-            Test {
-                case:
-                    "Root and Swap on manifest LVs from the same VG, the VG has 3 PVs from manifest partitions and existing partition."
-                        .into(),
-                manifest: Manifest {
                     hostname: "foo".into(),
                     timezone: "foo".into(),
+                },
+            },
+
+            Test {
+                case: "Root and Swap on manifest LVs from the same VG".into(),
+                context: Some("2 LVs on 1 VGs - VGs on 3 PVs".into()),
+                sys_fs_ready_devs: HashMap::from([
+                    ("/dev/nvme0n1p1".into(), TYPE_PART),
+                    ("/dev/nvme0n1p2".into(), TYPE_PART)],
+                ),
+                sys_fs_devs: HashMap::new(),
+                sys_lvms: HashMap::new(),
+
+                manifest: Manifest {
                     disks: vec![ManifestDisk {
                         device: "./mock_devs/sda".into(),
                         table: PartitionTable::Gpt,
@@ -1124,21 +1145,28 @@ mod tests {
                     pacstraps: HashSet::new(),
                     chroot: None,
                     postinstall: None,
-                },
-                sys_fs_ready_devs: HashMap::from([
-                    ("/dev/nvme0n1p1".into(), TYPE_PART),
-                    ("/dev/nvme0n1p2".into(), TYPE_PART)],
-                ),
-                sys_fs_devs: HashMap::new(),
-                sys_lvms: HashMap::new(),
-            },
-            Test {
-                case:
-                    "Root and Swap on manifest LVs from the same VG, the VG has 3 PVs from manifest partitions and existing PV"
-                        .into(),
-                manifest: Manifest {
                     hostname: "foo".into(),
                     timezone: "foo".into(),
+                },
+            },
+
+            Test {
+                case: "Root and Swap on manifest LVs from the same VG".into(),
+                context: Some("2 LVs on 1 VG on 4 PVs. One of the PV already exists".into()),
+                sys_fs_ready_devs: HashMap::from([
+                    ("/dev/nvme0n1p1".into(), TYPE_PART),
+                    ("/dev/nvme0n1p2".into(), TYPE_PART),
+                ]),
+                sys_fs_devs: HashMap::new(),
+                sys_lvms: HashMap::from([
+                    ("/dev/nvme0n2p7".into(), vec![
+                        LinkedList::from(
+                            [BlockDev { device: "/dev/nvme0n2p7".into(), device_type: TYPE_PV }],
+                        ),
+                    ]),
+                ]),
+
+                manifest: Manifest {
                     disks: vec![ManifestDisk {
                         device: "./mock_devs/sda".into(),
                         table: PartitionTable::Gpt,
@@ -1204,7 +1232,14 @@ mod tests {
                     pacstraps: HashSet::new(),
                     chroot: None,
                     postinstall: None,
+                    hostname: "foo".into(),
+                    timezone: "foo".into(),
                 },
+            },
+
+            Test {
+                case: "Multiple LVs on multiple VGs on multiple PVs".into(),
+                context: Some("3 LVs on 2 VGs, each VG on 2 PVs - one PV already exists".into()),
                 sys_fs_ready_devs: HashMap::from([
                     ("/dev/nvme0n1p1".into(), TYPE_PART),
                     ("/dev/nvme0n1p2".into(), TYPE_PART),
@@ -1217,13 +1252,8 @@ mod tests {
                         ),
                     ]),
                 ]),
-            },
-            Test {
-                case:
-                    "Multiple LVs on multiple VGs on multiple PVs".into(),
+
                 manifest: Manifest {
-                    hostname: "foo".into(),
-                    timezone: "foo".into(),
                     disks: vec![ManifestDisk {
                         device: "./mock_devs/sda".into(),
                         table: PartitionTable::Gpt,
@@ -1310,49 +1340,20 @@ mod tests {
                     pacstraps: HashSet::new(),
                     chroot: None,
                     postinstall: None,
+                    hostname: "foo".into(),
+                    timezone: "foo".into(),
                 },
-                sys_fs_ready_devs: HashMap::from([
-                    ("/dev/nvme0n1p1".into(), TYPE_PART),
-                    ("/dev/nvme0n1p2".into(), TYPE_PART),
-                ]),
-                sys_fs_devs: HashMap::new(),
-                sys_lvms: HashMap::from([
-                    ("/dev/nvme0n2p7".into(), vec![
-                        LinkedList::from(
-                            [BlockDev { device: "/dev/nvme0n2p7".into(), device_type: TYPE_PV }],
-                        ),
-                    ]),
-                ]),
             },
         ];
 
         let tests_should_err: Vec<Test> = vec![
             Test {
                 case: "No manifest disks, root on non-existent, swap on non-existent".into(),
-                manifest: Manifest {
-                    hostname: "foo".into(),
-                    timezone: "foo".into(),
-                    disks: vec![],
-                    dm: vec![],
-                    rootfs: ManifestRootFs(ManifestFs {
-                        device: "/dev/sda1".into(),
-                        mnt: "/".into(),
-                        fs_type: "btrfs".into(),
-                        fs_opts: "".into(),
-                        mnt_opts: "".into(),
-                    }),
-                    filesystems: vec![],
-                    swap: Some(vec!["/dev/nvme0n1p2".into()]),
-                    pacstraps: HashSet::new(),
-                    chroot: None,
-                    postinstall: None,
-                },
+                context: None,
                 sys_fs_ready_devs: HashMap::new(),
                 sys_fs_devs: HashMap::new(),
                 sys_lvms: HashMap::new(),
-            },
-            Test {
-                case: "No manifest disks, root on existing ext4 fs, swap on non-existent".into(),
+
                 manifest: Manifest {
                     hostname: "foo".into(),
                     timezone: "foo".into(),
@@ -1371,18 +1372,49 @@ mod tests {
                     chroot: None,
                     postinstall: None,
                 },
+            },
+
+            Test {
+                case: "No manifest disks, root on existing ext4 fs, swap on non-existent".into(),
+                context: None,
                 sys_fs_ready_devs: HashMap::new(),
                 sys_fs_devs: HashMap::from([(
                     "/dev/sda1".into(),
                     BlockDevType::Fs("btrfs".into()),
                 )]),
                 sys_lvms: HashMap::new(),
-            },
-            Test {
-                case: "Root on LVM, built on manifest partitions, but missing LV manifest".into(),
+
                 manifest: Manifest {
+                    disks: vec![],
+                    dm: vec![],
+                    rootfs: ManifestRootFs(ManifestFs {
+                        device: "/dev/sda1".into(),
+                        mnt: "/".into(),
+                        fs_type: "btrfs".into(),
+                        fs_opts: "".into(),
+                        mnt_opts: "".into(),
+                    }),
+                    filesystems: vec![],
+                    swap: Some(vec!["/dev/nvme0n1p2".into()]),
+                    pacstraps: HashSet::new(),
+                    chroot: None,
+                    postinstall: None,
                     hostname: "foo".into(),
                     timezone: "foo".into(),
+                },
+            },
+
+            Test {
+                case: "Root on LVM, built on manifest partitions, but missing LV manifest".into(),
+                context: None,
+                sys_fs_ready_devs: HashMap::from([(
+                    "/dev/nvme0n1p2".into(),
+                    BlockDevType::Disk,
+                )]),
+                sys_fs_devs: HashMap::new(),
+                sys_lvms: HashMap::new(),
+
+                manifest: Manifest {
                     disks: vec![ManifestDisk {
                         device: "./mock_devs/sda".into(),
                         table: PartitionTable::Gpt,
@@ -1419,21 +1451,20 @@ mod tests {
                     pacstraps: HashSet::new(),
                     chroot: None,
                     postinstall: None,
-                },
-                sys_fs_ready_devs: HashMap::from([(
-                    "/dev/nvme0n1p2".into(),
-                    BlockDevType::Disk,
-                )]),
-                sys_fs_devs: HashMap::new(),
-                sys_lvms: HashMap::new(),
-            },
-             Test {
-                case:
-                    "Root on manifest LVM, built on manifest partitions and existing partition. Swap on manifest partition that was used to build PV"
-                        .into(),
-                manifest: Manifest {
                     hostname: "foo".into(),
                     timezone: "foo".into(),
+                },
+            },
+             Test {
+                case: "Root on manifest LVM, built on manifest partitions and existing partition. Swap on manifest partition that was used to build PV".into(),
+                context: None,
+                sys_fs_ready_devs: HashMap::from(
+                    [("/dev/nvme0n1p1".into(), TYPE_PART), ("/dev/nvme0n1p2".into(), TYPE_PART)],
+                ),
+                sys_fs_devs: HashMap::new(),
+                sys_lvms: HashMap::new(),
+
+                manifest: Manifest {
                     disks: vec![ManifestDisk {
                         device: "./mock_devs/sda".into(),
                         table: PartitionTable::Gpt,
@@ -1492,20 +1523,20 @@ mod tests {
                     pacstraps: HashSet::new(),
                     chroot: None,
                     postinstall: None,
+                    hostname: "foo".into(),
+                    timezone: "foo".into(),
                 },
-                sys_fs_ready_devs: HashMap::from(
-                    [("/dev/nvme0n1p1".into(), TYPE_PART), ("/dev/nvme0n1p2".into(), TYPE_PART)],
-                ),
-                sys_fs_devs: HashMap::new(),
-                sys_lvms: HashMap::new(),
             },
+
             Test {
                 case:
                     "Root on manifest LVM, built on manifest partitions and non-existent partition. Swap on manifest partition"
                         .into(),
+                context: None,
+                sys_fs_ready_devs: HashMap::from([("/dev/nvme0n1p1".into(), TYPE_PART)]),
+                sys_fs_devs: HashMap::new(),
+                sys_lvms: HashMap::new(),
                 manifest: Manifest {
-                    hostname: "foo".into(),
-                    timezone: "foo".into(),
                     disks: vec![ManifestDisk {
                         device: "./mock_devs/sda".into(),
                         table: PartitionTable::Gpt,
@@ -1556,18 +1587,24 @@ mod tests {
                     pacstraps: HashSet::new(),
                     chroot: None,
                     postinstall: None,
-                },
-                sys_fs_ready_devs: HashMap::from([("/dev/nvme0n1p1".into(), TYPE_PART)]),
-                sys_fs_devs: HashMap::new(),
-                sys_lvms: HashMap::new(),
-            },
-            Test {
-                case:
-                    "Root and Swap on manifest LVs from the same VG, the VG has 3 PVs from manifest partitions and existing partition, but existing partition already has fs"
-                        .into(),
-                manifest: Manifest {
                     hostname: "foo".into(),
                     timezone: "foo".into(),
+                },
+            },
+
+            Test {
+                case: "Root and Swap on manifest LVs from the same VG, but existing VG partition already has fs".into(),
+                context: Some("2 LVs on 1 VG on 4 PVs, but 1 PV already has swap".into()),
+                sys_fs_ready_devs: HashMap::from([
+                    ("/dev/nvme0n1p1".into(), TYPE_PART),
+                    ("/dev/nvme0n1p2".into(), TYPE_PART),
+                ]),
+                sys_fs_devs: HashMap::from([
+                    ("/dev/nvme0n2p7".into(), BlockDevType::Fs("swap".into())),
+                ]),
+                sys_lvms: HashMap::new(),
+
+                manifest: Manifest {
                     disks: vec![ManifestDisk {
                         device: "./mock_devs/sda".into(),
                         table: PartitionTable::Gpt,
@@ -1595,10 +1632,19 @@ mod tests {
                             ]
                     }],
                     dm: vec![Dm::Lvm(ManifestLvm {
-                        pvs: vec!["./mock_devs/sda2".into(), "./mock_devs/sdb1".into(), "/dev/nvme0n1p2".into()],
+                        pvs: vec![
+                            "./mock_devs/sda2".into(),
+                            "./mock_devs/sdb1".into(),
+                            "/dev/nvme0n1p2".into(),
+                        ],
                         vgs: vec![ManifestLvmVg {
                             name: "myvg".into(),
-                            pvs: vec!["./mock_devs/sda2".into(), "./mock_devs/sdb1".into(), "/dev/nvme0n1p2".into(), "/dev/nvme0n2p7".into()],
+                            pvs: vec![
+                                "./mock_devs/sda2".into(),
+                                "./mock_devs/sdb1".into(),
+                                "/dev/nvme0n1p2".into(),
+                                "/dev/nvme0n2p7".into(),
+                            ],
                         }],
                         lvs: vec![
                         ManifestLvmLv {
@@ -1624,18 +1670,28 @@ mod tests {
                     pacstraps: HashSet::new(),
                     chroot: None,
                     postinstall: None,
-                },
-                sys_fs_ready_devs: HashMap::from([("/dev/nvme0n1p1".into(), TYPE_PART), ("/dev/nvme0n1p2".into(), TYPE_PART)]),
-                sys_fs_devs: HashMap::from([("/dev/nvme0n2p7".into(), BlockDevType::Fs("swap".into()))]),
-                sys_lvms: HashMap::new(),
-            },
-            Test {
-                case:
-                    "Root and Swap on manifest LVs from the same VG, the VG has 3 PVs from manifest partitions and existing PV, but exiting PV was already used"
-                        .into(),
-                manifest: Manifest {
                     hostname: "foo".into(),
                     timezone: "foo".into(),
+                },
+            },
+
+            Test {
+                case: "Root and Swap on manifest LVs from the same VG".into(),
+                context: Some("2 LVs on 1 VG on 4 PVs, but 1 PV was already used".into()),
+                sys_fs_ready_devs: HashMap::from([("/dev/nvme0n1p1".into(), TYPE_PART), ("/dev/nvme0n1p2".into(), TYPE_PART)]),
+                sys_fs_devs: HashMap::new(),
+                sys_lvms: HashMap::from([
+                    ("/dev/nvme0n2p7".into(), vec![
+                        LinkedList::from(
+                            [
+                                BlockDev { device: "/dev/nvme0n2p7".into(), device_type: TYPE_PV },
+                                BlockDev { device: "/dev/sysvg".into(), device_type: TYPE_VG },
+                            ],
+                        ),
+                    ]),
+                ]),
+
+                manifest: Manifest {
                     disks: vec![ManifestDisk {
                         device: "./mock_devs/sda".into(),
                         table: PartitionTable::Gpt,
@@ -1697,19 +1753,9 @@ mod tests {
                     pacstraps: HashSet::new(),
                     chroot: None,
                     postinstall: None,
+                    hostname: "foo".into(),
+                    timezone: "foo".into(),
                 },
-                sys_fs_ready_devs: HashMap::from([("/dev/nvme0n1p1".into(), TYPE_PART), ("/dev/nvme0n1p2".into(), TYPE_PART)]),
-                sys_fs_devs: HashMap::new(),
-                sys_lvms: HashMap::from([
-                    ("/dev/nvme0n2p7".into(), vec![
-                        LinkedList::from(
-                            [
-                                BlockDev { device: "/dev/nvme0n2p7".into(), device_type: TYPE_PV },
-                                BlockDev { device: "/dev/sysvg".into(), device_type: TYPE_VG },
-                            ],
-                        ),
-                    ]),
-                ]),
             },
         ];
 
@@ -1723,6 +1769,12 @@ mod tests {
 
             if result.is_err() {
                 eprintln!("Unexpected error from test case {}: {}", i + 1, test.case);
+
+                if let Some(ref ctx) = test.context {
+                    eprintln!("\nCONTEXT: {ctx}\n");
+                }
+
+                eprintln!("Test structure: {test:?}");
                 eprintln!("Error: {result:?}");
             }
 
@@ -1743,6 +1795,11 @@ mod tests {
                     i + 1,
                     test.case
                 );
+
+                if let Some(ref ctx) = test.context {
+                    eprintln!("\nCONTEXT: {ctx}\n");
+                }
+
                 eprintln!("Test structure: {test:?}");
             }
 
