@@ -1,7 +1,7 @@
 name: Test code
 
 on: [push]
-    
+
 jobs:
   test:
     name: Test
@@ -21,10 +21,14 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: check
-          
 
       - name: Test with `cargo test`
         uses: actions-rs/cargo@v1
         with:
           command: test
 
+      - name: Formatting PR
+        uses: mbrobbel/rustfmt-check@master
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          mode: review
