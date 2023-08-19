@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
@@ -57,13 +58,15 @@ fn update_manifest(manifest: &mut Manifest) {
     );
     let (mut has_lvm, mut has_btrfs) = (false, false);
 
-    for dm in manifest.dm.iter() {
-        match dm {
-            manifest::Dm::Lvm(_) => {
-                has_lvm = true;
-                break;
+    if let Some(dms) = &manifest.dm {
+        for dm in dms {
+            match dm {
+                manifest::Dm::Lvm(_) => {
+                    has_lvm = true;
+                    break;
+                }
+                _ => continue,
             }
-            _ => continue,
         }
     }
 
@@ -72,20 +75,38 @@ fn update_manifest(manifest: &mut Manifest) {
     }
 
     if !has_btrfs {
-        for fs in manifest.filesystems.iter() {
-            if fs.fs_type.as_str() == btrfs {
-                has_btrfs = true;
-                break;
+        if let Some(filesystems) = &manifest.filesystems {
+            for fs in filesystems {
+                if fs.fs_type.as_str() == btrfs {
+                    has_btrfs = true;
+                    break;
+                }
             }
         }
     }
 
     if has_lvm {
-        manifest.pacstraps.insert(lvm2);
+        match manifest.pacstraps {
+            Some(ref mut pacstraps) => {
+                pacstraps.insert(lvm2.clone());
+            }
+            None => {
+                let pacstraps = HashSet::from([lvm2.clone()]);
+                manifest.pacstraps = Some(pacstraps)
+            }
+        }
     }
 
     if has_btrfs {
-        manifest.pacstraps.insert(btrfs_progs);
+        match manifest.pacstraps {
+            Some(ref mut pacstraps) => {
+                pacstraps.insert(lvm2);
+            }
+            None => {
+                let pacstraps = HashSet::from([btrfs_progs.clone()]);
+                manifest.pacstraps = Some(pacstraps)
+            }
+        }
     }
 }
 

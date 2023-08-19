@@ -8,16 +8,22 @@ use crate::errors::NayiError;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Manifest {
-    #[serde(alias = "name")]
-    pub hostname: String,
-    pub timezone: String,
+    #[serde(alias = "name", alias = "host")]
+    pub hostname: Option<String>,
 
-    pub disks: Vec<ManifestDisk>,
-    pub dm: Vec<Dm>,
+    #[serde(alias = "tz")]
+    pub timezone: Option<String>,
+
+    #[serde(alias = "root")]
     pub rootfs: ManifestRootFs,
 
-    #[serde(alias = "fs")]
-    pub filesystems: Vec<ManifestFs>,
+    pub disks: Option<Vec<ManifestDisk>>,
+
+    #[serde(alias = "dms", alias = "device-mappers")]
+    pub dm: Option<Vec<Dm>>,
+
+    #[serde(alias = "fs", alias = "filesystem")]
+    pub filesystems: Option<Vec<ManifestFs>>,
 
     pub swap: Option<Vec<String>>,
 
@@ -27,10 +33,12 @@ pub struct Manifest {
         alias = "install",
         alias = "installs"
     )]
-    pub pacstraps: HashSet<String>,
+    pub pacstraps: Option<HashSet<String>>,
 
     #[serde(alias = "arch-chroot")]
     pub chroot: Option<Vec<String>>,
+
+    #[serde(alias = "post-install")]
     pub postinstall: Option<Vec<String>>,
 }
 
@@ -77,10 +85,10 @@ pub struct ManifestFs {
     pub fs_type: String,
 
     #[serde(alias = "fsopts")]
-    pub fs_opts: String,
+    pub fs_opts: Option<String>,
 
     #[serde(alias = "mntopts")]
-    pub mnt_opts: String,
+    pub mnt_opts: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -115,9 +123,9 @@ pub struct ManifestLvmLv {
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct ManifestLvm {
-    pub pvs: Vec<String>,
-    pub vgs: Vec<ManifestLvmVg>,
-    pub lvs: Vec<ManifestLvmLv>,
+    pub pvs: Option<Vec<String>>,
+    pub vgs: Option<Vec<ManifestLvmVg>>,
+    pub lvs: Option<Vec<ManifestLvmLv>>,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]

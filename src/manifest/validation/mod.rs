@@ -2,6 +2,7 @@ mod trace_blk;
 
 use std::collections::{HashMap, HashSet, LinkedList};
 
+use crate::defaults;
 use crate::errors::NayiError;
 use crate::manifest::{Dm, Manifest};
 use crate::utils::fs::file_exists;
@@ -30,18 +31,27 @@ pub fn validate(manifest: &Manifest) -> Result<(), NayiError> {
         )));
     }
 
-    for fs in &manifest.filesystems {
-        let mkfs_cmd = &format!("mkfs.{}", fs.fs_type);
-        if !in_path(mkfs_cmd) {
-            let device = &fs.device;
+    if let Some(filesystems) = &manifest.filesystems {
+        for fs in filesystems {
+            let mkfs_cmd = &format!("mkfs.{}", fs.fs_type);
+            if !in_path(mkfs_cmd) {
+                let device = &fs.device;
 
-            return Err(NayiError::BadManifest(format!(
-                "no such program to create filesystem for device {device}: {mkfs_cmd}"
-            )));
+                return Err(NayiError::BadManifest(format!(
+                    "no such program to create filesystem for device {device}: {mkfs_cmd}"
+                )));
+            }
         }
     }
 
-    let zone_info = format!("/usr/share/zoneinfo/{}", manifest.timezone);
+    let zone_info = format!(
+        "/usr/share/zoneinfo/{}",
+        manifest
+            .timezone
+            .clone()
+            .unwrap_or(defaults::DEFAULT_TIMEZONE.into())
+    );
+
     if !file_exists(&zone_info) {
         return Err(NayiError::BadManifest(format!(
             "no zone info file {zone_info}"
@@ -154,136 +164,160 @@ fn validate_blk(
     // valids collects all valid known devices to be created in the manifest
     let mut valids = Vec::<LinkedList<BlockDev>>::new();
 
-    for disk in &manifest.disks {
-        if !file_exists(&disk.device) {
-            return Err(NayiError::BadManifest(format!(
-                "no such disk device: {}",
-                disk.device
-            )));
-        }
-        let partition_prefix: String = {
-            if disk.device.contains("nvme") || disk.device.contains("mmcblk") {
-                format!("{}p", disk.device)
-            } else {
-                disk.device.clone()
-            }
-        };
-
-        // Base disk
-        let base = LinkedList::from([BlockDev {
-            device: disk.device.clone(),
-            device_type: TYPE_DISK,
-        }]);
-
-        // Check if this partition is already in use
-        let msg = "partition validation failed";
-        for (i, _) in disk.partitions.iter().enumerate() {
-            let partition_name = format!("{partition_prefix}{}", i + 1);
-
-            if let Some(_) = sys_fs_ready_devs.get(&partition_name) {
+    if let Some(disks) = &manifest.disks {
+        for disk in disks {
+            if !file_exists(&disk.device) {
                 return Err(NayiError::BadManifest(format!(
-                    "{msg}: partition {partition_name} already exists on system"
+                    "no such disk device: {}",
+                    disk.device
                 )));
             }
+            let partition_prefix: String = {
+                if disk.device.contains("nvme") || disk.device.contains("mmcblk") {
+                    format!("{}p", disk.device)
+                } else {
+                    disk.device.clone()
+                }
+            };
 
-            if let Some(existing_fs) = sys_fs_devs.get(&partition_name) {
-                return Err(NayiError::BadManifest(format!(
-                    "{msg}: partition {partition_name} is already used as {existing_fs}"
-                )));
+            // Base disk
+            let base = LinkedList::from([BlockDev {
+                device: disk.device.clone(),
+                device_type: TYPE_DISK,
+            }]);
+
+            // Check if this partition is already in use
+            let msg = "partition validation failed";
+            for (i, _) in disk.partitions.iter().enumerate() {
+                let partition_name = format!("{partition_prefix}{}", i + 1);
+
+                if let Some(_) = sys_fs_ready_devs.get(&partition_name) {
+                    return Err(NayiError::BadManifest(format!(
+                        "{msg}: partition {partition_name} already exists on system"
+                    )));
+                }
+
+                if let Some(existing_fs) = sys_fs_devs.get(&partition_name) {
+                    return Err(NayiError::BadManifest(format!(
+                        "{msg}: partition {partition_name} is already used as {existing_fs}"
+                    )));
+                }
+
+                let mut partition = base.clone();
+                partition.push_back(BlockDev {
+                    device: partition_name,
+                    device_type: TYPE_PART,
+                });
+
+                valids.push(partition);
             }
-
-            let mut partition = base.clone();
-            partition.push_back(BlockDev {
-                device: partition_name,
-                device_type: TYPE_PART,
-            });
-
-            valids.push(partition);
         }
     }
 
-    'validate_dm: for dm in &manifest.dm {
-        match dm {
-            Dm::Luks(luks) => {
-                let msg = "dm luks validation failed";
+    if let Some(dms) = &manifest.dm {
+        'validate_dm: for dm in dms {
+            match dm {
+                Dm::Luks(luks) => {
+                    let msg = "dm luks validation failed";
 
-                let (luks_base_path, luks_path) =
-                    (&luks.device, format!("/dev/mapper/{}", luks.name));
+                    let (luks_base_path, luks_path) =
+                        (&luks.device, format!("/dev/mapper/{}", luks.name));
 
-                if file_exists(&luks_path) {
-                    return Err(NayiError::BadManifest(format!(
-                        "{msg}: device {luks_path} already exists"
-                    )));
-                }
-
-                if let Some(fs_type) = sys_fs_devs.get(luks_base_path) {
-                    return Err(NayiError::BadManifest(format!(
-                        "{msg}: luks {} base {luks_base_path} was already in use as {fs_type}",
-                        luks.name
-                    )));
-                }
-
-                // Find base device for LUKS
-                for list in valids.iter_mut() {
-                    let top_most = list.back().expect("no back node in linked list in v");
-
-                    if top_most.device.as_str() != luks_base_path {
-                        continue;
-                    }
-
-                    if !is_luks_base(&top_most.device_type) {
+                    if file_exists(&luks_path) {
                         return Err(NayiError::BadManifest(format!(
-                            "{msg}: luks {} base {luks_base_path} cannot have type {}",
-                            luks.name, top_most.device_type,
+                            "{msg}: device {luks_path} already exists"
                         )));
                     }
 
-                    list.push_back(BlockDev {
-                        device: luks_path.clone(),
-                        device_type: TYPE_LUKS,
-                    });
+                    if let Some(fs_type) = sys_fs_devs.get(luks_base_path) {
+                        return Err(NayiError::BadManifest(format!(
+                            "{msg}: luks {} base {luks_base_path} was already in use as {fs_type}",
+                            luks.name
+                        )));
+                    }
 
-                    continue 'validate_dm;
-                }
+                    // Find base device for LUKS
+                    for list in valids.iter_mut() {
+                        let top_most = list.back().expect("no back node in linked list in v");
 
-                // Find base LV in existing LVM
-                for (lvm_base, sys_lvm_lists) in sys_lvms.iter_mut() {
-                    for sys_lvm in sys_lvm_lists {
-                        let top_most = sys_lvm.back();
-
-                        if top_most.is_none() {
-                            continue;
-                        }
-
-                        let top_most = top_most.unwrap();
                         if top_most.device.as_str() != luks_base_path {
                             continue;
                         }
 
                         if !is_luks_base(&top_most.device_type) {
                             return Err(NayiError::BadManifest(format!(
-                                "{msg}: luks base {} (itself is an LVM from {}) cannot have type {}",
-                                luks_base_path, lvm_base, top_most.device_type
+                                "{msg}: luks {} base {luks_base_path} cannot have type {}",
+                                luks.name, top_most.device_type,
                             )));
                         }
-
-                        // Copy and update list from existing_lvms to valids
-                        let mut list = sys_lvm.clone();
 
                         list.push_back(BlockDev {
                             device: luks_path.clone(),
                             device_type: TYPE_LUKS,
                         });
 
-                        // Push to v, and clear used up sys LVM device
-                        valids.push(list);
-                        sys_lvm.clear();
-
                         continue 'validate_dm;
                     }
-                }
 
-                if sys_fs_ready_devs.contains_key(luks_base_path) {
+                    // Find base LV in existing LVM
+                    for (lvm_base, sys_lvm_lists) in sys_lvms.iter_mut() {
+                        for sys_lvm in sys_lvm_lists {
+                            let top_most = sys_lvm.back();
+
+                            if top_most.is_none() {
+                                continue;
+                            }
+
+                            let top_most = top_most.unwrap();
+                            if top_most.device.as_str() != luks_base_path {
+                                continue;
+                            }
+
+                            if !is_luks_base(&top_most.device_type) {
+                                return Err(NayiError::BadManifest(format!(
+                                "{msg}: luks base {} (itself is an LVM from {}) cannot have type {}",
+                                luks_base_path, lvm_base, top_most.device_type
+                            )));
+                            }
+
+                            // Copy and update list from existing_lvms to valids
+                            let mut list = sys_lvm.clone();
+
+                            list.push_back(BlockDev {
+                                device: luks_path.clone(),
+                                device_type: TYPE_LUKS,
+                            });
+
+                            // Push to v, and clear used up sys LVM device
+                            valids.push(list);
+                            sys_lvm.clear();
+
+                            continue 'validate_dm;
+                        }
+                    }
+
+                    if sys_fs_ready_devs.contains_key(luks_base_path) {
+                        valids.push(LinkedList::from([
+                            BlockDev {
+                                device: luks_base_path.clone(),
+                                device_type: TYPE_UNKNOWN,
+                            },
+                            BlockDev {
+                                device: luks_path,
+                                device_type: TYPE_LUKS,
+                            },
+                        ]));
+
+                        // Clear used up sys fs_ready device
+                        sys_fs_ready_devs.remove(luks_base_path);
+                        continue 'validate_dm;
+                    }
+
+                    // TODO: This may introduce error if such file is not a proper block device.
+                    if !file_exists(luks_base_path) {
+                        return Err(NayiError::NoSuchDevice(luks_base_path.to_string()));
+                    }
+
                     valids.push(LinkedList::from([
                         BlockDev {
                             device: luks_base_path.clone(),
@@ -294,313 +328,300 @@ fn validate_blk(
                             device_type: TYPE_LUKS,
                         },
                     ]));
-
-                    // Clear used up sys fs_ready device
-                    sys_fs_ready_devs.remove(luks_base_path);
-                    continue 'validate_dm;
                 }
 
-                // TODO: This may introduce error if such file is not a proper block device.
-                if !file_exists(luks_base_path) {
-                    return Err(NayiError::NoSuchDevice(luks_base_path.to_string()));
-                }
+                // We validate a LVM manifest block by adding valid devices in these exact order:
+                // PV -> VG -> LV
+                // This gives us certainty that during VG validation, any known PV would have been in valids.
+                Dm::Lvm(lvm) => {
+                    let mut msg = "lvm pv validation failed";
 
-                valids.push(LinkedList::from([
-                    BlockDev {
-                        device: luks_base_path.clone(),
-                        device_type: TYPE_UNKNOWN,
-                    },
-                    BlockDev {
-                        device: luks_path,
-                        device_type: TYPE_LUKS,
-                    },
-                ]));
-            }
-
-            // We validate a LVM manifest block by adding valid devices in these exact order:
-            // PV -> VG -> LV
-            // This gives us certainty that during VG validation, any known PV would have been in valids.
-            Dm::Lvm(lvm) => {
-                let mut msg = "lvm pv validation failed";
-
-                'validate_pv: for pv_path in &lvm.pvs {
-                    if let Some(fs_type) = sys_fs_devs.get(pv_path) {
-                        return Err(NayiError::BadManifest(format!(
-                            "{msg}: pv {pv_path} base was already used as {fs_type}",
-                        )));
-                    }
-
-                    // Find and invalidate duplicate PV if it was used for other VG
-                    if let Some(sys_pv_lvms) = sys_lvms.get(pv_path) {
-                        for sys_pv_path in sys_pv_lvms {
-                            for node in sys_pv_path {
-                                if node.device_type == TYPE_VG {
-                                    return Err(NayiError::BadManifest(format!(
-                                        "{msg}: pv {pv_path} was already used for other vg {}",
-                                        node.device,
-                                    )));
-                                }
+                    if let Some(pvs) = &lvm.pvs {
+                        'validate_pv: for pv_path in pvs {
+                            if let Some(fs_type) = sys_fs_devs.get(pv_path) {
+                                return Err(NayiError::BadManifest(format!(
+                                    "{msg}: pv {pv_path} base was already used as {fs_type}",
+                                )));
                             }
-                        }
-                    }
 
-                    // Find PV base from top-most values in v
-                    for list in valids.iter_mut() {
-                        let top_most = list
-                            .back()
-                            .expect("no back node in linked list from manifest_devs");
-
-                        if top_most.device.as_str() != pv_path {
-                            continue;
-                        }
-
-                        if top_most.device_type == TYPE_PV {
-                            return Err(NayiError::BadManifest(format!(
-                                "{msg}: duplicate pv {pv_path} in manifest"
-                            )));
-                        }
-
-                        if !is_pv_base(&top_most.device_type) {
-                            return Err(NayiError::BadManifest(format!(
-                                "{msg}: pv {} base cannot have type {}",
-                                pv_path, top_most.device_type,
-                            )));
-                        }
-
-                        list.push_back(BlockDev {
-                            device: pv_path.clone(),
-                            device_type: TYPE_PV,
-                        });
-
-                        continue 'validate_pv;
-                    }
-
-                    // Check if PV base device is in sys_fs_ready_devs
-                    if sys_fs_ready_devs.contains_key(pv_path) {
-                        // Add both base and PV
-                        valids.push(LinkedList::from([
-                            BlockDev {
-                                device: pv_path.to_string(),
-                                device_type: TYPE_UNKNOWN,
-                            },
-                            BlockDev {
-                                device: pv_path.to_string(),
-                                device_type: TYPE_PV,
-                            },
-                        ]));
-
-                        // Removed used up sys fs_ready device
-                        sys_fs_ready_devs.remove(pv_path);
-                        continue 'validate_pv;
-                    }
-
-                    // TODO: This may introduce error if such file is not a proper block device.
-                    if !file_exists(pv_path) {
-                        return Err(NayiError::BadManifest(format!(
-                            "{msg}: no such pv device: {pv_path}"
-                        )));
-                    }
-
-                    valids.push(LinkedList::from([
-                        BlockDev {
-                            device: pv_path.clone(),
-                            device_type: TYPE_UNKNOWN,
-                        },
-                        BlockDev {
-                            device: pv_path.clone(),
-                            device_type: TYPE_PV,
-                        },
-                    ]));
-                }
-
-                msg = "lvm vg validation failed";
-                for vg in &lvm.vgs {
-                    let multi_pvs = vg.pvs.len() > 1;
-                    let last_pv_idx = vg.pvs.len() - 1;
-
-                    // If a VG sits on top of >=1 PVs, then we will have to add a new list to valids (tmp_valids)
-                    let mut tmp_valids = Vec::new();
-
-                    let vg_dev = BlockDev {
-                        device: format!("/dev/{}", vg.name),
-                        device_type: TYPE_VG,
-                    };
-
-                    'validate_vg_pv: for (pv_idx, pv_base) in vg.pvs.iter().enumerate() {
-                        // Invalidate VG if its PV was already used in sys LVM
-                        if let Some(sys_pv_lvms) = sys_lvms.get(pv_base) {
-                            for sys_pv_path in sys_pv_lvms {
-                                for node in sys_pv_path {
-                                    if node.device_type == TYPE_VG {
-                                        return Err(NayiError::BadManifest(format!(
-                                            "{msg}: vg {} base {} was already used for other vg {}",
-                                            vg.name, pv_base, node.device,
+                            // Find and invalidate duplicate PV if it was used for other VG
+                            if let Some(sys_pv_lvms) = sys_lvms.get(pv_path) {
+                                for sys_pv_path in sys_pv_lvms {
+                                    for node in sys_pv_path {
+                                        if node.device_type == TYPE_VG {
+                                            return Err(NayiError::BadManifest(format!(
+                                            "{msg}: pv {pv_path} was already used for other vg {}",
+                                            node.device,
                                         )));
+                                        }
                                     }
                                 }
                             }
-                        }
 
-                        // Check if top-most device is PV
-                        for list in valids.iter_mut() {
-                            let top_most = list
-                                .back()
-                                .expect("no back node in linked list from manifest_devs");
+                            // Find PV base from top-most values in v
+                            for list in valids.iter_mut() {
+                                let top_most = list
+                                    .back()
+                                    .expect("no back node in linked list from manifest_devs");
 
-                            if top_most.device.as_str() != pv_base {
-                                continue;
+                                if top_most.device.as_str() != pv_path {
+                                    continue;
+                                }
+
+                                if top_most.device_type == TYPE_PV {
+                                    return Err(NayiError::BadManifest(format!(
+                                        "{msg}: duplicate pv {pv_path} in manifest"
+                                    )));
+                                }
+
+                                if !is_pv_base(&top_most.device_type) {
+                                    return Err(NayiError::BadManifest(format!(
+                                        "{msg}: pv {} base cannot have type {}",
+                                        pv_path, top_most.device_type,
+                                    )));
+                                }
+
+                                list.push_back(BlockDev {
+                                    device: pv_path.clone(),
+                                    device_type: TYPE_PV,
+                                });
+
+                                continue 'validate_pv;
                             }
 
-                            if !is_vg_base(&top_most.device_type) {
+                            // Check if PV base device is in sys_fs_ready_devs
+                            if sys_fs_ready_devs.contains_key(pv_path) {
+                                // Add both base and PV
+                                valids.push(LinkedList::from([
+                                    BlockDev {
+                                        device: pv_path.to_string(),
+                                        device_type: TYPE_UNKNOWN,
+                                    },
+                                    BlockDev {
+                                        device: pv_path.to_string(),
+                                        device_type: TYPE_PV,
+                                    },
+                                ]));
+
+                                // Removed used up sys fs_ready device
+                                sys_fs_ready_devs.remove(pv_path);
+                                continue 'validate_pv;
+                            }
+
+                            // TODO: This may introduce error if such file is not a proper block device.
+                            if !file_exists(pv_path) {
                                 return Err(NayiError::BadManifest(format!(
-                                    "{msg}: vg {} pv base {pv_base} cannot have type {}",
-                                    vg.name, top_most.device_type,
+                                    "{msg}: no such pv device: {pv_path}"
                                 )));
                             }
 
-                            // Copy a new list into valids
-                            if multi_pvs && pv_idx != last_pv_idx {
-                                let mut new_list = list.clone();
-                                new_list.push_back(vg_dev.clone());
-
-                                tmp_valids.push(new_list);
-                                continue;
-                            }
-
-                            list.push_back(vg_dev.clone());
-
-                            continue 'validate_vg_pv;
+                            valids.push(LinkedList::from([
+                                BlockDev {
+                                    device: pv_path.clone(),
+                                    device_type: TYPE_UNKNOWN,
+                                },
+                                BlockDev {
+                                    device: pv_path.clone(),
+                                    device_type: TYPE_PV,
+                                },
+                            ]));
                         }
+                    }
 
-                        // Find sys_lvm PV to base on
-                        for sys_lvm_lists in sys_lvms.values_mut() {
-                            for sys_lvm in sys_lvm_lists {
-                                let top_most = sys_lvm.back();
+                    msg = "lvm vg validation failed";
+                    if let Some(vgs) = &lvm.vgs {
+                        for vg in vgs {
+                            let multi_pvs = vg.pvs.len() > 1;
+                            let last_pv_idx = vg.pvs.len() - 1;
 
-                                if top_most.is_none() {
-                                    continue;
+                            // If a VG sits on top of >=1 PVs, then we will have to add a new list to valids (tmp_valids)
+                            let mut tmp_valids = Vec::new();
+
+                            let vg_dev = BlockDev {
+                                device: format!("/dev/{}", vg.name),
+                                device_type: TYPE_VG,
+                            };
+
+                            'validate_vg_pv: for (pv_idx, pv_base) in vg.pvs.iter().enumerate() {
+                                // Invalidate VG if its PV was already used in sys LVM
+                                if let Some(sys_pv_lvms) = sys_lvms.get(pv_base) {
+                                    for sys_pv_path in sys_pv_lvms {
+                                        for node in sys_pv_path {
+                                            if node.device_type == TYPE_VG {
+                                                return Err(NayiError::BadManifest(format!(
+                                            "{msg}: vg {} base {} was already used for other vg {}",
+                                            vg.name, pv_base, node.device,
+                                        )));
+                                            }
+                                        }
+                                    }
                                 }
 
-                                let top_most = top_most.unwrap();
-                                if *top_most == vg_dev {
+                                // Check if top-most device is PV
+                                for list in valids.iter_mut() {
+                                    let top_most = list
+                                        .back()
+                                        .expect("no back node in linked list from manifest_devs");
+
+                                    if top_most.device.as_str() != pv_base {
+                                        continue;
+                                    }
+
+                                    if !is_vg_base(&top_most.device_type) {
+                                        return Err(NayiError::BadManifest(format!(
+                                            "{msg}: vg {} pv base {pv_base} cannot have type {}",
+                                            vg.name, top_most.device_type,
+                                        )));
+                                    }
+
+                                    // Copy a new list into valids
+                                    if multi_pvs && pv_idx != last_pv_idx {
+                                        let mut new_list = list.clone();
+                                        new_list.push_back(vg_dev.clone());
+
+                                        tmp_valids.push(new_list);
+                                        continue;
+                                    }
+
+                                    list.push_back(vg_dev.clone());
+
+                                    continue 'validate_vg_pv;
+                                }
+
+                                // Find sys_lvm PV to base on
+                                for sys_lvm_lists in sys_lvms.values_mut() {
+                                    for sys_lvm in sys_lvm_lists {
+                                        let top_most = sys_lvm.back();
+
+                                        if top_most.is_none() {
+                                            continue;
+                                        }
+
+                                        let top_most = top_most.unwrap();
+                                        if *top_most == vg_dev {
+                                            return Err(NayiError::BadManifest(format!(
+                                                "{msg}: vg {} already exists",
+                                                vg.name,
+                                            )));
+                                        }
+
+                                        if top_most.device.as_str() != pv_base {
+                                            continue;
+                                        }
+
+                                        if !is_vg_base(&top_most.device_type) {
+                                            return Err(NayiError::BadManifest(format!(
+                                            "{msg}: vg {} pv base {pv_base} cannot have type {}",
+                                            vg.name, top_most.device_type
+                                        )));
+                                        }
+
+                                        let mut new_list = sys_lvm.clone();
+                                        new_list.push_back(vg_dev.clone());
+
+                                        // Push to valids, and remove used up sys_lvms path
+                                        valids.push(new_list);
+                                        sys_lvm.clear();
+
+                                        continue 'validate_vg_pv;
+                                    }
+                                }
+
+                                // Copy forked lists for VGs with >1 PVs
+                                if !tmp_valids.is_empty() {
+                                    valids.append(&mut tmp_valids);
+                                    continue 'validate_vg_pv;
+                                }
+
+                                return Err(NayiError::BadManifest(
+                                    format!(
+                            "{msg}: no pv device matching {pv_base} in manifest or in the system"),
+                                ));
+                            }
+                        }
+                    }
+
+                    msg = "lvm lv validation failed";
+                    if let Some(lvs) = &lvm.lvs {
+                        'validate_lv: for lv in lvs {
+                            let vg_name = format!("/dev/{}", lv.vg);
+                            let lv_name = format!("{vg_name}/{}", lv.name);
+
+                            let lv_dev = BlockDev {
+                                device: lv_name.clone(),
+                                device_type: TYPE_LV,
+                            };
+
+                            for sys_lvm_lists in sys_lvms.values_mut() {
+                                for sys_lvm_list in sys_lvm_lists.iter_mut() {
+                                    let top_most = sys_lvm_list.back();
+
+                                    if top_most.is_none() {
+                                        continue;
+                                    }
+
+                                    let top_most = top_most.unwrap();
+                                    if *top_most == lv_dev {
+                                        return Err(NayiError::BadManifest(format!(
+                                            "{msg}: lv {lv_name} already exists"
+                                        )));
+                                    }
+
+                                    if top_most.device != vg_name {
+                                        continue;
+                                    }
+
+                                    if !is_lv_base(&top_most.device_type) {
+                                        return Err(NayiError::BadManifest(format!(
+                                        "{msg}: lv {lv_name} vg base {vg_name} cannot have type {}",
+                                        top_most.device_type
+                                    )));
+                                    }
+
+                                    let mut list = sys_lvm_list.clone();
+                                    list.push_back(lv_dev);
+
+                                    valids.push(list);
+                                    sys_lvm_list.clear();
+
+                                    continue 'validate_lv;
+                                }
+                            }
+
+                            for list in valids.iter_mut() {
+                                let top_most = list
+                                    .back()
+                                    .expect("no back node for linked list in manifest_devs");
+
+                                if *top_most == lv_dev {
                                     return Err(NayiError::BadManifest(format!(
-                                        "{msg}: vg {} already exists",
-                                        vg.name,
+                                        "{msg}: duplicate lv {lv_name} in manifest"
                                     )));
                                 }
 
-                                if top_most.device.as_str() != pv_base {
+                                if top_most.device != vg_name {
                                     continue;
                                 }
 
-                                if !is_vg_base(&top_most.device_type) {
+                                if !is_lv_base(&top_most.device_type) {
                                     return Err(NayiError::BadManifest(format!(
-                                        "{msg}: vg {} pv base {pv_base} cannot have type {}",
-                                        vg.name, top_most.device_type
+                                        "{msg}: lv {lv_name} vg base {vg_name} cannot have type {}",
+                                        top_most.device_type
                                     )));
                                 }
 
-                                let mut new_list = sys_lvm.clone();
-                                new_list.push_back(vg_dev.clone());
+                                // Copy the path to VG, and leave it in-place
+                                // for other LVs that sits on this VG to later use.
+                                list.push_back(lv_dev);
 
-                                // Push to valids, and remove used up sys_lvms path
-                                valids.push(new_list);
-                                sys_lvm.clear();
-
-                                continue 'validate_vg_pv;
+                                continue 'validate_lv;
                             }
-                        }
 
-                        // Copy forked lists for VGs with >1 PVs
-                        if !tmp_valids.is_empty() {
-                            valids.append(&mut tmp_valids);
-                            continue 'validate_vg_pv;
-                        }
-
-                        return Err(NayiError::BadManifest(format!(
-                            "{msg}: no pv device matching {pv_base} in manifest or in the system"
+                            return Err(NayiError::BadManifest(format!(
+                            "{msg}: no vg device matching {vg_name} in manifest or in the system"
                         )));
-                    }
-                }
-
-                msg = "lvm lv validation failed";
-                'validate_lv: for lv in &lvm.lvs {
-                    let vg_name = format!("/dev/{}", lv.vg);
-                    let lv_name = format!("{vg_name}/{}", lv.name);
-
-                    let lv_dev = BlockDev {
-                        device: lv_name.clone(),
-                        device_type: TYPE_LV,
-                    };
-
-                    for sys_lvm_lists in sys_lvms.values_mut() {
-                        for sys_lvm_list in sys_lvm_lists.iter_mut() {
-                            let top_most = sys_lvm_list.back();
-
-                            if top_most.is_none() {
-                                continue;
-                            }
-
-                            let top_most = top_most.unwrap();
-                            if *top_most == lv_dev {
-                                return Err(NayiError::BadManifest(format!(
-                                    "{msg}: lv {lv_name} already exists"
-                                )));
-                            }
-
-                            if top_most.device != vg_name {
-                                continue;
-                            }
-
-                            if !is_lv_base(&top_most.device_type) {
-                                return Err(NayiError::BadManifest(format!(
-                                    "{msg}: lv {lv_name} vg base {vg_name} cannot have type {}",
-                                    top_most.device_type
-                                )));
-                            }
-
-                            let mut list = sys_lvm_list.clone();
-                            list.push_back(lv_dev);
-
-                            valids.push(list);
-                            sys_lvm_list.clear();
-
-                            continue 'validate_lv;
                         }
                     }
-
-                    for list in valids.iter_mut() {
-                        let top_most = list
-                            .back()
-                            .expect("no back node for linked list in manifest_devs");
-
-                        if *top_most == lv_dev {
-                            return Err(NayiError::BadManifest(format!(
-                                "{msg}: duplicate lv {lv_name} in manifest"
-                            )));
-                        }
-
-                        if top_most.device != vg_name {
-                            continue;
-                        }
-
-                        if !is_lv_base(&top_most.device_type) {
-                            return Err(NayiError::BadManifest(format!(
-                                "{msg}: lv {lv_name} vg base {vg_name} cannot have type {}",
-                                top_most.device_type
-                            )));
-                        }
-
-                        // Copy the path to VG, and leave it in-place
-                        // for other LVs that sits on this VG to later use.
-                        list.push_back(lv_dev);
-
-                        continue 'validate_lv;
-                    }
-
-                    return Err(NayiError::BadManifest(format!(
-                        "{msg}: no vg device matching {vg_name} in manifest or in the system"
-                    )));
                 }
             }
         }
@@ -652,19 +673,21 @@ fn validate_blk(
     // Remove used up fs-ready device
     fs_ready_devs.remove(&manifest.rootfs.device);
 
-    msg = "fs validation failed";
-    for (i, fs) in manifest.filesystems.iter().enumerate() {
-        if !fs_ready_devs.contains(&fs.device) {
-            return Err(NayiError::BadManifest(format!(
-                "{msg}: device {} for fs #{} ({}) is not fs-ready",
-                fs.device,
-                i + 1,
-                fs.fs_type,
-            )));
-        }
+    if let Some(filesystems) = &manifest.filesystems {
+        msg = "fs validation failed";
+        for (i, fs) in filesystems.iter().enumerate() {
+            if !fs_ready_devs.contains(&fs.device) {
+                return Err(NayiError::BadManifest(format!(
+                    "{msg}: device {} for fs #{} ({}) is not fs-ready",
+                    fs.device,
+                    i + 1,
+                    fs.fs_type,
+                )));
+            }
 
-        // Remove used up fs-ready device
-        fs_ready_devs.remove(&fs.device);
+            // Remove used up fs-ready device
+            fs_ready_devs.remove(&fs.device);
+        }
     }
 
     msg = "swap validation failed";
@@ -712,16 +735,15 @@ impl std::fmt::Display for BlockDevType {
 mod tests {
     use super::*;
     use crate::manifest::*;
-    use std::collections::HashSet;
 
     #[derive(Debug)]
     struct Test {
         case: String,
         context: Option<String>, // Extra info about the test
         manifest: Manifest,
-        sys_fs_ready_devs: HashMap<String, BlockDevType>,
-        sys_fs_devs: HashMap<String, BlockDevType>,
-        sys_lvms: HashMap<String, Vec<LinkedList<BlockDev>>>,
+        sys_fs_ready_devs: Option<HashMap<String, BlockDevType>>,
+        sys_fs_devs: Option<HashMap<String, BlockDevType>>,
+        sys_lvms: Option<HashMap<String, Vec<LinkedList<BlockDev>>>>,
     }
 
     #[test]
@@ -730,42 +752,42 @@ mod tests {
             Test {
                 case: "Root and swap on existing partition".into(),
                 context: None,
-                sys_fs_ready_devs: HashMap::from([
+                sys_fs_ready_devs: Some(HashMap::from([
                     ("/dev/sda1".into(), BlockDevType::Disk),
                     ("/dev/nvme0n1p2".into(), BlockDevType::Disk),
-                ]),
-                sys_fs_devs: HashMap::new(),
-                sys_lvms: HashMap::new(),
+                ])),
+                sys_fs_devs: None,
+                sys_lvms: None,
 
                 manifest: Manifest {
-                    disks: vec![],
-                    dm: vec![],
+                    disks: None,
+                    dm: None,
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/sda1".into(),
                         mnt: "/".into(),
                         fs_type: "btrfs".into(),
-                        fs_opts: "".into(),
-                        mnt_opts: "".into(),
+                        fs_opts: None,
+                        mnt_opts: None,
                     }),
-                    filesystems: vec![],
+                    filesystems: None,
                     swap: Some(vec!["/dev/nvme0n1p2".into()]),
-                    pacstraps: HashSet::new(),
+                    pacstraps: None,
                     chroot: None,
                     postinstall: None,
-                    hostname: "foo".into(),
-                    timezone: "foo".into(),
+                    hostname: None,
+                    timezone: None,
                 },
             },
 
             Test {
                 case: "Root on existing LV, swap on existing partition".into(),
                 context: None,
-                sys_fs_ready_devs: HashMap::from([(
+                sys_fs_ready_devs: Some(HashMap::from([(
                     "/dev/nvme0n1p2".into(),
                     BlockDevType::Disk,
-                )]),
-                sys_fs_devs: HashMap::new(),
-                sys_lvms: HashMap::from([(
+                )])),
+                sys_fs_devs: None,
+                sys_lvms: Some(HashMap::from([(
                     "/dev/sda1".into(),
                     vec![LinkedList::from([
                         BlockDev {
@@ -781,37 +803,37 @@ mod tests {
                             device_type: TYPE_LV,
                         },
                     ])],
-                )]),
+                )])),
 
                 manifest: Manifest {
-                    disks: vec![],
-                    dm: vec![],
+                    disks: None,
+                    dm: None,
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
                         mnt: "/".into(),
                         fs_type: "btrfs".into(),
-                        fs_opts: "".into(),
-                        mnt_opts: "".into(),
+                        fs_opts: None,
+                        mnt_opts: None,
                     }),
-                    filesystems: vec![],
+                    filesystems: None,
                     swap: Some(vec!["/dev/nvme0n1p2".into()]),
-                    pacstraps: HashSet::new(),
+                    pacstraps: None,
                     chroot: None,
                     postinstall: None,
-                    hostname: "foo".into(),
-                    timezone: "foo".into(),
+                    hostname: None,
+                    timezone: None,
                 },
             },
 
             Test {
                 case: "Root on existing LV, swap on manifest partition".into(),
                 context: None,
-                sys_fs_ready_devs: HashMap::from([
+                sys_fs_ready_devs: Some(HashMap::from([
                     ("/dev/sda1".into(), BlockDevType::Disk),
                     ("/dev/nvme0n1p2".into(), BlockDevType::Disk),
-                ]),
-                sys_fs_devs: HashMap::new(),
-                sys_lvms: HashMap::from([(
+                ])),
+                sys_fs_devs: None,
+                sys_lvms: Some(HashMap::from([(
                     "/dev/sda1".into(),
                     vec![LinkedList::from([
                         BlockDev {
@@ -827,37 +849,37 @@ mod tests {
                             device_type: TYPE_LV,
                         },
                     ])],
-                )]),
+                )])),
 
                 manifest: Manifest {
-                    disks: vec![],
-                    dm: vec![],
+                    disks: None,
+                    dm: None,
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
                         mnt: "/".into(),
                         fs_type: "btrfs".into(),
-                        fs_opts: "".into(),
-                        mnt_opts: "".into(),
+                        fs_opts: None,
+                        mnt_opts: None,
                     }),
-                    filesystems: vec![],
+                    filesystems: None,
                     swap: Some(vec!["/dev/nvme0n1p2".into()]),
-                    pacstraps: HashSet::new(),
+                    pacstraps: None,
                     chroot: None,
                     postinstall: None,
-                    hostname: "foo".into(),
-                    timezone: "foo".into(),
+                    hostname: None,
+                    timezone: None,
                 },
             },
 
             Test {
                 case: "Root and swap on existing LV on existing VG".into(),
                 context: None,
-                sys_fs_ready_devs: HashMap::from([
+                sys_fs_ready_devs: Some(HashMap::from([
                     ("/dev/sda1".into(), BlockDevType::Disk),
                     ("/dev/nvme0n1p2".into(), BlockDevType::Disk),
-                ]),
-                sys_fs_devs: HashMap::new(),
-                sys_lvms: HashMap::from([(
+                ])),
+                sys_fs_devs: None,
+                sys_lvms: Some(HashMap::from([(
                     "/dev/sda1".into(),
                     vec![LinkedList::from([
                         BlockDev {
@@ -869,91 +891,88 @@ mod tests {
                             device_type: TYPE_VG,
                         },
                     ])],
-                )]),
+                )])),
 
                 manifest: Manifest {
-                    disks: vec![],
-                    dm: vec![Dm::Lvm(ManifestLvm {
-                        pvs: vec![],
-                        vgs: vec![],
-                        lvs: vec![ManifestLvmLv {
+                    disks: None,
+                    dm: Some(vec![Dm::Lvm(ManifestLvm {
+                        pvs: None,
+                        vgs: None,
+                        lvs: Some(vec![ManifestLvmLv {
                             name: "mylv".into(),
                             vg: "myvg".into(),
                             size: None,
-                        }],
-                    })],
+                        }]),
+                    })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
                         mnt: "/".into(),
                         fs_type: "btrfs".into(),
-                        fs_opts: "".into(),
-                        mnt_opts: "".into(),
+                        fs_opts: None,
+                        mnt_opts: None,
                     }),
-                    filesystems: vec![],
+                    filesystems: None,
                     swap: Some(vec!["/dev/nvme0n1p2".into()]),
-                    pacstraps: HashSet::new(),
+                    pacstraps: None,
                     chroot: None,
                     postinstall: None,
-                    hostname: "foo".into(),
-                    timezone: "foo".into(),
+                    hostname: None,
+                    timezone: None,
                 },
             },
 
             Test {
                 case: "Root on manifest LVM, built on existing partition. Swap on existing partition".into(),
                 context: None,
-                sys_fs_ready_devs: HashMap::from([
+                sys_fs_ready_devs: Some(HashMap::from([
                     ("/dev/sda1".into(), BlockDevType::Disk),
                     ("/dev/nvme0n1p2".into(), BlockDevType::Disk),
-                ]),
-                sys_fs_devs: HashMap::new(),
-                sys_lvms: HashMap::new(),
+                ])),
+                sys_fs_devs: None,
+                sys_lvms: None,
 
                 manifest: Manifest {
-                    disks: vec![],
-                    dm: vec![Dm::Lvm(ManifestLvm {
-                        pvs: vec!["/dev/sda1".into()],
-                        vgs: vec![ManifestLvmVg {
+                    disks: None,
+                    dm: Some(vec![Dm::Lvm(ManifestLvm {
+                        pvs: Some(vec!["/dev/sda1".into()]),
+                        vgs: Some(vec![ManifestLvmVg {
                             name: "myvg".into(),
                             pvs: vec!["/dev/sda1".into()],
-                        }],
-                        lvs: vec![ManifestLvmLv {
+                        }]),
+                        lvs: Some(vec![ManifestLvmLv {
                             name: "mylv".into(),
                             vg: "myvg".into(),
                             size: None,
-                        }],
-                    })],
+                        }]),
+                    })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
                         mnt: "/".into(),
                         fs_type: "btrfs".into(),
-                        fs_opts: "".into(),
-                        mnt_opts: "".into(),
+                        fs_opts: None,
+                        mnt_opts: None,
                     }),
-                    filesystems: vec![],
+                    filesystems: None,
                     swap: Some(vec!["/dev/nvme0n1p2".into()]),
-                    pacstraps: HashSet::new(),
+                    pacstraps: None,
                     chroot: None,
                     postinstall: None,
-                    hostname: "foo".into(),
-                    timezone: "foo".into(),
+                    hostname: None,
+                    timezone: None,
                 },
             },
 
             Test {
-                case:
-                    "Root on manifest LVM, built on manifest partition. Swap on manifest partition"
-                        .into(),
+                case:"Root on manifest LVM, built on manifest partition. Swap on manifest partition".into(),
                 context: None,
-                sys_fs_ready_devs: HashMap::from([(
-                    "/dev/nvme0n1p2".into(),
-                    BlockDevType::Disk,
-                )]),
-                sys_fs_devs: HashMap::new(),
-                sys_lvms: HashMap::new(),
+                sys_fs_ready_devs: Some(HashMap::from([
+                    ("/dev/nvme0n1p2".into(), BlockDevType::Disk),
+                ])),
+                sys_fs_devs: None,
+                sys_lvms: None,
 
                 manifest: Manifest {
-                    disks: vec![ManifestDisk {
+                    disks: Some(vec![ManifestDisk {
                         device: "./mock_devs/sda".into(),
                         table: PartitionTable::Gpt,
                         partitions: vec![
@@ -968,125 +987,129 @@ mod tests {
                                 part_type: "8e".into(),
                             },
                         ],
-                    }],
-                    dm: vec![Dm::Lvm(ManifestLvm {
-                        pvs: vec!["./mock_devs/sda2".into()],
-                        vgs: vec![ManifestLvmVg {
+                    }]),
+                    dm: Some(vec![Dm::Lvm(ManifestLvm {
+                        pvs: Some(vec!["./mock_devs/sda2".into()]),
+                        vgs: Some(vec![ManifestLvmVg {
                             name: "myvg".into(),
                             pvs: vec!["./mock_devs/sda2".into()],
-                        }],
-                        lvs: vec![ManifestLvmLv {
+                        }]),
+                        lvs: Some(vec![ManifestLvmLv {
                             name: "mylv".into(),
                             vg: "myvg".into(),
                             size: None,
-                        }],
-                    })],
+                        }]),
+                    })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
                         mnt: "/".into(),
                         fs_type: "btrfs".into(),
-                        fs_opts: "".into(),
-                        mnt_opts: "".into(),
+                        fs_opts: None,
+                        mnt_opts: None,
                     }),
-                    filesystems: vec![],
+                    filesystems: None,
                     swap: Some(vec!["/dev/nvme0n1p2".into()]),
-                    pacstraps: HashSet::new(),
+                    pacstraps: None,
                     chroot: None,
                     postinstall: None,
-                    hostname: "foo".into(),
-                    timezone: "foo".into(),
+                    hostname: None,
+                    timezone: None,
                 },
             },
 
             Test {
                 case: "Root on manifest LVM on manifest partition/existing partition. Swap on manifest partition".into(),
                 context: None,
-                sys_fs_ready_devs: HashMap::from([
-                    ("/dev/nvme0n1p1".into(), TYPE_PART), ("/dev/nvme0n1p2".into(), TYPE_PART),
-                ]),
-                sys_fs_devs: HashMap::new(),
-                sys_lvms: HashMap::new(),
+                sys_fs_ready_devs: Some(HashMap::from([
+                    ("/dev/nvme0n1p1".into(), TYPE_PART),
+                    ("/dev/nvme0n1p2".into(), TYPE_PART),
+                ])),
+                sys_fs_devs: None,
+                sys_lvms: None,
 
                 manifest: Manifest {
-                    hostname: "foo".into(),
-                    timezone: "foo".into(),
-                    disks: vec![ManifestDisk {
-                        device: "./mock_devs/sda".into(),
-                        table: PartitionTable::Gpt,
-                        partitions: vec![
-                            ManifestPartition {
-                                label: "PART_EFI".into(),
-                                size: Some("500M".into()),
-                                part_type: "ef".into(),
-                            },
-                            ManifestPartition {
-                                label: "PART_PV".into(),
-                                size: None,
-                                part_type: "8e".into(),
-                            },
-                        ],
-                    }],
-                    dm: vec![Dm::Lvm(ManifestLvm {
-                        pvs: vec![
+                    disks: Some(vec![
+                        ManifestDisk {
+                            device: "./mock_devs/sda".into(),
+                            table: PartitionTable::Gpt,
+                            partitions: vec![
+                                ManifestPartition {
+                                    label: "PART_EFI".into(),
+                                    size: Some("500M".into()),
+                                    part_type: "ef".into(),
+                                },
+                                ManifestPartition {
+                                    label: "PART_PV".into(),
+                                    size: None,
+                                    part_type: "8e".into(),
+                                },
+                            ],
+                        },
+                    ]),
+                    dm: Some(vec![Dm::Lvm(ManifestLvm {
+                        pvs: Some(vec![
                             "./mock_devs/sda2".into(),
                             "/dev/nvme0n1p1".into(),
-                        ],
-                        vgs: vec![ManifestLvmVg {
+                        ]),
+                        vgs: Some(vec![ManifestLvmVg {
                             name: "myvg".into(),
                             pvs: vec![
                                 "./mock_devs/sda2".into(),
                                 "/dev/nvme0n1p1".into(),
                             ],
-                        }],
-                        lvs: vec![ManifestLvmLv {
+                        }]),
+                        lvs: Some(vec![ManifestLvmLv {
                             name: "mylv".into(),
                             vg: "myvg".into(),
                             size: None,
-                        }],
-                    })],
+                        }]),
+                    })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
                         mnt: "/".into(),
                         fs_type: "btrfs".into(),
-                        fs_opts: "".into(),
-                        mnt_opts: "".into(),
+                        fs_opts: None,
+                        mnt_opts:None,
                     }),
-                    filesystems: vec![],
+                    filesystems: None,
                     swap: Some(vec!["/dev/nvme0n1p2".into()]),
-                    pacstraps: HashSet::new(),
+                    pacstraps: None,
                     chroot: None,
                     postinstall: None,
+                    hostname: None,
+                    timezone: None,
                 },
             },
 
             Test {
-                case:
-                    "Root on manifest LVM, built on manifest/existing partition. Swap on manifest partition".into(),
+                case: "Root on manifest LVM, built on manifest/existing partition. Swap on manifest partition".into(),
                 context: None,
-                sys_fs_ready_devs: HashMap::from([
+                sys_fs_ready_devs: Some(HashMap::from([
                     ("/dev/nvme0n1p1".into(), TYPE_PART),
                     ("/dev/nvme0n1p2".into(), TYPE_PART),
-                ]),
-                sys_fs_devs: HashMap::new(),
-                sys_lvms: HashMap::new(),
+                ])),
+                sys_fs_devs: None,
+                sys_lvms: None,
 
                 manifest: Manifest {
-                    disks: vec![ManifestDisk {
-                        device: "./mock_devs/sda".into(),
-                        table: PartitionTable::Gpt,
-                        partitions: vec![
-                            ManifestPartition {
-                                label: "PART_EFI".into(),
-                                size: Some("500M".into()),
-                                part_type: "ef".into(),
-                            },
-                            ManifestPartition {
-                                label: "PART_PV1".into(),
-                                size: None,
-                                part_type: "8e".into(),
-                            },
-                        ],
-                    }, ManifestDisk {
+                    disks: Some(vec![
+                        ManifestDisk {
+                            device: "./mock_devs/sda".into(),
+                            table: PartitionTable::Gpt,
+                            partitions: vec![
+                                ManifestPartition {
+                                    label: "PART_EFI".into(),
+                                    size: Some("500M".into()),
+                                    part_type: "ef".into(),
+                                },
+                                ManifestPartition {
+                                    label: "PART_PV1".into(),
+                                    size: None,
+                                    part_type: "8e".into(),
+                                },
+                            ],
+                        },
+                        ManifestDisk {
                             device: "./mock_devs/sdb".into(),
                             table: PartitionTable::Mbr,
                             partitions: vec![
@@ -1096,71 +1119,74 @@ mod tests {
                                     part_type: "8e".into(),
                                 }
                             ]
-                        }],
-                    dm: vec![Dm::Lvm(ManifestLvm {
-                        pvs: vec![
+                        },
+                    ]),
+                    dm: Some(vec![Dm::Lvm(ManifestLvm {
+                        pvs: Some(vec![
                             "./mock_devs/sda2".into(),
                             "./mock_devs/sdb1".into(),
                             "/dev/nvme0n1p2".into(),
-                        ],
-                        vgs: vec![ManifestLvmVg {
+                        ]),
+                        vgs: Some(vec![ManifestLvmVg {
                             name: "myvg".into(),
                             pvs: vec![
                                 "./mock_devs/sda2".into(),
                                 "./mock_devs/sdb1".into(),
                                 "/dev/nvme0n1p2".into(),
                             ],
-                        }],
-                        lvs: vec![ManifestLvmLv {
+                        }]),
+                        lvs: Some(vec![ManifestLvmLv {
                             name: "mylv".into(),
                             vg: "myvg".into(),
                             size: None,
-                        }],
-                    })],
+                        }]),
+                    })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
                         mnt: "/".into(),
                         fs_type: "btrfs".into(),
-                        fs_opts: "".into(),
-                        mnt_opts: "".into(),
+                        fs_opts: None,
+                        mnt_opts: None,
                     }),
-                    filesystems: vec![],
+                    filesystems: None,
                     swap: Some(vec!["/dev/nvme0n1p1".into()]),
-                    pacstraps: HashSet::new(),
+                    pacstraps: None,
                     chroot: None,
                     postinstall: None,
-                    hostname: "foo".into(),
-                    timezone: "foo".into(),
+                    hostname: None,
+                    timezone: None,
                 },
             },
 
             Test {
                 case: "Root and Swap on manifest LVs from the same VG".into(),
                 context: Some("2 LVs on 1 VGs - VGs on 3 PVs".into()),
-                sys_fs_ready_devs: HashMap::from([
+                sys_fs_ready_devs: Some(HashMap::from([
                     ("/dev/nvme0n1p1".into(), TYPE_PART),
                     ("/dev/nvme0n1p2".into(), TYPE_PART)],
-                ),
-                sys_fs_devs: HashMap::new(),
-                sys_lvms: HashMap::new(),
+                )),
+                sys_fs_devs: None,
+                sys_lvms: None,
 
                 manifest: Manifest {
-                    disks: vec![ManifestDisk {
-                        device: "./mock_devs/sda".into(),
-                        table: PartitionTable::Gpt,
-                        partitions: vec![
-                            ManifestPartition {
-                                label: "PART_EFI".into(),
-                                size: Some("500M".into()),
-                                part_type: "ef".into(),
-                            },
-                            ManifestPartition {
-                                label: "PART_PV1".into(),
-                                size: None,
-                                part_type: "8e".into(),
-                            },
-                        ],
-                    }, ManifestDisk {
+                    disks: Some(vec![
+                        ManifestDisk {
+                            device: "./mock_devs/sda".into(),
+                            table: PartitionTable::Gpt,
+                            partitions: vec![
+                                ManifestPartition {
+                                    label: "PART_EFI".into(),
+                                    size: Some("500M".into()),
+                                    part_type: "ef".into(),
+                                },
+                                ManifestPartition {
+                                    label: "PART_PV1".into(),
+                                    size: None,
+                                    part_type: "8e".into(),
+                                },
+                            ],
+                        },
+                        ManifestDisk {
                             device: "./mock_devs/sdb".into(),
                             table: PartitionTable::Mbr,
                             partitions: vec![
@@ -1170,83 +1196,87 @@ mod tests {
                                     part_type: "8e".into(),
                                 }
                             ]
-                        }],
-                    dm: vec![Dm::Lvm(ManifestLvm {
-                        pvs: vec![
+                        },
+                    ]),
+                    dm: Some(vec![Dm::Lvm(ManifestLvm {
+                        pvs: Some(vec![
                             "./mock_devs/sda2".into(),
                             "./mock_devs/sdb1".into(),
                             "/dev/nvme0n1p2".into(),
-                        ],
-                        vgs: vec![ManifestLvmVg {
+                        ]),
+                        vgs: Some(vec![ManifestLvmVg {
                             name: "myvg".into(),
                             pvs: vec![
                                 "./mock_devs/sda2".into(),
                                 "./mock_devs/sdb1".into(),
                                 "/dev/nvme0n1p2".into(),
                             ],
-                        }],
-                        lvs: vec![
-                        ManifestLvmLv {
-                            name: "myswap".into(),
-                            vg: "myvg".into(),
-                            size: Some("8G".into()),
-                        },
-                        ManifestLvmLv {
-                            name: "mylv".into(),
-                            vg: "myvg".into(),
-                            size: None,
-                        }],
-                    })],
+                        }]),
+                        lvs: Some(vec![
+                            ManifestLvmLv {
+                                name: "myswap".into(),
+                                vg: "myvg".into(),
+                                size: Some("8G".into()),
+                            },
+                            ManifestLvmLv {
+                                name: "mylv".into(),
+                                vg: "myvg".into(),
+                                size: None,
+                            },
+                        ]),
+                    })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
                         mnt: "/".into(),
                         fs_type: "btrfs".into(),
-                        fs_opts: "".into(),
-                        mnt_opts: "".into(),
+                        fs_opts: None,
+                        mnt_opts: None,
                     }),
-                    filesystems: vec![],
+                    filesystems: None,
                     swap: Some(vec!["/dev/myvg/myswap".into()]),
-                    pacstraps: HashSet::new(),
+                    pacstraps: None,
                     chroot: None,
                     postinstall: None,
-                    hostname: "foo".into(),
-                    timezone: "foo".into(),
+                    hostname: None,
+                    timezone: None,
                 },
             },
 
             Test {
                 case: "Root and Swap on manifest LVs from the same VG".into(),
                 context: Some("2 LVs on 1 VG on 4 PVs. One of the PV already exists".into()),
-                sys_fs_ready_devs: HashMap::from([
+                sys_fs_ready_devs: Some(HashMap::from([
                     ("/dev/nvme0n1p1".into(), TYPE_PART),
                     ("/dev/nvme0n1p2".into(), TYPE_PART),
-                ]),
-                sys_fs_devs: HashMap::new(),
-                sys_lvms: HashMap::from([
+                ])),
+                sys_fs_devs: None,
+                sys_lvms: Some(HashMap::from([
                     ("/dev/nvme0n2p7".into(), vec![
                         LinkedList::from(
                             [BlockDev { device: "/dev/nvme0n2p7".into(), device_type: TYPE_PV }],
                         ),
                     ]),
-                ]),
+                ])),
 
                 manifest: Manifest {
-                    disks: vec![ManifestDisk {
-                        device: "./mock_devs/sda".into(),
-                        table: PartitionTable::Gpt,
-                        partitions: vec![
-                            ManifestPartition {
-                                label: "PART_EFI".into(),
-                                size: Some("500M".into()),
-                                part_type: "ef".into(),
-                            },
-                            ManifestPartition {
-                                label: "PART_PV1".into(),
-                                size: None,
-                                part_type: "8e".into(),
-                            },
-                        ],
-                    }, ManifestDisk {
+                    disks: Some(vec![
+                        ManifestDisk {
+                            device: "./mock_devs/sda".into(),
+                            table: PartitionTable::Gpt,
+                            partitions: vec![
+                                ManifestPartition {
+                                    label: "PART_EFI".into(),
+                                    size: Some("500M".into()),
+                                    part_type: "ef".into(),
+                                },
+                                ManifestPartition {
+                                    label: "PART_PV1".into(),
+                                    size: None,
+                                    part_type: "8e".into(),
+                                },
+                            ],
+                        },
+                        ManifestDisk {
                             device: "./mock_devs/sdb".into(),
                             table: PartitionTable::Mbr,
                             partitions: vec![
@@ -1256,14 +1286,15 @@ mod tests {
                                     part_type: "8e".into(),
                                 }
                             ]
-                        }],
-                    dm: vec![Dm::Lvm(ManifestLvm {
-                        pvs: vec![
+                        },
+                    ]),
+                    dm: Some(vec![Dm::Lvm(ManifestLvm {
+                        pvs: Some(vec![
                             "./mock_devs/sda2".into(),
                             "./mock_devs/sdb1".into(),
                             "/dev/nvme0n1p2".into(),
-                        ],
-                        vgs: vec![ManifestLvmVg {
+                        ]),
+                        vgs: Some(vec![ManifestLvmVg {
                             name: "myvg".into(),
                             pvs: vec![
                                 "./mock_devs/sda2".into(),
@@ -1271,69 +1302,72 @@ mod tests {
                                 "/dev/nvme0n1p2".into(),
                                 "/dev/nvme0n2p7".into(),
                             ],
-                        }],
-                        lvs: vec![
-                        ManifestLvmLv {
-                            name: "myswap".into(),
-                            vg: "myvg".into(),
-                            size: Some("8G".into()),
-                        },
-                        ManifestLvmLv {
-                            name: "mylv".into(),
-                            vg: "myvg".into(),
-                            size: None,
-                        }],
-                    })],
+                        }]),
+                        lvs: Some(vec![
+                            ManifestLvmLv {
+                                name: "myswap".into(),
+                                vg: "myvg".into(),
+                                size: Some("8G".into()),
+                            },
+                            ManifestLvmLv {
+                                name: "mylv".into(),
+                                vg: "myvg".into(),
+                                size: None,
+                            }
+                        ]),
+                    })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
                         mnt: "/".into(),
                         fs_type: "btrfs".into(),
-                        fs_opts: "".into(),
-                        mnt_opts: "".into(),
+                        fs_opts: None,
+                        mnt_opts: None,
                     }),
-                    filesystems: vec![],
+                    filesystems: None,
                     swap: Some(vec!["/dev/myvg/myswap".into()]),
-                    pacstraps: HashSet::new(),
+                    pacstraps: None,
                     chroot: None,
                     postinstall: None,
-                    hostname: "foo".into(),
-                    timezone: "foo".into(),
+                    hostname: None,
+                    timezone: None,
                 },
             },
 
             Test {
                 case: "Multiple LVs on multiple VGs on multiple PVs".into(),
                 context: Some("3 LVs on 2 VGs, each VG on 2 PVs - one PV already exists".into()),
-                sys_fs_ready_devs: HashMap::from([
+                sys_fs_ready_devs: Some(HashMap::from([
                     ("/dev/nvme0n1p1".into(), TYPE_PART),
                     ("/dev/nvme0n1p2".into(), TYPE_PART),
-                ]),
-                sys_fs_devs: HashMap::new(),
-                sys_lvms: HashMap::from([
+                ])),
+                sys_fs_devs: None,
+                sys_lvms: Some(HashMap::from([
                     ("/dev/nvme0n2p7".into(), vec![
                         LinkedList::from(
                             [BlockDev { device: "/dev/nvme0n2p7".into(), device_type: TYPE_PV }],
                         ),
                     ]),
-                ]),
+                ])),
 
                 manifest: Manifest {
-                    disks: vec![ManifestDisk {
-                        device: "./mock_devs/sda".into(),
-                        table: PartitionTable::Gpt,
-                        partitions: vec![
-                            ManifestPartition {
-                                label: "PART_EFI".into(),
-                                size: Some("500M".into()),
-                                part_type: "ef".into(),
-                            },
-                            ManifestPartition {
-                                label: "PART_PV1".into(),
-                                size: None,
-                                part_type: "8e".into(),
-                            },
-                        ],
-                    }, ManifestDisk {
+                    disks: Some(vec![
+                        ManifestDisk {
+                            device: "./mock_devs/sda".into(),
+                            table: PartitionTable::Gpt,
+                            partitions: vec![
+                                ManifestPartition {
+                                    label: "PART_EFI".into(),
+                                    size: Some("500M".into()),
+                                    part_type: "ef".into(),
+                                },
+                                ManifestPartition {
+                                    label: "PART_PV1".into(),
+                                    size: None,
+                                    part_type: "8e".into(),
+                                },
+                            ],
+                        },
+                        ManifestDisk {
                             device: "./mock_devs/sdb".into(),
                             table: PartitionTable::Mbr,
                             partitions: vec![
@@ -1343,14 +1377,15 @@ mod tests {
                                     part_type: "8e".into(),
                                 }
                             ]
-                        }],
-                    dm: vec![Dm::Lvm(ManifestLvm {
-                        pvs: vec![
+                        },
+                    ]),
+                    dm: Some(vec![Dm::Lvm(ManifestLvm {
+                        pvs: Some(vec![
                             "./mock_devs/sda2".into(),
                             "./mock_devs/sdb1".into(),
                             "/dev/nvme0n1p2".into(),
-                        ],
-                        vgs: vec![
+                        ]),
+                        vgs: Some(vec![
                             ManifestLvmVg {
                                 name: "mysatavg".into(),
                                 pvs: vec![
@@ -1365,8 +1400,8 @@ mod tests {
                                     "/dev/nvme0n2p7".into(),
                                 ],
                             },
-                        ],
-                        lvs: vec![
+                        ]),
+                        lvs: Some(vec![
                             ManifestLvmLv {
                                 name: "myswap".into(),
                                 vg: "mynvmevg".into(),
@@ -1382,30 +1417,30 @@ mod tests {
                                 vg: "mysatavg".into(),
                                 size: None,
                             },
-                        ],
-                    })],
+                        ]),
+                    })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/mysatavg/rootlv".into(),
                         mnt: "/".into(),
                         fs_type: "btrfs".into(),
-                        fs_opts: "".into(),
-                        mnt_opts: "".into(),
+                        fs_opts: None,
+                        mnt_opts: None,
                     }),
-                    filesystems: vec![
+                    filesystems: Some(vec![
                         ManifestFs {
                             device: "/dev/mysatavg/datalv".into(),
                             mnt: "/opt/data".into(),
                             fs_type: "xfs".into(),
-                            fs_opts: "".into(),
-                            mnt_opts: "".into(),
+                            fs_opts: None,
+                            mnt_opts: None,
                         },
-                    ],
+                    ]),
                     swap: Some(vec!["/dev/mynvmevg/myswap".into()]),
-                    pacstraps: HashSet::new(),
+                    pacstraps: None,
                     chroot: None,
                     postinstall: None,
-                    hostname: "foo".into(),
-                    timezone: "foo".into(),
+                    hostname: None,
+                    timezone: None,
                 },
             },
         ];
@@ -1414,142 +1449,146 @@ mod tests {
             Test {
                 case: "No manifest disks, root on non-existent, swap on non-existent".into(),
                 context: None,
-                sys_fs_ready_devs: HashMap::new(),
-                sys_fs_devs: HashMap::new(),
-                sys_lvms: HashMap::new(),
+                sys_fs_ready_devs: None,
+                sys_fs_devs: None,
+                sys_lvms: None,
 
                 manifest: Manifest {
-                    hostname: "foo".into(),
-                    timezone: "foo".into(),
-                    disks: vec![],
-                    dm: vec![],
+                    disks: None,
+                    dm: None,
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/sda1".into(),
                         mnt: "/".into(),
                         fs_type: "btrfs".into(),
-                        fs_opts: "".into(),
-                        mnt_opts: "".into(),
+                        fs_opts: None,
+                        mnt_opts: None,
                     }),
-                    filesystems: vec![],
+                    filesystems: None,
                     swap: Some(vec!["/dev/nvme0n1p2".into()]),
-                    pacstraps: HashSet::new(),
+                    pacstraps: None,
                     chroot: None,
                     postinstall: None,
+                    hostname: None,
+                    timezone: None,
                 },
             },
 
             Test {
                 case: "No manifest disks, root on existing ext4 fs, swap on non-existent".into(),
                 context: None,
-                sys_fs_ready_devs: HashMap::new(),
-                sys_fs_devs: HashMap::from([(
+                sys_fs_ready_devs: None,
+                sys_fs_devs: Some(HashMap::from([(
                     "/dev/sda1".into(),
                     BlockDevType::Fs("btrfs".into()),
-                )]),
-                sys_lvms: HashMap::new(),
+                )])),
+                sys_lvms: None,
 
                 manifest: Manifest {
-                    disks: vec![],
-                    dm: vec![],
+                    disks: None,
+                    dm: None,
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/sda1".into(),
                         mnt: "/".into(),
                         fs_type: "btrfs".into(),
-                        fs_opts: "".into(),
-                        mnt_opts: "".into(),
+                        fs_opts: None,
+                        mnt_opts: None,
                     }),
-                    filesystems: vec![],
+                    filesystems: None,
                     swap: Some(vec!["/dev/nvme0n1p2".into()]),
-                    pacstraps: HashSet::new(),
+                    pacstraps: None,
                     chroot: None,
                     postinstall: None,
-                    hostname: "foo".into(),
-                    timezone: "foo".into(),
+                    hostname: None,
+                    timezone: None,
                 },
             },
 
             Test {
                 case: "Root on LVM, built on manifest partitions, but missing LV manifest".into(),
                 context: None,
-                sys_fs_ready_devs: HashMap::from([(
+                sys_fs_ready_devs: Some(HashMap::from([(
                     "/dev/nvme0n1p2".into(),
                     BlockDevType::Disk,
-                )]),
-                sys_fs_devs: HashMap::new(),
-                sys_lvms: HashMap::new(),
+                )])),
+                sys_fs_devs: None,
+                sys_lvms: None,
 
                 manifest: Manifest {
-                    disks: vec![ManifestDisk {
-                        device: "./mock_devs/sda".into(),
-                        table: PartitionTable::Gpt,
-                        partitions: vec![
-                            ManifestPartition {
-                                label: "PART_EFI".into(),
-                                size: Some("500M".into()),
-                                part_type: "ef".into(),
-                            },
-                            ManifestPartition {
-                                label: "PART_PV".into(),
-                                size: None,
-                                part_type: "8e".into(),
-                            },
-                        ],
-                    }],
-                    dm: vec![Dm::Lvm(ManifestLvm {
-                        pvs: vec!["./mock_devs/sda2".into()],
-                        vgs: vec![ManifestLvmVg {
+                    disks: Some(vec![
+                        ManifestDisk {
+                            device: "./mock_devs/sda".into(),
+                            table: PartitionTable::Gpt,
+                            partitions: vec![
+                                ManifestPartition {
+                                    label: "PART_EFI".into(),
+                                    size: Some("500M".into()),
+                                    part_type: "ef".into(),
+                                },
+                                ManifestPartition {
+                                    label: "PART_PV".into(),
+                                    size: None,
+                                    part_type: "8e".into(),
+                                },
+                            ],
+                    }]),
+                    dm: Some(vec![Dm::Lvm(ManifestLvm {
+                        pvs: Some(vec![
+                            "./mock_devs/sda2".into(),
+                        ]),
+                        vgs: Some(vec![ManifestLvmVg {
                             name: "myvg".into(),
                             pvs: vec!["./mock_devs/sda2".into()],
-                        }],
-                        lvs: vec![],
-                    })],
+                        }]),
+                        lvs: None,
+                    })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
                         mnt: "/".into(),
                         fs_type: "btrfs".into(),
-                        fs_opts: "".into(),
-                        mnt_opts: "".into(),
+                        fs_opts: None,
+                        mnt_opts: None,
                     }),
-                    filesystems: vec![],
+                    filesystems: None,
                     swap: Some(vec!["/dev/nvme0n1p2".into()]),
-                    pacstraps: HashSet::new(),
+                    pacstraps: None,
                     chroot: None,
                     postinstall: None,
-                    hostname: "foo".into(),
-                    timezone: "foo".into(),
+                    hostname: None,
+                    timezone: None,
                 },
             },
 
             Test {
                 case: "Root on LVM, built on manifest partitions".into(),
                 context: Some("VG is based on used PV".into()),
-                sys_fs_ready_devs: HashMap::from([(
+                sys_fs_ready_devs: Some(HashMap::from([(
                     "/dev/nvme0n1p2".into(),
                     BlockDevType::Disk,
-                )]),
-                sys_fs_devs: HashMap::new(),
-                sys_lvms: HashMap::new(),
+                )])),
+                sys_fs_devs: None,
+                sys_lvms: None,
 
                 manifest: Manifest {
-                    disks: vec![ManifestDisk {
-                        device: "./mock_devs/sda".into(),
-                        table: PartitionTable::Gpt,
-                        partitions: vec![
-                            ManifestPartition {
-                                label: "PART_EFI".into(),
-                                size: Some("500M".into()),
-                                part_type: "ef".into(),
-                            },
-                            ManifestPartition {
-                                label: "PART_PV".into(),
-                                size: None,
-                                part_type: "8e".into(),
-                            },
-                        ],
-                    }],
-                    dm: vec![Dm::Lvm(ManifestLvm {
-                        pvs: vec!["./mock_devs/sda2".into()],
-                        vgs: vec![
+                    disks: Some(vec![
+                        ManifestDisk {
+                            device: "./mock_devs/sda".into(),
+                            table: PartitionTable::Gpt,
+                            partitions: vec![
+                                ManifestPartition {
+                                    label: "PART_EFI".into(),
+                                    size: Some("500M".into()),
+                                    part_type: "ef".into(),
+                                },
+                                ManifestPartition {
+                                    label: "PART_PV".into(),
+                                    size: None,
+                                    part_type: "8e".into(),
+                                },
+                            ],
+                    }]),
+                    dm: Some(vec![Dm::Lvm(ManifestLvm {
+                        pvs: Some(vec!["./mock_devs/sda2".into()]),
+                        vgs: Some(vec![
                             ManifestLvmVg {
                                 name: "myvg".into(),
                                 pvs: vec!["./mock_devs/sda2".into()],
@@ -1558,118 +1597,122 @@ mod tests {
                                 name: "somevg".into(),
                                 pvs: vec!["./mock_devs/sda2".into()],
                             },
-                        ],
-                        lvs: vec![],
-                    })],
+                        ]),
+                        lvs: None,
+                    })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
                         mnt: "/".into(),
                         fs_type: "btrfs".into(),
-                        fs_opts: "".into(),
-                        mnt_opts: "".into(),
+                        fs_opts: None,
+                        mnt_opts: None,
                     }),
-                    filesystems: vec![],
+                    filesystems: None,
                     swap: Some(vec!["/dev/nvme0n1p2".into()]),
-                    pacstraps: HashSet::new(),
+                    pacstraps: None,
                     chroot: None,
                     postinstall: None,
-                    hostname: "foo".into(),
-                    timezone: "foo".into(),
+                    hostname: None,
+                    timezone: None,
                 },
             },
 
             Test {
                 case: "Root on LVM, built on manifest partitions, but 1 fs is re-using rootfs LV".into(),
                 context: None,
-                sys_fs_ready_devs: HashMap::from([(
+                sys_fs_ready_devs: Some(HashMap::from([(
                     "/dev/nvme0n1p2".into(),
                     BlockDevType::Disk,
-                )]),
-                sys_fs_devs: HashMap::new(),
-                sys_lvms: HashMap::new(),
+                )])),
+                sys_fs_devs: None,
+                sys_lvms: None,
 
                 manifest: Manifest {
-                    disks: vec![ManifestDisk {
-                        device: "./mock_devs/sda".into(),
-                        table: PartitionTable::Gpt,
-                        partitions: vec![
-                            ManifestPartition {
-                                label: "PART_EFI".into(),
-                                size: Some("500M".into()),
-                                part_type: "ef".into(),
-                            },
-                            ManifestPartition {
-                                label: "PART_PV".into(),
-                                size: None,
-                                part_type: "8e".into(),
-                            },
-                        ],
-                    }],
-                    dm: vec![Dm::Lvm(ManifestLvm {
-                        pvs: vec!["./mock_devs/sda2".into()],
-                        vgs: vec![ManifestLvmVg {
+                    disks: Some(vec![
+                        ManifestDisk {
+                            device: "./mock_devs/sda".into(),
+                            table: PartitionTable::Gpt,
+                            partitions: vec![
+                                ManifestPartition {
+                                    label: "PART_EFI".into(),
+                                    size: Some("500M".into()),
+                                    part_type: "ef".into(),
+                                },
+                                ManifestPartition {
+                                    label: "PART_PV".into(),
+                                    size: None,
+                                    part_type: "8e".into(),
+                                },
+                            ],
+                        },
+                    ]),
+                    dm: Some(vec![Dm::Lvm(ManifestLvm {
+                        pvs: Some(vec!["./mock_devs/sda2".into()]),
+                        vgs: Some(vec![ManifestLvmVg {
                             name: "myvg".into(),
                             pvs: vec!["./mock_devs/sda2".into()],
-                        }],
-                        lvs: vec![
+                        }]),
+                        lvs: Some(vec![
                             ManifestLvmLv {
                                 name: "mylv".into(),
                                 vg: "myvg".into(),
                                 size: None,
                             },
-                        ],
-                    })],
+                        ]),
+                    })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
                         mnt: "/".into(),
                         fs_type: "btrfs".into(),
-                        fs_opts: "".into(),
-                        mnt_opts: "".into(),
+                        fs_opts: None,
+                        mnt_opts: None,
                     }),
-                    filesystems: vec![
+                    filesystems: Some(vec![
                         ManifestFs {
                             device: "/dev/myvg.mylv".into(),
                             mnt: "/data".into(),
-                            fs_type: "".into(),
-                            fs_opts: "".into(),
-                            mnt_opts: "".into(),
+                            fs_type: "btrfs".into(),
+                            fs_opts: None,
+                            mnt_opts: None,
                         },
-                    ],
+                    ]),
                     swap: Some(vec!["/dev/nvme0n1p2".into()]),
-                    pacstraps: HashSet::new(),
+                    pacstraps: None,
                     chroot: None,
                     postinstall: None,
-                    hostname: "foo".into(),
-                    timezone: "foo".into(),
+                    hostname: None,
+                    timezone: None,
                 },
             },
 
              Test {
                 case: "Root on manifest LVM, built on manifest partitions and existing partition. Swap on manifest partition that was used to build PV".into(),
                 context: None,
-                sys_fs_ready_devs: HashMap::from(
+                sys_fs_ready_devs: Some(HashMap::from(
                     [("/dev/nvme0n1p1".into(), TYPE_PART), ("/dev/nvme0n1p2".into(), TYPE_PART)],
-                ),
-                sys_fs_devs: HashMap::new(),
-                sys_lvms: HashMap::new(),
+                )),
+                sys_fs_devs: None,
+                sys_lvms: None,
 
                 manifest: Manifest {
-                    disks: vec![ManifestDisk {
-                        device: "./mock_devs/sda".into(),
-                        table: PartitionTable::Gpt,
-                        partitions: vec![
-                            ManifestPartition {
-                                label: "PART_EFI".into(),
-                                size: Some("500M".into()),
-                                part_type: "ef".into(),
-                            },
-                            ManifestPartition {
-                                label: "PART_PV1".into(),
-                                size: None,
-                                part_type: "8e".into(),
-                            },
-                        ],
-                    }, ManifestDisk {
+                    disks: Some(vec![
+                        ManifestDisk {
+                            device: "./mock_devs/sda".into(),
+                            table: PartitionTable::Gpt,
+                            partitions: vec![
+                                ManifestPartition {
+                                    label: "PART_EFI".into(),
+                                    size: Some("500M".into()),
+                                    part_type: "ef".into(),
+                                },
+                                ManifestPartition {
+                                    label: "PART_PV1".into(),
+                                    size: None,
+                                    part_type: "8e".into(),
+                                },
+                            ],
+                        },
+                        ManifestDisk {
                             device: "./mock_devs/sdb".into(),
                             table: PartitionTable::Mbr,
                             partitions: vec![
@@ -1679,67 +1722,69 @@ mod tests {
                                     part_type: "8e".into(),
                                 }
                             ]
-                        }],
-                    dm: vec![Dm::Lvm(ManifestLvm {
-                        pvs: vec![
+                        }]),
+                    dm: Some(vec![Dm::Lvm(ManifestLvm {
+                        pvs: Some(vec![
                             "./mock_devs/sda2".into(),
                             "./mock_devs/sdb1".into(),
                             "/dev/nvme0n1p2".into(),
-                        ],
-                        vgs: vec![ManifestLvmVg {
+                        ]),
+                        vgs: Some(vec![ManifestLvmVg {
                             name: "myvg".into(),
                             pvs: vec![
                                 "./mock_devs/sda2".into(),
                                 "./mock_devs/sdb1".into(),
                                 "/dev/nvme0n1p2".into(),
                             ],
-                        }],
-                        lvs: vec![ManifestLvmLv {
+                        }]),
+                        lvs: Some(vec![ManifestLvmLv {
                             name: "mylv".into(),
                             vg: "myvg".into(),
                             size: None,
-                        }],
-                    })],
+                        }]),
+                    })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
                         mnt: "/".into(),
                         fs_type: "btrfs".into(),
-                        fs_opts: "".into(),
-                        mnt_opts: "".into(),
+                        fs_opts: None,
+                        mnt_opts: None,
                     }),
-                    filesystems: vec![],
+                    filesystems: None,
                     swap: Some(vec!["/dev/nvme0n1p2".into()]), // Was already used as manifest PV
-                    pacstraps: HashSet::new(),
+                    pacstraps: None,
                     chroot: None,
                     postinstall: None,
-                    hostname: "foo".into(),
-                    timezone: "foo".into(),
+                    hostname: None,
+                    timezone: None,
                 },
             },
 
             Test {
                 case: "Root on manifest LVM, built on manifest partitions and non-existent partition. Swap on manifest partition".into(),
                 context: None,
-                sys_fs_ready_devs: HashMap::from([("/dev/nvme0n1p1".into(), TYPE_PART)]),
-                sys_fs_devs: HashMap::new(),
-                sys_lvms: HashMap::new(),
+                sys_fs_ready_devs: Some(HashMap::from([("/dev/nvme0n1p1".into(), TYPE_PART)])),
+                sys_fs_devs: None,
+                sys_lvms: None,
                 manifest: Manifest {
-                    disks: vec![ManifestDisk {
-                        device: "./mock_devs/sda".into(),
-                        table: PartitionTable::Gpt,
-                        partitions: vec![
-                            ManifestPartition {
-                                label: "PART_EFI".into(),
-                                size: Some("500M".into()),
-                                part_type: "ef".into(),
-                            },
-                            ManifestPartition {
-                                label: "PART_PV1".into(),
-                                size: None,
-                                part_type: "8e".into(),
-                            },
-                        ],
-                    }, ManifestDisk {
+                    disks: Some(vec![
+                        ManifestDisk {
+                            device: "./mock_devs/sda".into(),
+                            table: PartitionTable::Gpt,
+                            partitions: vec![
+                                ManifestPartition {
+                                    label: "PART_EFI".into(),
+                                    size: Some("500M".into()),
+                                    part_type: "ef".into(),
+                                },
+                                ManifestPartition {
+                                    label: "PART_PV1".into(),
+                                    size: None,
+                                    part_type: "8e".into(),
+                                },
+                            ],
+                        },
+                        ManifestDisk {
                             device: "./mock_devs/sdb".into(),
                             table: PartitionTable::Mbr,
                             partitions: vec![
@@ -1749,73 +1794,76 @@ mod tests {
                                     part_type: "8e".into(),
                                 }
                             ]
-                        }],
-                    dm: vec![Dm::Lvm(ManifestLvm {
-                        pvs: vec![
+                        },
+                    ]),
+                    dm: Some(vec![Dm::Lvm(ManifestLvm {
+                        pvs: Some(vec![
                             "./mock_devs/sda2".into(),
                             "./mock_devs/sdb1".into(),
                             "/dev/nvme0n1p2".into(),
-                        ],
-                        vgs: vec![ManifestLvmVg {
+                        ]),
+                        vgs: Some(vec![ManifestLvmVg {
                             name: "myvg".into(),
                             pvs: vec![
                                 "./mock_devs/sda2".into(),
                                 "./mock_devs/sdb1".into(),
                                 "/dev/nvme0n1p2".into(),
                             ],
-                        }],
-                        lvs: vec![ManifestLvmLv {
+                        }]),
+                        lvs: Some(vec![ManifestLvmLv {
                             name: "mylv".into(),
                             vg: "myvg".into(),
                             size: None,
-                        }],
-                    })],
+                        }]),
+                    })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
                         mnt: "/".into(),
                         fs_type: "btrfs".into(),
-                        fs_opts: "".into(),
-                        mnt_opts: "".into(),
+                        fs_opts: None,
+                        mnt_opts: None,
                     }),
-                    filesystems: vec![],
+                    filesystems: None,
                     swap: Some(vec!["/dev/nvme0n1p1".into()]),
-                    pacstraps: HashSet::new(),
+                    pacstraps: None,
                     chroot: None,
                     postinstall: None,
-                    hostname: "foo".into(),
-                    timezone: "foo".into(),
+                    hostname: None,
+                    timezone: None,
                 },
             },
 
             Test {
                 case: "Root and Swap on manifest LVs from the same VG, but existing VG partition already has fs".into(),
                 context: Some("2 LVs on 1 VG on 4 PVs, but 1 PV already has swap".into()),
-                sys_fs_ready_devs: HashMap::from([
+                sys_fs_ready_devs: Some(HashMap::from([
                     ("/dev/nvme0n1p1".into(), TYPE_PART),
                     ("/dev/nvme0n1p2".into(), TYPE_PART),
-                ]),
-                sys_fs_devs: HashMap::from([
+                ])),
+                sys_fs_devs: Some(HashMap::from([
                     ("/dev/nvme0n2p7".into(), BlockDevType::Fs("swap".into())),
-                ]),
-                sys_lvms: HashMap::new(),
+                ])),
+                sys_lvms: None,
 
                 manifest: Manifest {
-                    disks: vec![ManifestDisk {
-                        device: "./mock_devs/sda".into(),
-                        table: PartitionTable::Gpt,
-                        partitions: vec![
-                            ManifestPartition {
-                                label: "PART_EFI".into(),
-                                size: Some("500M".into()),
-                                part_type: "ef".into(),
-                            },
-                            ManifestPartition {
-                                label: "PART_PV1".into(),
-                                size: None,
-                                part_type: "8e".into(),
-                            },
-                        ],
-                    }, ManifestDisk {
+                    disks: Some(vec![
+                        ManifestDisk {
+                            device: "./mock_devs/sda".into(),
+                            table: PartitionTable::Gpt,
+                            partitions: vec![
+                                ManifestPartition {
+                                    label: "PART_EFI".into(),
+                                    size: Some("500M".into()),
+                                    part_type: "ef".into(),
+                                },
+                                ManifestPartition {
+                                    label: "PART_PV1".into(),
+                                    size: None,
+                                    part_type: "8e".into(),
+                                },
+                            ],
+                        },
+                        ManifestDisk {
                             device: "./mock_devs/sdb".into(),
                             table: PartitionTable::Mbr,
                             partitions: vec![
@@ -1823,16 +1871,17 @@ mod tests {
                                     label: "PART_PV2".into(),
                                     size: None,
                                     part_type: "8e".into(),
-                                }
+                                },
                             ]
-                    }],
-                    dm: vec![Dm::Lvm(ManifestLvm {
-                        pvs: vec![
+                        },
+                    ]),
+                    dm: Some(vec![Dm::Lvm(ManifestLvm {
+                        pvs: Some(vec![
                             "./mock_devs/sda2".into(),
                             "./mock_devs/sdb1".into(),
                             "/dev/nvme0n1p2".into(),
-                        ],
-                        vgs: vec![ManifestLvmVg {
+                        ]),
+                        vgs: Some(vec![ManifestLvmVg {
                             name: "myvg".into(),
                             pvs: vec![
                                 "./mock_devs/sda2".into(),
@@ -1840,8 +1889,8 @@ mod tests {
                                 "/dev/nvme0n1p2".into(),
                                 "/dev/nvme0n2p7".into(),
                             ],
-                        }],
-                        lvs: vec![
+                        }]),
+                        lvs: Some(vec![
                         ManifestLvmLv {
                             name: "myswap".into(),
                             vg: "myvg".into(),
@@ -1851,31 +1900,34 @@ mod tests {
                             name: "mylv".into(),
                             vg: "myvg".into(),
                             size: None,
-                        }],
-                    })],
+                        }]),
+                    })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
                         mnt: "/".into(),
                         fs_type: "btrfs".into(),
-                        fs_opts: "".into(),
-                        mnt_opts: "".into(),
+                        fs_opts: None,
+                        mnt_opts: None,
                     }),
-                    filesystems: vec![],
+                    filesystems: None,
                     swap: Some(vec!["/dev/myvg/myswap".into()]),
-                    pacstraps: HashSet::new(),
+                    pacstraps: None,
                     chroot: None,
                     postinstall: None,
-                    hostname: "foo".into(),
-                    timezone: "foo".into(),
+                    hostname: None,
+                    timezone: None,
                 },
             },
 
             Test {
                 case: "Root and Swap on manifest LVs from the same VG".into(),
                 context: Some("2 LVs on 1 VG on 4 PVs, but 1 PV was already used".into()),
-                sys_fs_ready_devs: HashMap::from([("/dev/nvme0n1p1".into(), TYPE_PART), ("/dev/nvme0n1p2".into(), TYPE_PART)]),
-                sys_fs_devs: HashMap::new(),
-                sys_lvms: HashMap::from([
+                sys_fs_ready_devs: Some(HashMap::from([
+                    ("/dev/nvme0n1p1".into(), TYPE_PART),
+                    ("/dev/nvme0n1p2".into(), TYPE_PART),
+                ])),
+                sys_fs_devs: None,
+                sys_lvms: Some(HashMap::from([
                     ("/dev/nvme0n2p7".into(), vec![
                         LinkedList::from(
                             [
@@ -1884,25 +1936,27 @@ mod tests {
                             ],
                         ),
                     ]),
-                ]),
+                ])),
 
                 manifest: Manifest {
-                    disks: vec![ManifestDisk {
-                        device: "./mock_devs/sda".into(),
-                        table: PartitionTable::Gpt,
-                        partitions: vec![
-                            ManifestPartition {
-                                label: "PART_EFI".into(),
-                                size: Some("500M".into()),
-                                part_type: "ef".into(),
-                            },
-                            ManifestPartition {
-                                label: "PART_PV1".into(),
-                                size: None,
-                                part_type: "8e".into(),
-                            },
-                        ],
-                    }, ManifestDisk {
+                    disks: Some(vec![
+                        ManifestDisk {
+                            device: "./mock_devs/sda".into(),
+                            table: PartitionTable::Gpt,
+                            partitions: vec![
+                                ManifestPartition {
+                                    label: "PART_EFI".into(),
+                                    size: Some("500M".into()),
+                                    part_type: "ef".into(),
+                                },
+                                ManifestPartition {
+                                    label: "PART_PV1".into(),
+                                    size: None,
+                                    part_type: "8e".into(),
+                                },
+                            ],
+                        },
+                        ManifestDisk {
                             device: "./mock_devs/sdb".into(),
                             table: PartitionTable::Mbr,
                             partitions: vec![
@@ -1912,14 +1966,15 @@ mod tests {
                                     part_type: "8e".into(),
                                 }
                             ]
-                        }],
-                    dm: vec![Dm::Lvm(ManifestLvm {
-                        pvs: vec![
+                        },
+                    ]),
+                    dm: Some(vec![Dm::Lvm(ManifestLvm {
+                        pvs: Some(vec![
                             "./mock_devs/sda2".into(),
                             "./mock_devs/sdb1".into(),
                             "/dev/nvme0n1p2".into(),
-                        ],
-                        vgs: vec![ManifestLvmVg {
+                        ]),
+                        vgs: Some(vec![ManifestLvmVg {
                             name: "myvg".into(),
                             pvs: vec![
                                 "./mock_devs/sda2".into(),
@@ -1927,8 +1982,8 @@ mod tests {
                                 "/dev/nvme0n1p2".into(),
                                 "/dev/nvme0n2p7".into(),
                             ],
-                        }],
-                        lvs: vec![
+                        }]),
+                        lvs: Some(vec![
                         ManifestLvmLv {
                             name: "myswap".into(),
                             vg: "myvg".into(),
@@ -1938,22 +1993,22 @@ mod tests {
                             name: "mylv".into(),
                             vg: "myvg".into(),
                             size: None,
-                        }],
-                    })],
+                        }]),
+                    })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
                         mnt: "/".into(),
                         fs_type: "btrfs".into(),
-                        fs_opts: "".into(),
-                        mnt_opts: "".into(),
+                        fs_opts: None,
+                        mnt_opts: None,
                     }),
-                    filesystems: vec![],
+                    filesystems: None,
                     swap: Some(vec!["/dev/myvg/myswap".into()]),
-                    pacstraps: HashSet::new(),
+                    pacstraps: None,
                     chroot: None,
                     postinstall: None,
-                    hostname: "foo".into(),
-                    timezone: "foo".into(),
+                    hostname: None,
+                    timezone: None,
                 },
             },
         ];
@@ -1961,9 +2016,9 @@ mod tests {
         for (i, test) in tests_should_ok.iter().enumerate() {
             let result = validate_blk(
                 &test.manifest,
-                &test.sys_fs_devs,
-                test.sys_fs_ready_devs.clone(),
-                test.sys_lvms.clone(),
+                &test.sys_fs_devs.clone().unwrap_or(HashMap::new()),
+                test.sys_fs_ready_devs.clone().unwrap_or_default(),
+                test.sys_lvms.clone().unwrap_or_default(),
             );
 
             if result.is_err() {
@@ -1983,9 +2038,9 @@ mod tests {
         for (i, test) in tests_should_err.iter().enumerate() {
             let result = validate_blk(
                 &test.manifest,
-                &test.sys_fs_devs,
-                test.sys_fs_ready_devs.clone(),
-                test.sys_lvms.clone(),
+                &test.sys_fs_devs.clone().unwrap_or_default(),
+                test.sys_fs_ready_devs.clone().unwrap_or_default(),
+                test.sys_lvms.clone().unwrap_or_default(),
             );
 
             if result.is_ok() {
