@@ -8,15 +8,13 @@ mod utils;
 
 use clap::Parser;
 
-use crate::errors::NayiError;
-
 fn main() -> Result<(), errors::NayiError> {
     let args = cli::Args::parse();
 
     match run::run(args) {
         Err(err) => eprintln!("nayi-rs failed: {err}"),
         Ok(report) => {
-            println!("Report: {report:?}");
+            println!("{}", report.to_json_string());
         }
     };
 
