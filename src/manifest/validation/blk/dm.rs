@@ -1,15 +1,50 @@
 use std::collections::{HashMap, LinkedList};
 
+use crate::entity::blockdev::*;
 use crate::errors::NayiError;
 use crate::manifest::validation::*;
 use crate::manifest::{ManifestLuks, ManifestLvmLv, ManifestLvmVg};
+
+fn is_pv_base(dev_type: &BlockDevType) -> bool {
+    match dev_type {
+        BlockDevType::Disk => true,
+        BlockDevType::Partition => true,
+        BlockDevType::UnknownBlock => true,
+        BlockDevType::Dm(DmType::Luks) => true,
+        _ => false,
+    }
+}
+
+fn is_vg_base(dev_type: &BlockDevType) -> bool {
+    match dev_type {
+        BlockDevType::Dm(DmType::LvmPv) => true,
+        _ => false,
+    }
+}
+
+fn is_lv_base(dev_type: &BlockDevType) -> bool {
+    match dev_type {
+        BlockDevType::Dm(DmType::LvmVg) => true,
+        _ => false,
+    }
+}
+
+fn is_luks_base(dev_type: &BlockDevType) -> bool {
+    match dev_type {
+        BlockDevType::Disk => true,
+        BlockDevType::Partition => true,
+        BlockDevType::UnknownBlock => true,
+        BlockDevType::Dm(DmType::LvmLv) => true,
+        _ => false,
+    }
+}
 
 pub(super) fn validate_luks(
     luks: &ManifestLuks,
     sys_fs_devs: &HashMap<String, BlockDevType>,
     sys_fs_ready_devs: &mut HashMap<String, BlockDevType>,
-    sys_lvms: &mut HashMap<String, Vec<LinkedList<BlockDev>>>,
-    valids: &mut Vec<LinkedList<BlockDev>>,
+    sys_lvms: &mut HashMap<String, Vec<BlockDevPath>>,
+    valids: &mut Vec<BlockDevPath>,
 ) -> Result<(), NayiError> {
     let (luks_base_path, luks_path) = (&luks.device, format!("/dev/mapper/{}", luks.name));
 
@@ -128,8 +163,8 @@ pub(super) fn validate_pv(
     pv_path: &str,
     sys_fs_devs: &HashMap<String, BlockDevType>,
     sys_fs_ready_devs: &mut HashMap<String, BlockDevType>,
-    sys_lvms: &mut HashMap<String, Vec<LinkedList<BlockDev>>>,
-    valids: &mut Vec<LinkedList<BlockDev>>,
+    sys_lvms: &mut HashMap<String, Vec<BlockDevPath>>,
+    valids: &mut Vec<BlockDevPath>,
 ) -> Result<(), NayiError> {
     let msg = "lvm pv validation failed";
     if let Some(fs_type) = sys_fs_devs.get(pv_path) {
@@ -226,8 +261,8 @@ pub(super) fn validate_pv(
 pub(super) fn validate_vg(
     vg: &ManifestLvmVg,
     sys_fs_devs: &HashMap<String, BlockDevType>,
-    sys_lvms: &mut HashMap<String, Vec<LinkedList<BlockDev>>>,
-    valids: &mut Vec<LinkedList<BlockDev>>,
+    sys_lvms: &mut HashMap<String, Vec<BlockDevPath>>,
+    valids: &mut Vec<BlockDevPath>,
 ) -> Result<(), NayiError> {
     let vg_dev = BlockDev {
         device: format!("/dev/{}", vg.name),
@@ -330,8 +365,8 @@ pub(super) fn validate_vg(
 pub(super) fn validate_lv(
     lv: &ManifestLvmLv,
     sys_fs_devs: &HashMap<String, BlockDevType>,
-    sys_lvms: &mut HashMap<String, Vec<LinkedList<BlockDev>>>,
-    valids: &mut Vec<LinkedList<BlockDev>>,
+    sys_lvms: &mut HashMap<String, Vec<BlockDevPath>>,
+    valids: &mut Vec<BlockDevPath>,
 ) -> Result<(), NayiError> {
     let vg_name = format!("/dev/{}", lv.vg);
     let lv_name = format!("{vg_name}/{}", lv.name);
