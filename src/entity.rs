@@ -2,7 +2,9 @@
 pub mod blockdev {
     use std::collections::LinkedList;
 
-    #[derive(Debug, PartialEq, Eq, std::hash::Hash, Clone)]
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Debug, PartialEq, Eq, std::hash::Hash, Clone, Serialize, Deserialize)]
     pub struct BlockDev {
         // Full path to device, with hard-coded format:
         // Disk => /dev/dev_name
@@ -14,7 +16,7 @@ pub mod blockdev {
         pub device_type: BlockDevType,
     }
 
-    #[derive(Debug, PartialEq, Eq, std::hash::Hash, Clone)]
+    #[derive(Debug, PartialEq, Eq, std::hash::Hash, Clone, Serialize, Deserialize)]
     pub enum DmType {
         Luks,
         LvmPv,
@@ -22,7 +24,7 @@ pub mod blockdev {
         LvmLv,
     }
 
-    #[derive(Debug, PartialEq, Eq, std::hash::Hash, Clone)]
+    #[derive(Debug, PartialEq, Eq, std::hash::Hash, Clone, Serialize, Deserialize)]
     pub enum BlockDevType {
         // Disks
         Disk,
@@ -40,6 +42,15 @@ pub mod blockdev {
         Fs(String),
     }
 
+    // Type aliases
+    pub const TYPE_DISK: BlockDevType = BlockDevType::Disk;
+    pub const TYPE_PART: BlockDevType = BlockDevType::Partition;
+    pub const TYPE_UNKNOWN: BlockDevType = BlockDevType::UnknownBlock;
+    pub const TYPE_LUKS: BlockDevType = BlockDevType::Dm(DmType::Luks);
+    pub const TYPE_PV: BlockDevType = BlockDevType::Dm(DmType::LvmPv);
+    pub const TYPE_VG: BlockDevType = BlockDevType::Dm(DmType::LvmVg);
+    pub const TYPE_LV: BlockDevType = BlockDevType::Dm(DmType::LvmLv);
+
     // Block device building blocks are modeled as linked list
     pub type BlockDevPath = LinkedList<BlockDev>;
 
@@ -51,13 +62,5 @@ pub mod blockdev {
     // 3. [/dev/sdb -> /dev/sdb2 -> /dev/sda1(pv) -> /dev/myvg -> /dev/myvg/foolv]
     // 2. [/dev/sda -> /dev/sda1 -> /dev/sda1(pv) -> /dev/myvg -> /dev/myvg/barlv]
     // 4. [/dev/sdb -> /dev/sdb2 -> /dev/sda1(pv) -> /dev/myvg -> /dev/myvg/barlv]
-    pub struct _BlockDevPaths(Vec<BlockDevPath>);
-
-    pub const TYPE_DISK: BlockDevType = BlockDevType::Disk;
-    pub const TYPE_PART: BlockDevType = BlockDevType::Partition;
-    pub const TYPE_UNKNOWN: BlockDevType = BlockDevType::UnknownBlock;
-    pub const TYPE_LUKS: BlockDevType = BlockDevType::Dm(DmType::Luks);
-    pub const TYPE_PV: BlockDevType = BlockDevType::Dm(DmType::LvmPv);
-    pub const TYPE_VG: BlockDevType = BlockDevType::Dm(DmType::LvmVg);
-    pub const TYPE_LV: BlockDevType = BlockDevType::Dm(DmType::LvmLv);
+    pub type BlockDevPaths = Vec<BlockDevPath>;
 }

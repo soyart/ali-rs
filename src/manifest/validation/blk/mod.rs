@@ -34,10 +34,10 @@ fn validate_blk(
     manifest: &Manifest,
     sys_fs_devs: &HashMap<String, BlockDevType>, // Maps fs devs to their FS type (e.g. Btrfs)
     mut sys_fs_ready_devs: HashMap<String, BlockDevType>, // Maps fs-ready devs to their types (e.g. partition)
-    mut sys_lvms: HashMap<String, Vec<BlockDevPath>>,     // Maps pv path to all possible LV paths
-) -> Result<(), NayiError> {
+    mut sys_lvms: HashMap<String, BlockDevPaths>,         // Maps pv path to all possible LV paths
+) -> Result<BlockDevPaths, NayiError> {
     // valids collects all valid known devices to be created in the manifest
-    let mut valids = Vec::<BlockDevPath>::new();
+    let mut valids = BlockDevPaths::new();
 
     if let Some(disks) = &manifest.disks {
         for disk in disks {
@@ -66,7 +66,7 @@ fn validate_blk(
             for (i, _) in disk.partitions.iter().enumerate() {
                 let partition_name = format!("{partition_prefix}{}", i + 1);
 
-                if let Some(_) = sys_fs_ready_devs.get(&partition_name) {
+                if sys_fs_ready_devs.get(&partition_name).is_some() {
                     return Err(NayiError::BadManifest(format!(
                         "{msg}: partition {partition_name} already exists on system"
                     )));
@@ -165,7 +165,7 @@ fn validate_blk(
     }
 
     // Collect from valids - fs-ready only
-    for list in valids {
+    for list in &valids {
         let top_most = list.back().expect("v is missing top-most device");
         if is_fs_base(&top_most.device_type) {
             fs_ready_devs.insert(top_most.device.clone());
@@ -216,7 +216,7 @@ fn validate_blk(
         }
     }
 
-    Ok(())
+    Ok(valids)
 }
 
 fn is_fs_base(dev_type: &BlockDevType) -> bool {
@@ -265,7 +265,7 @@ mod tests {
         manifest: Manifest,
         sys_fs_ready_devs: Option<HashMap<String, BlockDevType>>,
         sys_fs_devs: Option<HashMap<String, BlockDevType>>,
-        sys_lvms: Option<HashMap<String, Vec<BlockDevPath>>>,
+        sys_lvms: Option<HashMap<String, BlockDevPaths>>,
     }
 
     #[test]
@@ -1533,7 +1533,7 @@ mod tests {
                 test.sys_lvms.clone().unwrap_or_default(),
             );
 
-            if result.is_err() {
+            if let Err(ref err) = result {
                 eprintln!("Unexpected error from test case {}: {}", i + 1, test.case);
 
                 if let Some(ref ctx) = test.context {
@@ -1541,7 +1541,7 @@ mod tests {
                 }
 
                 eprintln!("Test structure: {test:?}");
-                eprintln!("Error: {result:?}");
+                eprintln!("Error: {err:?}");
             }
 
             assert!(result.is_ok());
@@ -1566,10 +1566,14 @@ mod tests {
                     eprintln!("\nCONTEXT: {ctx}\n");
                 }
 
-                eprintln!("Test structure: {test:?}");
-            }
+                let paths = result.unwrap();
+                let paths_json = serde_json::to_string(&paths).unwrap();
 
-            assert!(result.is_err());
+                eprintln!("Test structure: {test:?}");
+                eprintln!("BlockDevPaths: {paths_json}");
+
+                panic!("test_should_err did not return error")
+            }
         }
     }
 }

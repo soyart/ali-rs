@@ -112,7 +112,7 @@ pub(super) fn sys_fs(output_blkid: &str) -> HashMap<String, BlockDevType> {
 //
 // Note: Takes in `lvs_cmd` and `pvs_cmd` to allow tests.
 // TODO: New trace output schema
-pub(super) fn sys_lvms(lvs_cmd: &str, pvs_cmd: &str) -> HashMap<String, Vec<BlockDevPath>> {
+pub(super) fn sys_lvms(lvs_cmd: &str, pvs_cmd: &str) -> HashMap<String, BlockDevPaths> {
     let cmd_lvs = Command::new(lvs_cmd).output().expect("failed to run `lvs`");
     let output_lvs = String::from_utf8(cmd_lvs.stdout).expect("output is not utf-8");
     let lines_lvs: Vec<&str> = output_lvs.lines().skip(1).collect();
