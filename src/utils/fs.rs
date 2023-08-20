@@ -1,5 +1,3 @@
-use std::path::Path;
-
 pub fn file_exists<P>(path: P) -> bool
 where
     P: AsRef<std::path::Path>,
