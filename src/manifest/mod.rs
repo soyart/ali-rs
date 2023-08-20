@@ -19,8 +19,8 @@ pub struct Manifest {
 
     pub disks: Option<Vec<ManifestDisk>>,
 
-    #[serde(alias = "dms", alias = "device-mappers")]
-    pub dm: Option<Vec<Dm>>,
+    #[serde(alias = "device-mappers", alias = "dm", alias = "dms")]
+    pub device_mappers: Option<Vec<Dm>>,
 
     #[serde(alias = "fs", alias = "filesystem")]
     pub filesystems: Option<Vec<ManifestFs>>,

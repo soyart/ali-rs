@@ -89,7 +89,7 @@ fn validate_blk(
         }
     }
 
-    if let Some(dms) = &manifest.dm {
+    if let Some(dms) = &manifest.device_mappers {
         for dm in dms {
             match dm {
                 Dm::Luks(luks) => {
@@ -283,7 +283,7 @@ mod tests {
 
                 manifest: Manifest {
                     disks: None,
-                    dm: None,
+                    device_mappers: None,
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/sda1".into(),
                         mnt: "/".into(),
@@ -329,7 +329,7 @@ mod tests {
 
                 manifest: Manifest {
                     disks: None,
-                    dm: None,
+                    device_mappers: None,
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
                         mnt: "/".into(),
@@ -375,7 +375,7 @@ mod tests {
 
                 manifest: Manifest {
                     disks: None,
-                    dm: None,
+                    device_mappers: None,
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
                         mnt: "/".into(),
@@ -417,7 +417,7 @@ mod tests {
 
                 manifest: Manifest {
                     disks: None,
-                    dm: Some(vec![Dm::Lvm(ManifestLvm {
+                    device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                         pvs: None,
                         vgs: None,
                         lvs: Some(vec![ManifestLvmLv {
@@ -455,7 +455,7 @@ mod tests {
 
                     manifest: Manifest {
                         disks: None,
-                        dm: Some(vec![Dm::Lvm(ManifestLvm {
+                        device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                             pvs: Some(vec!["/dev/sda1".into()]),
                             vgs: Some(vec![ManifestLvmVg {
                                 name: "myvg".into(),
@@ -510,7 +510,7 @@ mod tests {
                                 },
                             ],
                         }]),
-                        dm: Some(vec![Dm::Lvm(ManifestLvm {
+                        device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                             pvs: Some(vec!["./mock_devs/sda2".into()]),
                             vgs: Some(vec![ManifestLvmVg {
                                 name: "myvg".into(),
@@ -568,7 +568,7 @@ mod tests {
                                 ],
                             },
                         ]),
-                        dm: Some(vec![Dm::Lvm(ManifestLvm {
+                        device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                             pvs: Some(vec![
                                 "./mock_devs/sda2".into(),
                                 "/dev/nvme0n1p1".into(),
@@ -643,7 +643,7 @@ mod tests {
                                 ]
                             },
                         ]),
-                        dm: Some(vec![Dm::Lvm(ManifestLvm {
+                        device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                             pvs: Some(vec![
                                 "./mock_devs/sda2".into(),
                                 "./mock_devs/sdb1".into(),
@@ -720,7 +720,7 @@ mod tests {
                                 ]
                             },
                         ]),
-                        dm: Some(vec![Dm::Lvm(ManifestLvm {
+                        device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                             pvs: Some(vec![
                                 "./mock_devs/sda2".into(),
                                 "./mock_devs/sdb1".into(),
@@ -810,7 +810,7 @@ mod tests {
                                 ]
                             },
                         ]),
-                        dm: Some(vec![Dm::Lvm(ManifestLvm {
+                        device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                             pvs: Some(vec![
                                 "./mock_devs/sda2".into(),
                                 "./mock_devs/sdb1".into(),
@@ -899,7 +899,7 @@ mod tests {
                                 }],
                             },
                         ]),
-                    dm: Some(vec![Dm::Lvm(ManifestLvm {
+                    device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                         pvs: Some(vec![
                             "./mock_devs/sda2".into(),
                             "./mock_devs/sdb1".into(),
@@ -967,7 +967,7 @@ mod tests {
 
                 manifest: Manifest {
                     disks: None,
-                    dm: None,
+                    device_mappers: None,
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/sda1".into(),
                         mnt: "/".into(),
@@ -997,7 +997,7 @@ mod tests {
 
                 manifest: Manifest {
                     disks: None,
-                    dm: None,
+                    device_mappers: None,
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/sda1".into(),
                         mnt: "/".into(),
@@ -1043,7 +1043,7 @@ mod tests {
                                 },
                             ],
                     }]),
-                    dm: Some(vec![Dm::Lvm(ManifestLvm {
+                    device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                         pvs: Some(vec![
                             "./mock_devs/sda2".into(),
                         ]),
@@ -1098,7 +1098,7 @@ mod tests {
                                 },
                             ],
                     }]),
-                    dm: Some(vec![Dm::Lvm(ManifestLvm {
+                    device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                         pvs: Some(vec!["./mock_devs/sda2".into()]),
                         vgs: Some(vec![
                             ManifestLvmVg {
@@ -1158,7 +1158,7 @@ mod tests {
                             ],
                         },
                     ]),
-                    dm: Some(vec![Dm::Lvm(ManifestLvm {
+                    device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                         pvs: Some(vec!["./mock_devs/sda2".into()]),
                         vgs: Some(vec![ManifestLvmVg {
                             name: "myvg".into(),
@@ -1235,7 +1235,7 @@ mod tests {
                                 }
                             ]
                         }]),
-                    dm: Some(vec![Dm::Lvm(ManifestLvm {
+                    device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                         pvs: Some(vec![
                             "./mock_devs/sda2".into(),
                             "./mock_devs/sdb1".into(),
@@ -1308,7 +1308,7 @@ mod tests {
                             ]
                         },
                     ]),
-                    dm: Some(vec![Dm::Lvm(ManifestLvm {
+                    device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                         pvs: Some(vec![
                             "./mock_devs/sda2".into(),
                             "./mock_devs/sdb1".into(),
@@ -1387,7 +1387,7 @@ mod tests {
                             ]
                         },
                     ]),
-                    dm: Some(vec![Dm::Lvm(ManifestLvm {
+                    device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                         pvs: Some(vec![
                             "./mock_devs/sda2".into(),
                             "./mock_devs/sdb1".into(),
@@ -1480,7 +1480,7 @@ mod tests {
                             ]
                         },
                     ]),
-                    dm: Some(vec![Dm::Lvm(ManifestLvm {
+                    device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                         pvs: Some(vec![
                             "./mock_devs/sda2".into(),
                             "./mock_devs/sdb1".into(),

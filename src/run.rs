@@ -6,7 +6,7 @@ use serde_json::json;
 
 use crate::cli;
 use crate::errors::NayiError;
-use crate::manifest::{self, validation, Manifest};
+use crate::manifest::{self, validation, Dm, Manifest};
 
 #[derive(Debug)]
 pub(super) struct Report {
@@ -56,9 +56,10 @@ fn update_manifest(manifest: &mut Manifest) {
         "btrfs".to_string(),
         "btrfs-progs".to_string(),
     );
+
     let (mut has_lvm, mut has_btrfs) = (false, false);
 
-    if let Some(dms) = &manifest.dm {
+    if let Some(dms) = &manifest.device_mappers {
         for dm in dms {
             match dm {
                 manifest::Dm::Lvm(_) => {
@@ -70,12 +71,14 @@ fn update_manifest(manifest: &mut Manifest) {
         }
     }
 
+    // See if root is on Btrfs
     if manifest.rootfs.fs_type.as_str() == btrfs {
         has_btrfs = true;
     }
 
-    if !has_btrfs {
-        if let Some(filesystems) = &manifest.filesystems {
+    // See if other FS is Btrfs
+    match (has_btrfs, &manifest.filesystems) {
+        (false, Some(filesystems)) => {
             for fs in filesystems {
                 if fs.fs_type.as_str() == btrfs {
                     has_btrfs = true;
@@ -83,30 +86,42 @@ fn update_manifest(manifest: &mut Manifest) {
                 }
             }
         }
+        _ => {}
     }
 
-    if has_lvm {
-        match manifest.pacstraps {
-            Some(ref mut pacstraps) => {
-                pacstraps.insert(lvm2.clone());
-            }
-            None => {
-                let pacstraps = HashSet::from([lvm2.clone()]);
-                manifest.pacstraps = Some(pacstraps)
+    // Update manifest.pacstraps if any of the filesystems is Btrfs
+    match (has_btrfs, manifest.pacstraps.as_mut()) {
+        (true, Some(ref mut pacstraps)) => {
+            pacstraps.insert(btrfs_progs.clone());
+        }
+        (true, None) => {
+            manifest.pacstraps = Some(HashSet::from([btrfs_progs.clone()]));
+        }
+        _ => {}
+    }
+
+    // Find a manifest LVM device
+    if let Some(ref dms) = manifest.device_mappers {
+        for dm in dms {
+            match dm {
+                Dm::Lvm(_) => {
+                    has_lvm = true;
+                    break;
+                }
+                _ => continue,
             }
         }
     }
 
-    if has_btrfs {
-        match manifest.pacstraps {
-            Some(ref mut pacstraps) => {
-                pacstraps.insert(lvm2);
-            }
-            None => {
-                let pacstraps = HashSet::from([btrfs_progs.clone()]);
-                manifest.pacstraps = Some(pacstraps)
-            }
+    // Update manifest.pacstraps if we have LVMs in manifest
+    match (has_lvm, manifest.pacstraps.as_mut()) {
+        (true, Some(ref mut pacstraps)) => {
+            pacstraps.insert(lvm2.clone());
         }
+        (true, None) => {
+            manifest.pacstraps = Some(HashSet::from([lvm2.clone()]));
+        }
+        _ => {}
     }
 }
 
