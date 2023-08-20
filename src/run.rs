@@ -59,18 +59,6 @@ fn update_manifest(manifest: &mut Manifest) {
 
     let (mut has_lvm, mut has_btrfs) = (false, false);
 
-    if let Some(dms) = &manifest.device_mappers {
-        for dm in dms {
-            match dm {
-                manifest::Dm::Lvm(_) => {
-                    has_lvm = true;
-                    break;
-                }
-                _ => continue,
-            }
-        }
-    }
-
     // See if root is on Btrfs
     if manifest.rootfs.fs_type.as_str() == btrfs {
         has_btrfs = true;
