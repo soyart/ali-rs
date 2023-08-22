@@ -68,31 +68,10 @@ pub(super) fn collect_valid_luks(
         )));
     }
 
-    // Find base device for LUKS
-    for list in valids.iter_mut() {
-        let top_most = list.back().expect("no back node in linked list in v");
+    let mut found_vg: Option<BlockDev> = None;
 
-        if top_most.device.as_str() != luks_base_path {
-            continue;
-        }
-
-        if !is_luks_base(&top_most.device_type) {
-            return Err(NayiError::BadManifest(format!(
-                "{msg}: luks {} base {luks_base_path} cannot have type {}",
-                luks.name, top_most.device_type,
-            )));
-        }
-
-        list.push_back(BlockDev {
-            device: luks_path.clone(),
-            device_type: TYPE_LUKS,
-        });
-
-        return Ok(());
-    }
-
-    // Find base LV in existing LVM
-    for (lvm_base, sys_lvm_lists) in sys_lvms.iter_mut() {
+    // Find base LV and its VG in existing LVMs
+    'find_some_vg: for (lvm_base, sys_lvm_lists) in sys_lvms.iter() {
         for sys_lvm in sys_lvm_lists {
             let top_most = sys_lvm.back();
 
@@ -112,33 +91,105 @@ pub(super) fn collect_valid_luks(
                 )));
             }
 
-            // Copy and update list from existing_lvms to valids
-            let mut list = sys_lvm.clone();
+            // We could really use unstable Cursor type here
+            // See also: https://doc.rust-lang.org/std/collections/linked_list/struct.Cursor.html
+            let mut path = sys_lvm.clone();
+            path.pop_back();
+            let should_be_vg = path.pop_back().expect("no vg after 2 pops");
 
-            list.push_back(BlockDev {
-                device: luks_path.clone(),
-                device_type: TYPE_LUKS,
-            });
+            if should_be_vg.device_type != TYPE_VG {
+                return Err(NayiError::NayiRsBug(format!(
+                    "unexpected device type - expecting a VG"
+                )));
+            }
 
-            // Push to v, and clear used up sys LVM device
-            valids.push(list);
-            sys_lvm.clear();
-
-            return Ok(());
+            found_vg = Some(should_be_vg.clone());
+            break 'find_some_vg;
         }
     }
 
+    let luks_dev = BlockDev {
+        device: luks_path.clone(),
+        device_type: TYPE_LUKS,
+    };
+
+    // Although a LUKS can only sit on 1 LV,
+    // We keep pushing since an LV may sit on VG with >1 PVs
+    if let Some(vg) = found_vg {
+        // Push all paths leading to VG and LV
+        'new_pv: for (_, sys_lvm_lists) in sys_lvms.iter_mut() {
+            for sys_lvm in sys_lvm_lists.iter_mut() {
+                let top_most = sys_lvm.back();
+
+                if top_most.is_none() {
+                    continue;
+                }
+
+                // Check if this path contains our VG -> LV
+                let top_most = top_most.unwrap();
+                if top_most.device.as_str() != luks_base_path {
+                    continue;
+                }
+
+                let mut tmp_path = sys_lvm.clone();
+                tmp_path.pop_back();
+                let maybe_vg = tmp_path.pop_back().expect("no vg after 2 pops");
+
+                if maybe_vg.device_type != TYPE_VG {
+                    return Err(NayiError::NayiRsBug(format!(
+                        "unexpected device type - expecting a VG"
+                    )));
+                }
+
+                if maybe_vg.device.as_str() != vg.device {
+                    continue;
+                }
+
+                let mut list = sys_lvm.clone();
+                list.push_back(luks_dev.clone());
+                valids.push(list);
+
+                sys_lvm.clear();
+                continue 'new_pv;
+            }
+        }
+
+        return Ok(());
+    }
+
+    // Find base device for LUKS
+    // There's a possibility that LUKS sits on manifest LV on some VG
+    // with itself having >1 PVs
+    let mut found: Option<()> = None;
+    for list in valids.iter_mut() {
+        let top_most = list.back().expect("no back node in linked list in v");
+
+        if top_most.device.as_str() != luks_base_path {
+            continue;
+        }
+
+        if !is_luks_base(&top_most.device_type) {
+            return Err(NayiError::BadManifest(format!(
+                "{msg}: luks {} base {luks_base_path} cannot have type {}",
+                luks.name, top_most.device_type,
+            )));
+        }
+
+        found = Some(());
+        list.push_back(luks_dev.clone());
+    }
+
+    if found.is_some() {
+        return Ok(());
+    }
+
+    let unknown_base = BlockDev {
+        device: luks_base_path.clone(),
+        device_type: TYPE_UNKNOWN,
+    };
+
     if sys_fs_ready_devs.contains_key(luks_base_path) {
-        valids.push(LinkedList::from([
-            BlockDev {
-                device: luks_base_path.clone(),
-                device_type: TYPE_UNKNOWN,
-            },
-            BlockDev {
-                device: luks_path,
-                device_type: TYPE_LUKS,
-            },
-        ]));
+        valids.push(LinkedList::from([unknown_base, luks_dev]));
 
         // Clear used up sys fs_ready device
         sys_fs_ready_devs.remove(luks_base_path);
@@ -151,16 +202,7 @@ pub(super) fn collect_valid_luks(
         return Err(NayiError::NoSuchDevice(luks_base_path.to_string()));
     }
 
-    valids.push(LinkedList::from([
-        BlockDev {
-            device: luks_base_path.clone(),
-            device_type: TYPE_UNKNOWN,
-        },
-        BlockDev {
-            device: luks_path,
-            device_type: TYPE_LUKS,
-        },
-    ]));
+    valids.push(LinkedList::from([unknown_base, luks_dev]));
 
     Ok(())
 }

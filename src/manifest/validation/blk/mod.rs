@@ -306,7 +306,7 @@ mod tests {
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([(
                     "/dev/nvme0n1p2".into(),
-                    BlockDevType::Disk,
+                    BlockDevType::Partition,
                 )])),
                 sys_fs_devs: None,
                 sys_lvms: Some(HashMap::from([(
@@ -348,11 +348,11 @@ mod tests {
             },
 
             Test {
-                case: "Root on LUKS on existing LV, swap on existing partition".into(),
+                case: "Root on LUKS on existing partition, swap on existing LV".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([(
                     "/dev/nvme0n1p2".into(),
-                    BlockDevType::Disk,
+                    BlockDevType::Partition,
                 )])),
                 sys_fs_devs: None,
                 sys_lvms: Some(HashMap::from([(
@@ -390,6 +390,147 @@ mod tests {
                     }),
                     filesystems: None,
                     swap: Some(vec!["/dev/myvg/mylv".into()]),
+                    pacstraps: None,
+                    chroot: None,
+                    postinstall: None,
+                    hostname: None,
+                    timezone: None,
+                },
+            },
+
+            Test {
+                case: "Root on LUKS on existing LV, swap on LUKS on existing partition".into(),
+                context: Some("Existing LV on VG on >1 PVs".into()),
+                sys_fs_ready_devs: Some(HashMap::from([(
+                    "/dev/nvme0n1p2".into(),
+                    BlockDevType::Partition,
+                )])),
+                sys_fs_devs: None,
+                sys_lvms: Some(HashMap::from([(
+                    "/dev/sda1".into(),
+                    vec![LinkedList::from([
+                        BlockDev {
+                            device: "/dev/sda1".into(),
+                            device_type: TYPE_PV,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg".into(),
+                            device_type: TYPE_VG,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg/mylv".into(),
+                            device_type: TYPE_LV,
+                        },
+                    ])],
+                ), (
+                    "/dev/sdb2".into(),
+                    vec![LinkedList::from([
+                        BlockDev {
+                            device: "/dev/sdb2".into(),
+                            device_type: TYPE_PV,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg".into(),
+                            device_type: TYPE_VG,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg/mylv".into(),
+                            device_type: TYPE_LV,
+                        },
+                    ])],
+                )])),
+
+                manifest: Manifest {
+                    disks: None,
+                    device_mappers: Some(vec![
+                        Dm::Luks(ManifestLuks { 
+                            device: "/dev/myvg/mylv".into(),
+                            name:  "cryptroot".into(),
+                        }),
+                        Dm::Luks(ManifestLuks {
+                            device: "/dev/nvme0n1p2".into(),
+                            name:  "cryptswap".into(),
+                        })
+                    ]),
+                    rootfs: ManifestRootFs(ManifestFs {
+                        device: "/dev/mapper/cryptroot".into(),
+                        mnt: "/".into(),
+                        fs_type: "btrfs".into(),
+                        fs_opts: None,
+                        mnt_opts: None,
+                    }),
+                    filesystems: None,
+                    swap: Some(vec!["/dev/mapper/cryptswap".into()]),
+                    pacstraps: None,
+                    chroot: None,
+                    postinstall: None,
+                    hostname: None,
+                    timezone: None,
+                },
+            },
+
+            Test {
+                case: "Root on LUKS on existing LV, swap on LUKS on existing partition".into(),
+                context: Some("Existing LV on VG on >1 existing + new PVs".into()),
+                sys_fs_ready_devs: Some(HashMap::from([
+                    (
+                        "/dev/nvme0n1p2".into(),
+                        BlockDevType::Partition,
+                    ),
+                    (
+                        "/dev/sdb2".into(),
+                        BlockDevType::Partition,
+                    ),
+                ])),
+                sys_fs_devs: None,
+                sys_lvms: Some(HashMap::from([(
+                    "/dev/sda1".into(),
+                    vec![LinkedList::from([
+                        BlockDev {
+                            device: "/dev/sda1".into(),
+                            device_type: TYPE_PV,
+                        },
+                    ])],
+                )])),
+
+                manifest: Manifest {
+                    disks: None,
+                    device_mappers: Some(vec![
+                        Dm::Lvm(ManifestLvm {
+                            pvs: Some(vec![
+                                "/dev/sdb2".into(),
+                            ]),
+                            vgs: Some(vec![ManifestLvmVg {
+                                name: "myvg".into(),
+                                pvs: vec![
+                                    "/dev/sda1".into(), // sys_lvm PV
+                                    "/dev/sdb2".into(), // new PV
+                                ]
+                            }]),
+                            lvs: Some(vec![ManifestLvmLv {
+                                name: "mylv".into(),
+                                vg: "myvg".into(),
+                                size: None,
+                            }]),
+                        }),
+                        Dm::Luks(ManifestLuks { 
+                            device: "/dev/myvg/mylv".into(),
+                            name:  "cryptroot".into(),
+                        }),
+                        Dm::Luks(ManifestLuks {
+                            device: "/dev/nvme0n1p2".into(),
+                            name:  "cryptswap".into(),
+                        })
+                    ]),
+                    rootfs: ManifestRootFs(ManifestFs {
+                        device: "/dev/mapper/cryptroot".into(),
+                        mnt: "/".into(),
+                        fs_type: "btrfs".into(),
+                        fs_opts: None,
+                        mnt_opts: None,
+                    }),
+                    filesystems: None,
+                    swap: Some(vec!["/dev/mapper/cryptswap".into()]),
                     pacstraps: None,
                     chroot: None,
                     postinstall: None,
@@ -1109,6 +1250,73 @@ mod tests {
                     }),
                     filesystems: None,
                     swap: Some(vec!["/dev/nvme0n1p2".into()]),
+                    pacstraps: None,
+                    chroot: None,
+                    postinstall: None,
+                    hostname: None,
+                    timezone: None,
+                },
+            },
+
+            Test {
+                case: "Root on LUKS on existing LV, swap on used-up LV".into(),
+                context: Some("Existing LV on VG on >1 PVs".into()),
+                sys_fs_ready_devs: Some(HashMap::from([(
+                    "/dev/nvme0n1p2".into(),
+                    BlockDevType::Disk,
+                )])),
+                sys_fs_devs: None,
+                sys_lvms: Some(HashMap::from([(
+                    "/dev/sda1".into(),
+                    vec![LinkedList::from([
+                        BlockDev {
+                            device: "/dev/sda1".into(),
+                            device_type: TYPE_PV,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg".into(),
+                            device_type: TYPE_VG,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg/mylv".into(),
+                            device_type: TYPE_LV,
+                        },
+                    ])],
+                ), (
+                    "/dev/sdb2".into(),
+                    vec![LinkedList::from([
+                        BlockDev {
+                            device: "/dev/sdb2".into(),
+                            device_type: TYPE_PV,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg".into(),
+                            device_type: TYPE_VG,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg/mylv".into(),
+                            device_type: TYPE_LV,
+                        },
+                    ])],
+                )])),
+
+                manifest: Manifest {
+                    disks: None,
+                    device_mappers: Some(vec![
+                        Dm::Luks(ManifestLuks { 
+                            device: "/dev/myvg/mylv".into(),
+                            name:  "cryptroot".into(),
+                        }),
+                    ]),
+                    rootfs: ManifestRootFs(ManifestFs {
+                        device: "/dev/mapper/cryptroot".into(),
+                        mnt: "/".into(),
+                        fs_type: "btrfs".into(),
+                        fs_opts: None,
+                        mnt_opts: None,
+                    }),
+                    filesystems: None,
+                    swap: Some(vec!["/dev/myvg/mylv".into()]),
                     pacstraps: None,
                     chroot: None,
                     postinstall: None,
