@@ -43,8 +43,9 @@ fn is_luks_base(dev_type: &BlockDevType) -> bool {
     }
 }
 
+// Collects valid block device path(s) into valids
 #[inline]
-pub(super) fn validate_luks(
+pub(super) fn collect_valid_luks(
     luks: &ManifestLuks,
     sys_fs_devs: &HashMap<String, BlockDevType>,
     sys_fs_ready_devs: &mut HashMap<String, BlockDevType>,
@@ -164,8 +165,9 @@ pub(super) fn validate_luks(
     Ok(())
 }
 
+// Collect valid PV device path into valids
 #[inline]
-pub(super) fn validate_pv(
+pub(super) fn collect_valid_pv(
     pv_path: &str,
     sys_fs_devs: &HashMap<String, BlockDevType>,
     sys_fs_ready_devs: &mut HashMap<String, BlockDevType>,
@@ -264,8 +266,9 @@ pub(super) fn validate_pv(
     return Ok(());
 }
 
+// Collect valid VG device path into valids
 #[inline]
-pub(super) fn validate_vg(
+pub(super) fn collect_valid_vg(
     vg: &ManifestLvmVg,
     sys_fs_devs: &HashMap<String, BlockDevType>,
     sys_lvms: &mut HashMap<String, BlockDevPaths>,
@@ -369,8 +372,9 @@ pub(super) fn validate_vg(
     Ok(())
 }
 
+// Collect valid LV device path(s) into valids
 #[inline]
-pub(super) fn validate_lv(
+pub(super) fn collect_valid_lv(
     lv: &ManifestLvmLv,
     sys_fs_devs: &HashMap<String, BlockDevType>,
     sys_lvms: &mut HashMap<String, BlockDevPaths>,

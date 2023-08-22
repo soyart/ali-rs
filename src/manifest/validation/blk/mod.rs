@@ -94,7 +94,7 @@ fn validate_blk(
             match dm {
                 Dm::Luks(luks) => {
                     // Appends LUKS to a path in valids, if OK
-                    dm::validate_luks(
+                    dm::collect_valid_luks(
                         luks,
                         sys_fs_devs,
                         &mut sys_fs_ready_devs,
@@ -110,7 +110,7 @@ fn validate_blk(
                     if let Some(pvs) = &lvm.pvs {
                         for pv_path in pvs {
                             // Appends PV to a path in valids, if OK
-                            dm::validate_pv(
+                            dm::collect_valid_pv(
                                 pv_path,
                                 sys_fs_devs,
                                 &mut sys_fs_ready_devs,
@@ -123,14 +123,14 @@ fn validate_blk(
                     if let Some(vgs) = &lvm.vgs {
                         for vg in vgs {
                             // Appends VG to paths in valids, if OK
-                            dm::validate_vg(vg, sys_fs_devs, &mut sys_lvms, &mut valids)?;
+                            dm::collect_valid_vg(vg, sys_fs_devs, &mut sys_lvms, &mut valids)?;
                         }
                     }
 
                     if let Some(lvs) = &lvm.lvs {
                         for lv in lvs {
                             // Appends LV to paths in valids, if OK
-                            dm::validate_lv(lv, sys_fs_devs, &mut sys_lvms, &mut valids)?;
+                            dm::collect_valid_lv(lv, sys_fs_devs, &mut sys_lvms, &mut valids)?;
                         }
                     }
                 }
@@ -339,6 +339,57 @@ mod tests {
                     }),
                     filesystems: None,
                     swap: Some(vec!["/dev/nvme0n1p2".into()]),
+                    pacstraps: None,
+                    chroot: None,
+                    postinstall: None,
+                    hostname: None,
+                    timezone: None,
+                },
+            },
+
+            Test {
+                case: "Root on LUKS on existing LV, swap on existing partition".into(),
+                context: None,
+                sys_fs_ready_devs: Some(HashMap::from([(
+                    "/dev/nvme0n1p2".into(),
+                    BlockDevType::Disk,
+                )])),
+                sys_fs_devs: None,
+                sys_lvms: Some(HashMap::from([(
+                    "/dev/sda1".into(),
+                    vec![LinkedList::from([
+                        BlockDev {
+                            device: "/dev/sda1".into(),
+                            device_type: TYPE_PV,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg".into(),
+                            device_type: TYPE_VG,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg/mylv".into(),
+                            device_type: TYPE_LV,
+                        },
+                    ])],
+                )])),
+
+                manifest: Manifest {
+                    disks: None,
+                    device_mappers: Some(vec![
+                        Dm::Luks(ManifestLuks { 
+                            device: "/dev/nvme0n1p2".into(),
+                            name:  "cryptroot".into(),
+                        }),
+                    ]),
+                    rootfs: ManifestRootFs(ManifestFs {
+                        device: "/dev/mapper/cryptroot".into(),
+                        mnt: "/".into(),
+                        fs_type: "btrfs".into(),
+                        fs_opts: None,
+                        mnt_opts: None,
+                    }),
+                    filesystems: None,
+                    swap: Some(vec!["/dev/myvg/mylv".into()]),
                     pacstraps: None,
                     chroot: None,
                     postinstall: None,
@@ -1000,6 +1051,57 @@ mod tests {
                     device_mappers: None,
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/sda1".into(),
+                        mnt: "/".into(),
+                        fs_type: "btrfs".into(),
+                        fs_opts: None,
+                        mnt_opts: None,
+                    }),
+                    filesystems: None,
+                    swap: Some(vec!["/dev/nvme0n1p2".into()]),
+                    pacstraps: None,
+                    chroot: None,
+                    postinstall: None,
+                    hostname: None,
+                    timezone: None,
+                },
+            },
+
+            Test {
+                case: "Root on LUKS on existing LV, but swap reuses rootfs base".into(),
+                context: None,
+                sys_fs_ready_devs: Some(HashMap::from([(
+                    "/dev/nvme0n1p2".into(),
+                    BlockDevType::Disk,
+                )])),
+                sys_fs_devs: None,
+                sys_lvms: Some(HashMap::from([(
+                    "/dev/sda1".into(),
+                    vec![LinkedList::from([
+                        BlockDev {
+                            device: "/dev/sda1".into(),
+                            device_type: TYPE_PV,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg".into(),
+                            device_type: TYPE_VG,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg/mylv".into(),
+                            device_type: TYPE_LV,
+                        },
+                    ])],
+                )])),
+
+                manifest: Manifest {
+                    disks: None,
+                    device_mappers: Some(vec![
+                        Dm::Luks(ManifestLuks { 
+                            device: "/dev/nvme0n1p2".into(),
+                            name:  "cryptroot".into(),
+                        }),
+                    ]),
+                    rootfs: ManifestRootFs(ManifestFs {
+                        device: "/dev/mapper/cryptroot".into(),
                         mnt: "/".into(),
                         fs_type: "btrfs".into(),
                         fs_opts: None,
