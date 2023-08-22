@@ -275,8 +275,8 @@ mod tests {
                 case: "Root and swap on existing partition".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([
-                    ("/dev/sda1".into(), BlockDevType::Disk),
-                    ("/dev/nvme0n1p2".into(), BlockDevType::Disk),
+                    ("/dev/sda1".into(), TYPE_PART),
+                    ("/dev/nvme0n1p2".into(), TYPE_PART),
                 ])),
                 sys_fs_devs: None,
                 sys_lvms: None,
@@ -306,7 +306,7 @@ mod tests {
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([(
                     "/dev/nvme0n1p2".into(),
-                    BlockDevType::Partition,
+                    TYPE_PART,
                 )])),
                 sys_fs_devs: None,
                 sys_lvms: Some(HashMap::from([(
@@ -352,7 +352,7 @@ mod tests {
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([(
                     "/dev/nvme0n1p2".into(),
-                    BlockDevType::Partition,
+                    TYPE_PART,
                 )])),
                 sys_fs_devs: None,
                 sys_lvms: Some(HashMap::from([(
@@ -376,7 +376,7 @@ mod tests {
                 manifest: Manifest {
                     disks: None,
                     device_mappers: Some(vec![
-                        Dm::Luks(ManifestLuks { 
+                        Dm::Luks(ManifestLuks {
                             device: "/dev/nvme0n1p2".into(),
                             name:  "cryptroot".into(),
                         }),
@@ -403,7 +403,7 @@ mod tests {
                 context: Some("Existing LV on VG on >1 PVs".into()),
                 sys_fs_ready_devs: Some(HashMap::from([(
                     "/dev/nvme0n1p2".into(),
-                    BlockDevType::Partition,
+                    TYPE_PART,
                 )])),
                 sys_fs_devs: None,
                 sys_lvms: Some(HashMap::from([(
@@ -443,7 +443,7 @@ mod tests {
                 manifest: Manifest {
                     disks: None,
                     device_mappers: Some(vec![
-                        Dm::Luks(ManifestLuks { 
+                        Dm::Luks(ManifestLuks {
                             device: "/dev/myvg/mylv".into(),
                             name:  "cryptroot".into(),
                         }),
@@ -475,11 +475,11 @@ mod tests {
                 sys_fs_ready_devs: Some(HashMap::from([
                     (
                         "/dev/nvme0n1p2".into(),
-                        BlockDevType::Partition,
+                        TYPE_PART,
                     ),
                     (
                         "/dev/sdb2".into(),
-                        BlockDevType::Partition,
+                        TYPE_PART,
                     ),
                 ])),
                 sys_fs_devs: None,
@@ -513,7 +513,7 @@ mod tests {
                                 size: None,
                             }]),
                         }),
-                        Dm::Luks(ManifestLuks { 
+                        Dm::Luks(ManifestLuks {
                             device: "/dev/myvg/mylv".into(),
                             name:  "cryptroot".into(),
                         }),
@@ -543,8 +543,8 @@ mod tests {
                 case: "Root on existing LV, swap on manifest partition".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([
-                    ("/dev/sda1".into(), BlockDevType::Disk),
-                    ("/dev/nvme0n1p2".into(), BlockDevType::Disk),
+                    ("/dev/sda1".into(), TYPE_PART),
+                    ("/dev/nvme0n1p2".into(), TYPE_PART),
                 ])),
                 sys_fs_devs: None,
                 sys_lvms: Some(HashMap::from([(
@@ -589,8 +589,8 @@ mod tests {
                 case: "Root and swap on existing LV on existing VG".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([
-                    ("/dev/sda1".into(), BlockDevType::Disk),
-                    ("/dev/nvme0n1p2".into(), BlockDevType::Disk),
+                    ("/dev/sda1".into(), TYPE_PART),
+                    ("/dev/nvme0n1p2".into(), TYPE_PART),
                 ])),
                 sys_fs_devs: None,
                 sys_lvms: Some(HashMap::from([(
@@ -639,8 +639,8 @@ mod tests {
                     case: "Root on manifest LVM, built on existing partition. Swap on existing partition".into(),
                     context: None,
                     sys_fs_ready_devs: Some(HashMap::from([
-                        ("/dev/sda1".into(), BlockDevType::Disk),
-                        ("/dev/nvme0n1p2".into(), BlockDevType::Disk),
+                        ("/dev/sda1".into(), TYPE_PART),
+                        ("/dev/nvme0n1p2".into(), TYPE_PART),
                     ])),
                     sys_fs_devs: None,
                     sys_lvms: None,
@@ -680,7 +680,7 @@ mod tests {
                     case:"Root on manifest LVM, built on manifest partition. Swap on manifest partition".into(),
                     context: None,
                     sys_fs_ready_devs: Some(HashMap::from([
-                        ("/dev/nvme0n1p2".into(), BlockDevType::Disk),
+                        ("/dev/nvme0n1p2".into(), TYPE_PART),
                     ])),
                     sys_fs_devs: None,
                     sys_lvms: None,
@@ -1212,7 +1212,7 @@ mod tests {
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([(
                     "/dev/nvme0n1p2".into(),
-                    BlockDevType::Disk,
+                    BlockDevType::Partition,
                 )])),
                 sys_fs_devs: None,
                 sys_lvms: Some(HashMap::from([(
@@ -1236,7 +1236,7 @@ mod tests {
                 manifest: Manifest {
                     disks: None,
                     device_mappers: Some(vec![
-                        Dm::Luks(ManifestLuks { 
+                        Dm::Luks(ManifestLuks {
                             device: "/dev/nvme0n1p2".into(),
                             name:  "cryptroot".into(),
                         }),
@@ -1263,7 +1263,7 @@ mod tests {
                 context: Some("Existing LV on VG on >1 PVs".into()),
                 sys_fs_ready_devs: Some(HashMap::from([(
                     "/dev/nvme0n1p2".into(),
-                    BlockDevType::Disk,
+                    BlockDevType::Partition,
                 )])),
                 sys_fs_devs: None,
                 sys_lvms: Some(HashMap::from([(
@@ -1303,7 +1303,7 @@ mod tests {
                 manifest: Manifest {
                     disks: None,
                     device_mappers: Some(vec![
-                        Dm::Luks(ManifestLuks { 
+                        Dm::Luks(ManifestLuks {
                             device: "/dev/myvg/mylv".into(),
                             name:  "cryptroot".into(),
                         }),
@@ -1330,7 +1330,7 @@ mod tests {
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([(
                     "/dev/nvme0n1p2".into(),
-                    BlockDevType::Disk,
+                    BlockDevType::Partition,
                 )])),
                 sys_fs_devs: None,
                 sys_lvms: None,
@@ -1385,7 +1385,7 @@ mod tests {
                 context: Some("VG is based on used PV".into()),
                 sys_fs_ready_devs: Some(HashMap::from([(
                     "/dev/nvme0n1p2".into(),
-                    BlockDevType::Disk,
+                    BlockDevType::Partition,
                 )])),
                 sys_fs_devs: None,
                 sys_lvms: None,
@@ -1444,7 +1444,7 @@ mod tests {
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([(
                     "/dev/nvme0n1p2".into(),
-                    BlockDevType::Disk,
+                    BlockDevType::Partition,
                 )])),
                 sys_fs_devs: None,
                 sys_lvms: None,
