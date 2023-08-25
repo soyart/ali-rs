@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet, LinkedList};
 
 use crate::entity::blockdev::*;
 use crate::errors::NayiError;
-use crate::manifest::{Dm, Manifest};
+use crate::manifest::{Dm, Manifest, ManifestLvmLv};
 use crate::utils::fs::file_exists;
 
 pub fn validate(manifest: &Manifest) -> Result<(), NayiError> {
@@ -55,6 +55,19 @@ fn validate_blk(
                 }
             };
 
+            // Find if this disk has any used partitions
+            // A GPT table can hold a maximum of 128 partitions
+            for i in 1_u8..128 {
+                let partition_name = format!("{partition_prefix}{}", i);
+                if sys_fs_devs.contains_key(&partition_name) {
+                    let fs = sys_fs_devs.get(&partition_name).unwrap();
+                    return Err(NayiError::BadManifest(format!(
+                        "disk {} already in use on {partition_name} as {fs}",
+                        disk.device
+                    )));
+                }
+            }
+
             // Base disk
             let base = LinkedList::from([BlockDev {
                 device: disk.device.clone(),
@@ -63,8 +76,20 @@ fn validate_blk(
 
             // Check if this partition is already in use
             let msg = "partition validation failed";
-            for (i, _) in disk.partitions.iter().enumerate() {
+
+            let l = disk.partitions.len();
+            for (i, part) in disk.partitions.iter().enumerate() {
                 let partition_name = format!("{partition_prefix}{}", i + 1);
+
+                // If multiple partitions are to be created on this disk,
+                // only the last partition could be unsized
+                if i != l - 1 && l != 1 {
+                    if part.size.is_none() {
+                        return Err(NayiError::BadManifest(format!(
+                            "unsized partition {partition_name} must be the last partition"
+                        )));
+                    }
+                }
 
                 if sys_fs_ready_devs.get(&partition_name).is_some() {
                     return Err(NayiError::BadManifest(format!(
@@ -90,6 +115,47 @@ fn validate_blk(
     }
 
     if let Some(dms) = &manifest.device_mappers {
+        // Only the last LV on each VG could be unsized (100% sized)
+        let mut vg_lvs: HashMap<String, Vec<ManifestLvmLv>> = HashMap::new();
+        for dm in dms {
+            match dm {
+                Dm::Lvm(lvm) => {
+                    if let Some(ref lvs) = lvm.lvs {
+                        for lv in lvs {
+                            if vg_lvs.contains_key(&lv.vg) {
+                                vg_lvs.get_mut(&lv.vg).unwrap().push(lv.clone());
+                                continue;
+                            }
+
+                            vg_lvs.insert(lv.vg.clone(), vec![lv.clone()]);
+                        }
+                    }
+                }
+                _ => continue,
+            }
+        }
+
+        for (vg, lvs) in vg_lvs.into_iter() {
+            if lvs.is_empty() {
+                continue;
+            }
+
+            let l = lvs.len();
+            if l == 1 {
+                continue;
+            }
+
+            for (i, lv) in lvs.into_iter().enumerate() {
+                if lv.size.is_none() && (i != l - 1) {
+                    return Err(NayiError::BadManifest(format!(
+                        "lv {} on vg {vg} has None size",
+                        lv.name
+                    )));
+                }
+            }
+        }
+
+        // Collect all DMs into valids to be used later in filesystems validation
         for dm in dms {
             match dm {
                 Dm::Luks(luks) => {
@@ -1362,6 +1428,72 @@ mod tests {
                             pvs: vec!["./mock_devs/sda2".into()],
                         }]),
                         lvs: None,
+                    })]),
+                    rootfs: ManifestRootFs(ManifestFs {
+                        device: "/dev/myvg/mylv".into(),
+                        mnt: "/".into(),
+                        fs_type: "btrfs".into(),
+                        fs_opts: None,
+                        mnt_opts: None,
+                    }),
+                    filesystems: None,
+                    swap: Some(vec!["/dev/nvme0n1p2".into()]),
+                    pacstraps: None,
+                    chroot: None,
+                    postinstall: None,
+                    hostname: None,
+                    timezone: None,
+                },
+            },
+
+            Test {
+                case: "Root on LVM, built on manifest partitions".into(),
+                context: Some("Non-last LV has None size".into()),
+                sys_fs_ready_devs: Some(HashMap::from([(
+                    "/dev/nvme0n1p2".into(),
+                    BlockDevType::Partition,
+                )])),
+                sys_fs_devs: None,
+                sys_lvms: None,
+
+                manifest: Manifest {
+                    disks: Some(vec![
+                        ManifestDisk {
+                            device: "./mock_devs/sda".into(),
+                            table: PartitionTable::Gpt,
+                            partitions: vec![
+                                ManifestPartition {
+                                    label: "PART_EFI".into(),
+                                    size: Some("500M".into()),
+                                    part_type: "ef".into(),
+                                },
+                                ManifestPartition {
+                                    label: "PART_PV".into(),
+                                    size: None,
+                                    part_type: "8e".into(),
+                                },
+                            ],
+                    }]),
+                    device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
+                        pvs: Some(vec![
+                            "./mock_devs/sda2".into(),
+                        ]),
+                        vgs: Some(vec![ManifestLvmVg {
+                            name: "myvg".into(),
+                            pvs: vec!["./mock_devs/sda2".into()],
+                        }]),
+                        lvs: Some(vec![
+                            ManifestLvmLv {
+                                name: "mylv".into(),
+                                vg: "myvg".into(),
+                                size: None,
+                            },
+                            ManifestLvmLv {
+                                name: "myswap".into(),
+                                vg: "myvg".into(),
+                                size: None,
+                            },
+                        ]),
                     })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),

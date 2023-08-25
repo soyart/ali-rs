@@ -114,7 +114,7 @@ pub struct ManifestLvmVg {
     pub pvs: Vec<String>,
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct ManifestLvmLv {
     pub name: String,
     pub vg: String,
