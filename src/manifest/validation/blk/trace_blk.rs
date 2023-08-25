@@ -22,14 +22,13 @@ struct EntryBlkid {
     label: Option<String>,
 }
 
-pub(super) fn run_blkid(cmd_blkid: &str) -> Result<String, NayiError> {
+pub(super) fn run_blkid(cmd_blkid: &str) -> Result<String, AliError> {
     let cmd_blkid = Command::new(cmd_blkid).output().map_err(|err| {
-        NayiError::CmdFailed(Some(err), format!("blkid command {cmd_blkid} failed"))
+        AliError::CmdFailed(Some(err), format!("blkid command {cmd_blkid} failed"))
     })?;
 
-    String::from_utf8(cmd_blkid.stdout).map_err(|err| {
-        NayiError::NayiRsBug(format!("blkid output not string: {}", err.to_string()))
-    })
+    String::from_utf8(cmd_blkid.stdout)
+        .map_err(|err| AliError::AliRsBug(format!("blkid output not string: {}", err.to_string())))
 }
 
 pub(super) fn sys_fs_ready(output_blkid: &str) -> HashMap<String, BlockDevType> {

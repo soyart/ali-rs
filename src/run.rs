@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use crate::cli;
-use crate::errors::NayiError;
+use crate::errors::AliError;
 use crate::manifest::{self, validation, Dm, Manifest};
 
 #[derive(Debug)]
@@ -27,11 +27,11 @@ impl Report {
     }
 }
 
-pub(super) fn run(args: cli::Args) -> Result<Report, NayiError> {
+pub(super) fn run(args: cli::Args) -> Result<Report, AliError> {
     let start = std::time::Instant::now();
 
     let manifest_yaml = std::fs::read_to_string(&args.manifest)
-        .map_err(|err| NayiError::NoSuchFile(err, args.manifest))?;
+        .map_err(|err| AliError::NoSuchFile(err, args.manifest))?;
 
     // manifest is mutable because we might have to
     // help add packages such as lvm2 and btrfs-progs
@@ -40,7 +40,7 @@ pub(super) fn run(args: cli::Args) -> Result<Report, NayiError> {
     validation::validate(&manifest)?;
     update_manifest(&mut manifest);
 
-    // TODO: now nayi-rs just prints valid manifest to stdout
+    // TODO: ali-rs just prints valid manifest to stdout
     println!("{:?}", manifest);
 
     Ok(Report {

@@ -4,11 +4,11 @@ mod trace_blk;
 use std::collections::{HashMap, HashSet, LinkedList};
 
 use crate::entity::{blockdev::*, parse_human_bytes};
-use crate::errors::NayiError;
+use crate::errors::AliError;
 use crate::manifest::{Dm, Manifest, ManifestLvmLv};
 use crate::utils::fs::file_exists;
 
-pub fn validate(manifest: &Manifest) -> Result<(), NayiError> {
+pub fn validate(manifest: &Manifest) -> Result<(), AliError> {
     // Get full blkid output
     let output_blkid = trace_blk::run_blkid("blkid")?;
 
@@ -35,14 +35,14 @@ fn validate_blk(
     sys_fs_devs: &HashMap<String, BlockDevType>, // Maps fs devs to their FS type (e.g. Btrfs)
     mut sys_fs_ready_devs: HashMap<String, BlockDevType>, // Maps fs-ready devs to their types (e.g. partition)
     mut sys_lvms: HashMap<String, BlockDevPaths>,         // Maps pv path to all possible LV paths
-) -> Result<BlockDevPaths, NayiError> {
+) -> Result<BlockDevPaths, AliError> {
     // valids collects all valid known devices to be created in the manifest
     let mut valids = BlockDevPaths::new();
 
     if let Some(disks) = &manifest.disks {
         for disk in disks {
             if !file_exists(&disk.device) {
-                return Err(NayiError::BadManifest(format!(
+                return Err(AliError::BadManifest(format!(
                     "no such disk device: {}",
                     disk.device
                 )));
@@ -61,7 +61,7 @@ fn validate_blk(
                 let partition_name = format!("{partition_prefix}{}", i);
                 if sys_fs_devs.contains_key(&partition_name) {
                     let fs = sys_fs_devs.get(&partition_name).unwrap();
-                    return Err(NayiError::BadManifest(format!(
+                    return Err(AliError::BadManifest(format!(
                         "disk {} already in use on {partition_name} as {fs}",
                         disk.device
                     )));
@@ -85,27 +85,27 @@ fn validate_blk(
                 // only the last partition could be unsized
                 if i != l - 1 && l != 1 {
                     if part.size.is_none() {
-                        return Err(NayiError::BadManifest(format!(
+                        return Err(AliError::BadManifest(format!(
                             "unsized partition {partition_name} must be the last partition"
                         )));
                     }
                 }
 
                 if sys_fs_ready_devs.get(&partition_name).is_some() {
-                    return Err(NayiError::BadManifest(format!(
+                    return Err(AliError::BadManifest(format!(
                         "{msg}: partition {partition_name} already exists on system"
                     )));
                 }
 
                 if let Some(existing_fs) = sys_fs_devs.get(&partition_name) {
-                    return Err(NayiError::BadManifest(format!(
+                    return Err(AliError::BadManifest(format!(
                         "{msg}: partition {partition_name} is already used as {existing_fs}"
                     )));
                 }
 
                 if let Some(ref size) = part.size {
                     if let Err(err) = parse_human_bytes(size) {
-                        return Err(NayiError::BadManifest(format!(
+                        return Err(AliError::BadManifest(format!(
                             "bad partition size {size}: {err}"
                         )));
                     }
@@ -133,7 +133,7 @@ fn validate_blk(
                             // Check if size string is valid
                             if let Some(ref size) = lv.size {
                                 if let Err(err) = parse_human_bytes(size) {
-                                    return Err(NayiError::BadManifest(format!(
+                                    return Err(AliError::BadManifest(format!(
                                         "bad lv size {size}: {err}"
                                     )));
                                 }
@@ -164,7 +164,7 @@ fn validate_blk(
 
             for (i, lv) in lvs.into_iter().enumerate() {
                 if lv.size.is_none() && (i != l - 1) {
-                    return Err(NayiError::BadManifest(format!(
+                    return Err(AliError::BadManifest(format!(
                         "lv {} on vg {vg} has None size",
                         lv.name
                     )));
@@ -231,7 +231,7 @@ fn validate_blk(
             continue;
         }
 
-        return Err(NayiError::NayiRsBug(format!(
+        return Err(AliError::AliRsBug(format!(
             "fs-ready dev {dev} is not fs-ready"
         )));
     }
@@ -258,7 +258,7 @@ fn validate_blk(
     // Validate root FS, other FS, and swap against fs_ready_devs
     let mut msg = "rootfs validation failed";
     if !fs_ready_devs.contains(&manifest.rootfs.device.clone()) {
-        return Err(NayiError::BadManifest(format!(
+        return Err(AliError::BadManifest(format!(
             "{msg}: no top-level fs-ready device for rootfs: {}",
             manifest.rootfs.device,
         )));
@@ -271,7 +271,7 @@ fn validate_blk(
         msg = "fs validation failed";
         for (i, fs) in filesystems.iter().enumerate() {
             if !fs_ready_devs.contains(&fs.device) {
-                return Err(NayiError::BadManifest(format!(
+                return Err(AliError::BadManifest(format!(
                     "{msg}: device {} for fs #{} ({}) is not fs-ready",
                     fs.device,
                     i + 1,
@@ -292,7 +292,7 @@ fn validate_blk(
                 continue;
             }
 
-            return Err(NayiError::BadManifest(format!(
+            return Err(AliError::BadManifest(format!(
                 "{msg}: device {swap} for swap #{} is not fs-ready",
                 i + 1,
             )));

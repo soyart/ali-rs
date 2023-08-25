@@ -4,7 +4,7 @@ use std::collections::HashSet;
 
 use serde::{Deserialize, Serialize};
 
-use crate::errors::NayiError;
+use crate::errors::AliError;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Manifest {
@@ -44,7 +44,7 @@ pub struct Manifest {
 
 impl Manifest {
     #[inline]
-    pub fn from_yaml(manifest_yaml: &str) -> Result<Self, NayiError> {
+    pub fn from_yaml(manifest_yaml: &str) -> Result<Self, AliError> {
         parse(manifest_yaml)
     }
 }
@@ -139,8 +139,8 @@ pub enum Dm {
 }
 
 #[inline]
-pub fn parse(manifest: &str) -> Result<Manifest, NayiError> {
-    serde_yaml::from_str(manifest).map_err(|err| NayiError::BadManifest(err.to_string()))
+pub fn parse(manifest: &str) -> Result<Manifest, AliError> {
+    serde_yaml::from_str(manifest).map_err(|err| AliError::BadManifest(err.to_string()))
 }
 
 #[test]

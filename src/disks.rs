@@ -1,8 +1,8 @@
-use crate::errors::NayiError;
+use crate::errors::AliError;
 use crate::linux;
 use crate::manifest;
 
-pub fn do_disks(disks: &[manifest::ManifestDisk]) -> Result<(), NayiError> {
+pub fn do_disks(disks: &[manifest::ManifestDisk]) -> Result<(), AliError> {
     for disk in disks.iter() {
         do_disk(disk)?;
     }
@@ -10,7 +10,7 @@ pub fn do_disks(disks: &[manifest::ManifestDisk]) -> Result<(), NayiError> {
     Ok(())
 }
 
-fn do_disk(disk: &manifest::ManifestDisk) -> Result<(), NayiError> {
+fn do_disk(disk: &manifest::ManifestDisk) -> Result<(), AliError> {
     let create_table_cmd = linux::fdisk::create_table_cmd(&disk.device, &disk.table);
     linux::fdisk::run_fdisk_cmd(&disk.device, &create_table_cmd)?;
 

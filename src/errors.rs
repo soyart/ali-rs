@@ -1,7 +1,7 @@
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum NayiError {
+pub enum AliError {
     #[error("no such file")]
     NoSuchFile(std::io::Error, String),
 
@@ -20,6 +20,6 @@ pub enum NayiError {
     #[error("not implemented")]
     NotImplemented,
 
-    #[error("nayi-rs bug")]
-    NayiRsBug(String),
+    #[error("ali-rs bug")]
+    AliRsBug(String),
 }

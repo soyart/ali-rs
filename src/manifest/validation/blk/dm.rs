@@ -1,7 +1,7 @@
 use std::collections::{HashMap, LinkedList};
 
 use crate::entity::blockdev::*;
-use crate::errors::NayiError;
+use crate::errors::AliError;
 use crate::manifest::validation::*;
 use crate::manifest::{ManifestLuks, ManifestLvmLv, ManifestLvmVg};
 
@@ -51,18 +51,18 @@ pub(super) fn collect_valid_luks(
     sys_fs_ready_devs: &mut HashMap<String, BlockDevType>,
     sys_lvms: &mut HashMap<String, BlockDevPaths>,
     valids: &mut BlockDevPaths,
-) -> Result<(), NayiError> {
+) -> Result<(), AliError> {
     let (luks_base_path, luks_path) = (&luks.device, format!("/dev/mapper/{}", luks.name));
 
     let msg = "dm luks validation failed";
     if file_exists(&luks_path) {
-        return Err(NayiError::BadManifest(format!(
+        return Err(AliError::BadManifest(format!(
             "{msg}: device {luks_path} already exists"
         )));
     }
 
     if let Some(fs_type) = sys_fs_devs.get(luks_base_path) {
-        return Err(NayiError::BadManifest(format!(
+        return Err(AliError::BadManifest(format!(
             "{msg}: luks {} base {luks_base_path} was already in use as {fs_type}",
             luks.name
         )));
@@ -85,7 +85,7 @@ pub(super) fn collect_valid_luks(
             }
 
             if !is_luks_base(&top_most.device_type) {
-                return Err(NayiError::BadManifest(format!(
+                return Err(AliError::BadManifest(format!(
                     "{msg}: luks base {} (itself is an LVM from {}) cannot have type {}",
                     luks_base_path, lvm_base, top_most.device_type
                 )));
@@ -98,7 +98,7 @@ pub(super) fn collect_valid_luks(
             let should_be_vg = path.pop_back().expect("no vg after 2 pops");
 
             if should_be_vg.device_type != TYPE_VG {
-                return Err(NayiError::NayiRsBug(format!(
+                return Err(AliError::AliRsBug(format!(
                     "unexpected device type - expecting a VG"
                 )));
             }
@@ -136,7 +136,7 @@ pub(super) fn collect_valid_luks(
                 let maybe_vg = tmp_path.pop_back().expect("no vg after 2 pops");
 
                 if maybe_vg.device_type != TYPE_VG {
-                    return Err(NayiError::NayiRsBug(format!(
+                    return Err(AliError::AliRsBug(format!(
                         "unexpected device type - expecting a VG"
                     )));
                 }
@@ -169,7 +169,7 @@ pub(super) fn collect_valid_luks(
         }
 
         if !is_luks_base(&top_most.device_type) {
-            return Err(NayiError::BadManifest(format!(
+            return Err(AliError::BadManifest(format!(
                 "{msg}: luks {} base {luks_base_path} cannot have type {}",
                 luks.name, top_most.device_type,
             )));
@@ -199,7 +199,7 @@ pub(super) fn collect_valid_luks(
 
     // TODO: This may introduce error if such file is not a proper block device.
     if !file_exists(luks_base_path) {
-        return Err(NayiError::NoSuchDevice(luks_base_path.to_string()));
+        return Err(AliError::NoSuchDevice(luks_base_path.to_string()));
     }
 
     valids.push(LinkedList::from([unknown_base, luks_dev]));
@@ -215,10 +215,10 @@ pub(super) fn collect_valid_pv(
     sys_fs_ready_devs: &mut HashMap<String, BlockDevType>,
     sys_lvms: &mut HashMap<String, BlockDevPaths>,
     valids: &mut BlockDevPaths,
-) -> Result<(), NayiError> {
+) -> Result<(), AliError> {
     let msg = "lvm pv validation failed";
     if let Some(fs_type) = sys_fs_devs.get(pv_path) {
-        return Err(NayiError::BadManifest(format!(
+        return Err(AliError::BadManifest(format!(
             "{msg}: pv {pv_path} base was already used as {fs_type}",
         )));
     }
@@ -228,7 +228,7 @@ pub(super) fn collect_valid_pv(
         for sys_pv_path in sys_pv_lvms {
             for node in sys_pv_path {
                 if node.device_type == TYPE_VG {
-                    return Err(NayiError::BadManifest(format!(
+                    return Err(AliError::BadManifest(format!(
                         "{msg}: pv {pv_path} was already used for other vg {}",
                         node.device,
                     )));
@@ -248,13 +248,13 @@ pub(super) fn collect_valid_pv(
         }
 
         if top_most.device_type == TYPE_PV {
-            return Err(NayiError::BadManifest(format!(
+            return Err(AliError::BadManifest(format!(
                 "{msg}: duplicate pv {pv_path} in manifest"
             )));
         }
 
         if !is_pv_base(&top_most.device_type) {
-            return Err(NayiError::BadManifest(format!(
+            return Err(AliError::BadManifest(format!(
                 "{msg}: pv {} base cannot have type {}",
                 pv_path, top_most.device_type,
             )));
@@ -289,7 +289,7 @@ pub(super) fn collect_valid_pv(
 
     // TODO: This may introduce error if such file is not a proper block device.
     if !file_exists(pv_path) {
-        return Err(NayiError::BadManifest(format!(
+        return Err(AliError::BadManifest(format!(
             "{msg}: no such pv device: {pv_path}"
         )));
     }
@@ -315,7 +315,7 @@ pub(super) fn collect_valid_vg(
     sys_fs_devs: &HashMap<String, BlockDevType>,
     sys_lvms: &mut HashMap<String, BlockDevPaths>,
     valids: &mut BlockDevPaths,
-) -> Result<(), NayiError> {
+) -> Result<(), AliError> {
     let vg_dev = BlockDev {
         device: format!("/dev/{}", vg.name),
         device_type: TYPE_VG,
@@ -325,7 +325,7 @@ pub(super) fn collect_valid_vg(
     'validate_vg_pv: for pv_base in &vg.pvs {
         // Invalidate VG if its PV was already used as FS partition
         if let Some(fs) = sys_fs_devs.get(pv_base) {
-            return Err(NayiError::BadManifest(format!(
+            return Err(AliError::BadManifest(format!(
                 "{msg}: vg {} base {} was already used as filesystem {fs}",
                 vg.name, pv_base
             )));
@@ -336,7 +336,7 @@ pub(super) fn collect_valid_vg(
             for sys_pv_path in sys_pv_lvms {
                 for node in sys_pv_path {
                     if node.device_type == TYPE_VG {
-                        return Err(NayiError::BadManifest(format!(
+                        return Err(AliError::BadManifest(format!(
                             "{msg}: vg {} base {} was already used for other vg {}",
                             vg.name, pv_base, node.device,
                         )));
@@ -356,7 +356,7 @@ pub(super) fn collect_valid_vg(
             }
 
             if !is_vg_base(&top_most.device_type) {
-                return Err(NayiError::BadManifest(format!(
+                return Err(AliError::BadManifest(format!(
                     "{msg}: vg {} pv base {pv_base} cannot have type {}",
                     vg.name, top_most.device_type,
                 )));
@@ -378,7 +378,7 @@ pub(super) fn collect_valid_vg(
 
                 let top_most = top_most.unwrap();
                 if *top_most == vg_dev {
-                    return Err(NayiError::BadManifest(format!(
+                    return Err(AliError::BadManifest(format!(
                         "{msg}: vg {} already exists",
                         vg.name,
                     )));
@@ -389,7 +389,7 @@ pub(super) fn collect_valid_vg(
                 }
 
                 if !is_vg_base(&top_most.device_type) {
-                    return Err(NayiError::BadManifest(format!(
+                    return Err(AliError::BadManifest(format!(
                         "{msg}: vg {} pv base {pv_base} cannot have type {}",
                         vg.name, top_most.device_type
                     )));
@@ -406,7 +406,7 @@ pub(super) fn collect_valid_vg(
             }
         }
 
-        return Err(NayiError::BadManifest(format!(
+        return Err(AliError::BadManifest(format!(
             "{msg}: no pv device matching {pv_base} in manifest or in the system"
         )));
     }
@@ -421,13 +421,13 @@ pub(super) fn collect_valid_lv(
     sys_fs_devs: &HashMap<String, BlockDevType>,
     sys_lvms: &mut HashMap<String, BlockDevPaths>,
     valids: &mut BlockDevPaths,
-) -> Result<(), NayiError> {
+) -> Result<(), AliError> {
     let vg_name = format!("/dev/{}", lv.vg);
     let lv_name = format!("{vg_name}/{}", lv.name);
 
     let msg = "lvm lv validation failed";
     if let Some(fs) = sys_fs_devs.get(&lv_name) {
-        return Err(NayiError::BadManifest(format!(
+        return Err(AliError::BadManifest(format!(
             "{msg}: another lv with matching name {lv_name} was already used as filesystem {fs}"
         )));
     }
@@ -453,7 +453,7 @@ pub(super) fn collect_valid_lv(
 
             let top_most = top_most.unwrap();
             if *top_most == lv_dev {
-                return Err(NayiError::BadManifest(format!(
+                return Err(AliError::BadManifest(format!(
                     "{msg}: lv {lv_name} already exists"
                 )));
             }
@@ -463,7 +463,7 @@ pub(super) fn collect_valid_lv(
             }
 
             if !is_lv_base(&top_most.device_type) {
-                return Err(NayiError::BadManifest(format!(
+                return Err(AliError::BadManifest(format!(
                     "{msg}: lv {lv_name} vg base {vg_name} cannot have type {}",
                     top_most.device_type
                 )));
@@ -490,7 +490,7 @@ pub(super) fn collect_valid_lv(
         }
 
         if !is_lv_base(&top_most.device_type) {
-            return Err(NayiError::BadManifest(format!(
+            return Err(AliError::BadManifest(format!(
                 "{msg}: lv {lv_name} vg base {vg_name} cannot have type {}",
                 top_most.device_type
             )));
@@ -502,7 +502,7 @@ pub(super) fn collect_valid_lv(
     }
 
     if lv_vgs.is_empty() {
-        return Err(NayiError::BadManifest(format!(
+        return Err(AliError::BadManifest(format!(
             "{msg}: lv {lv_name} no vg device matching {vg_name} in manifest or in the system"
         )));
     }

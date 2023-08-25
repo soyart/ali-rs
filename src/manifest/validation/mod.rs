@@ -1,18 +1,18 @@
 mod blk; // Block device validation
 
 use crate::defaults;
-use crate::errors::NayiError;
+use crate::errors::AliError;
 use crate::manifest::Manifest;
 use crate::utils::fs::file_exists;
 use crate::utils::shell::in_path;
 
-pub fn validate(manifest: &Manifest) -> Result<(), NayiError> {
+pub fn validate(manifest: &Manifest) -> Result<(), AliError> {
     blk::validate(manifest)?;
 
     // Check mkfs for rootfs
     let mkfs_rootfs = &format!("mkfs.{}", manifest.rootfs.fs_type);
     if !in_path(mkfs_rootfs) {
-        return Err(NayiError::BadManifest(format!(
+        return Err(AliError::BadManifest(format!(
             "no such program to create rootfs: {mkfs_rootfs}"
         )));
     }
@@ -24,7 +24,7 @@ pub fn validate(manifest: &Manifest) -> Result<(), NayiError> {
             if !in_path(mkfs_cmd) {
                 let device = &fs.device;
 
-                return Err(NayiError::BadManifest(format!(
+                return Err(AliError::BadManifest(format!(
                     "no such program to create filesystem for device {device}: {mkfs_cmd}"
                 )));
             }
@@ -40,7 +40,7 @@ pub fn validate(manifest: &Manifest) -> Result<(), NayiError> {
     );
 
     if !file_exists(&zone_info) {
-        return Err(NayiError::BadManifest(format!(
+        return Err(AliError::BadManifest(format!(
             "no zone info file {zone_info}"
         )));
     }

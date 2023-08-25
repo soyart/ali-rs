@@ -2,16 +2,16 @@ use std::env;
 use std::fs;
 use std::process::Command;
 
-use crate::errors::NayiError;
+use crate::errors::AliError;
 
-pub fn exec(cmd: &str, args: &[&str]) -> Result<(), NayiError> {
+pub fn exec(cmd: &str, args: &[&str]) -> Result<(), AliError> {
     match Command::new(cmd).args(args).spawn() {
         Ok(mut result) => match result.wait() {
             // Spawned but may still fail
             Ok(r) => match r.code() {
                 Some(code) => {
                     if code != 0 {
-                        return Err(NayiError::CmdFailed(
+                        return Err(AliError::CmdFailed(
                             None,
                             format!("command {cmd} exited with non-zero status {code}"),
                         ));
@@ -19,19 +19,19 @@ pub fn exec(cmd: &str, args: &[&str]) -> Result<(), NayiError> {
 
                     Ok(())
                 }
-                None => Err(NayiError::CmdFailed(
+                None => Err(AliError::CmdFailed(
                     None,
                     format!("command {cmd} terminated by signal"),
                 )),
             },
-            Err(err) => Err(NayiError::CmdFailed(
+            Err(err) => Err(AliError::CmdFailed(
                 Some(err),
                 format!("command ${cmd} failed to run"),
             )),
         },
 
         // Failed to spawn
-        Err(err) => Err(NayiError::CmdFailed(
+        Err(err) => Err(AliError::CmdFailed(
             Some(err),
             format!("command ${cmd} failed to spawn"),
         )),

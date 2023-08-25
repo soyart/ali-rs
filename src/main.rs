@@ -10,11 +10,11 @@ mod utils;
 
 use clap::Parser;
 
-fn main() -> Result<(), errors::NayiError> {
+fn main() -> Result<(), errors::AliError> {
     let args = cli::Args::parse();
 
     match run::run(args) {
-        Err(err) => eprintln!("nayi-rs failed: {err}"),
+        Err(err) => eprintln!("ali-rs failed: {err}"),
         Ok(report) => {
             println!("{}", report.to_json_string());
         }

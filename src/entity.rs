@@ -1,6 +1,6 @@
 use humanize_rs::bytes;
 
-use crate::errors::NayiError;
+use crate::errors::AliError;
 
 // Block device entity for validation and installation
 pub mod blockdev {
@@ -68,9 +68,9 @@ pub mod blockdev {
     pub type BlockDevPaths = Vec<BlockDevPath>;
 }
 
-pub fn parse_human_bytes(s: &str) -> Result<bytes::Bytes, NayiError> {
+pub fn parse_human_bytes(s: &str) -> Result<bytes::Bytes, AliError> {
     (s.to_lowercase()).parse::<bytes::Bytes>().map_err(|err| {
-        NayiError::BadManifest(format!("bad byte unit string {s}: {}", err.to_string()))
+        AliError::BadManifest(format!("bad byte unit string {s}: {}", err.to_string()))
     })
 }
 
