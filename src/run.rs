@@ -37,7 +37,10 @@ pub(super) fn run(args: cli::Args) -> Result<Report, AliError> {
     // help add packages such as lvm2 and btrfs-progs
     let mut manifest = Manifest::from_yaml(&manifest_yaml)?;
 
-    validation::validate(&manifest)?;
+    if !args.no_validate {
+        validation::validate(&manifest, args.overwrite)?;
+    }
+
     update_manifest(&mut manifest);
 
     // TODO: ali-rs just prints valid manifest to stdout

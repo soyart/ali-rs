@@ -8,21 +8,36 @@ use crate::errors::AliError;
 use crate::manifest::{Dm, Manifest, ManifestLvmLv};
 use crate::utils::fs::file_exists;
 
-pub fn validate(manifest: &Manifest) -> Result<(), AliError> {
-    // Get full blkid output
-    let output_blkid = trace_blk::run_blkid("blkid")?;
+pub fn validate(manifest: &Manifest, overwrite: bool) -> Result<(), AliError> {
+    match overwrite {
+        true => {
+            // Overwrite disk devices - we don't need to trace any existing devices,
+            // as all devices required must already be in the manifest
+            validate_blk(
+                &manifest,
+                &HashMap::<String, BlockDevType>::new(),
+                HashMap::<String, BlockDevType>::new(),
+                HashMap::<String, BlockDevPaths>::new(),
+            )?;
+        }
 
-    // A hash map of existing block device that can be used as filesystem base
-    let sys_fs_ready_devs = trace_blk::sys_fs_ready(&output_blkid);
+        false => {
+            // Get full blkid output
+            let output_blkid = trace_blk::run_blkid("blkid")?;
 
-    // A hash map of existing block device and its filesystems
-    let sys_fs_devs = trace_blk::sys_fs(&output_blkid);
+            // A hash map of existing block device that can be used as filesystem base
+            let sys_fs_ready_devs = trace_blk::sys_fs_ready(&output_blkid);
 
-    // Get all paths of existing LVM devices.
-    // Unknown disks are not tracked - only LVM devices and their bases.
-    let sys_lvms = trace_blk::sys_lvms("lvs", "pvs");
+            // A hash map of existing block device and its filesystems
+            let sys_fs_devs = trace_blk::sys_fs(&output_blkid);
 
-    validate_blk(&manifest, &sys_fs_devs, sys_fs_ready_devs, sys_lvms)?;
+            // Get all paths of existing LVM devices.
+            // Unknown disks are not tracked - only LVM devices and their bases.
+            let sys_lvms = trace_blk::sys_lvms("lvs", "pvs");
+
+            validate_blk(&manifest, &sys_fs_devs, sys_fs_ready_devs, sys_lvms)?;
+        }
+    };
 
     Ok(())
 }

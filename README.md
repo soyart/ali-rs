@@ -9,6 +9,10 @@ before attempting to change anything on-disk.
 If a manifest instruction suggests it might wipe an existing
 block device, ali-rs stops and throw an error.
 
+It is possible to skip validation with `--no-validate` flags,
+and it is possible to overwrite existing system devices with
+`-o` or `--overwrite` flags.
+
 ## [Validation](./src/manifest/validation/)
 
 Although ALI does specifies how YAML manifests should be parsed,
