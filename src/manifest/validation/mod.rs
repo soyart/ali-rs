@@ -6,8 +6,8 @@ use crate::manifest::Manifest;
 use crate::utils::fs::file_exists;
 use crate::utils::shell::in_path;
 
-pub fn validate(manifest: &Manifest) -> Result<(), AliError> {
-    blk::validate(manifest)?;
+pub fn validate(manifest: &Manifest, overwrite: bool) -> Result<(), AliError> {
+    blk::validate(manifest, overwrite)?;
 
     // Check mkfs for rootfs
     let mkfs_rootfs = &format!("mkfs.{}", manifest.rootfs.fs_type);
