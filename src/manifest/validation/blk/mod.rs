@@ -8,8 +8,8 @@ use crate::errors::AliError;
 use crate::manifest::{Dm, Manifest, ManifestLvmLv};
 use crate::utils::fs::file_exists;
 
-pub fn validate(manifest: &Manifest, overwrite: bool) -> Result<(), AliError> {
-    match overwrite {
+pub fn validate(manifest: &Manifest, overwrite: bool) -> Result<BlockDevPaths, AliError> {
+    let paths = match overwrite {
         true => {
             // Overwrite disk devices - we don't need to trace any existing devices,
             // as all devices required must already be in the manifest
@@ -19,6 +19,8 @@ pub fn validate(manifest: &Manifest, overwrite: bool) -> Result<(), AliError> {
                 HashMap::<String, BlockDevType>::new(),
                 HashMap::<String, BlockDevPaths>::new(),
             )?;
+
+            BlockDevPaths::new()
         }
 
         false => {
@@ -35,11 +37,11 @@ pub fn validate(manifest: &Manifest, overwrite: bool) -> Result<(), AliError> {
             // Unknown disks are not tracked - only LVM devices and their bases.
             let sys_lvms = trace_blk::sys_lvms("lvs", "pvs");
 
-            validate_blk(&manifest, &sys_fs_devs, sys_fs_ready_devs, sys_lvms)?;
+            validate_blk(&manifest, &sys_fs_devs, sys_fs_ready_devs, sys_lvms)?
         }
     };
 
-    Ok(())
+    Ok(paths)
 }
 
 // Validates manifest block storage.
