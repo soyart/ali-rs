@@ -139,8 +139,9 @@ mod tests {
 
         // Create a zeroed 500M file as fake block device
         let fname = "./fake-disk.img";
-        test_utils::dd("/dev/zero", fname, "100M", 5)
-            .expect("failed to create zeroed file {fname} of size 500M");
+        if let Err(err) = test_utils::dd("/dev/zero", fname, "100M", 5) {
+            panic!("dd command failed to create zeroed dummy device: {err}");
+        }
 
         let create_gpt_table = create_table_cmd(fname, &PartitionTable::Gpt);
         run_fdisk_cmd(fname, &create_gpt_table).expect("failed to create gpt table");

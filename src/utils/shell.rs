@@ -78,7 +78,7 @@ pub mod test_utils {
             &[
                 &format!("if={infile}"),
                 &format!("of={outfile}"),
-                &format!("bs={bs:?}"),
+                &format!("bs={bs}"),
                 &format!("count={count}"),
             ],
         )
