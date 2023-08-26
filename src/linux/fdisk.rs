@@ -1,3 +1,6 @@
+/// This modules formats block devices by simply piping printf output to fdisk binary
+/// @TODO: Consider fdisk sys https://github.com/IBM/fdisk-sys
+///
 use std::process::{Command, Stdio};
 
 use crate::errors::AliError;
@@ -132,14 +135,12 @@ mod tests {
     #[cfg(not(target_os = "windows"))]
     #[cfg(not(target_os = "macos"))]
     fn test_run_fdisk_cmd() {
-        use crate::utils::shell::exec;
+        use crate::utils::shell::test_utils;
 
-        let fname = "fake-disk.img";
-        exec(
-            "dd",
-            &["if=/dev/zero", &format!("of={fname}"), "bs=100M", "count=5"],
-        )
-        .expect("failed to create blank disk");
+        // Create a zeroed 500M file as fake block device
+        let fname = "./fake-disk.img";
+        test_utils::dd("/dev/zero", fname, "100M", 5)
+            .expect("failed to create zeroed file {fname} of size 500M");
 
         let create_gpt_table = create_table_cmd(fname, &PartitionTable::Gpt);
         run_fdisk_cmd(fname, &create_gpt_table).expect("failed to create gpt table");

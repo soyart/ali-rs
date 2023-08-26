@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+use crate::run::Action;
+
 #[derive(Debug, Error)]
 pub enum AliError {
     #[error("no such file")]
@@ -19,6 +21,13 @@ pub enum AliError {
 
     #[error("not implemented")]
     NotImplemented,
+
+    #[error("installation error")]
+    InstallError {
+        error: Box<AliError>,
+        action_failed: Action,
+        actions_performed: Vec<Action>,
+    },
 
     #[error("ali-rs bug")]
     AliRsBug(String),

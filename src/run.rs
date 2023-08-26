@@ -9,25 +9,25 @@ use crate::errors::AliError;
 use crate::manifest::{self, validation, Dm, Manifest};
 
 #[derive(Debug)]
-pub(super) struct Report {
+pub struct Report {
     pub actions: Vec<Action>,
     pub duration: Duration,
 }
 
 impl Report {
-    pub(super) fn to_json(&self) -> serde_json::Value {
+    pub fn to_json(&self) -> serde_json::Value {
         json!({
             "actions": self.actions,
             "elaspedTime": self.duration,
         })
     }
 
-    pub(super) fn to_json_string(&self) -> String {
+    pub fn to_json_string(&self) -> String {
         self.to_json().to_string()
     }
 }
 
-pub(super) fn run(args: cli::Args) -> Result<Report, AliError> {
+pub fn run(args: cli::Args) -> Result<Report, AliError> {
     let start = std::time::Instant::now();
 
     let manifest_yaml = std::fs::read_to_string(&args.manifest)
@@ -117,7 +117,10 @@ fn update_manifest(manifest: &mut Manifest) {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub(super) enum Action {
+pub enum Action {
+    #[serde(rename = "prepareDisk")]
+    PrepareDisk { deviec: String },
+
     #[serde(rename = "createPartitionTable")]
     CreatePartitionTable {
         device: String,
@@ -129,6 +132,13 @@ pub(super) enum Action {
         device: String,
         number: usize,
         size: String,
+    },
+
+    #[serde(rename = "setParitionType")]
+    SetPartitionType {
+        device: String,
+        number: usize,
+        partition_type: String,
     },
 
     #[serde(rename = "createDmLuks")]

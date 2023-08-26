@@ -1,6 +1,5 @@
 mod cli;
 mod defaults;
-mod disks;
 mod entity;
 mod errors;
 mod linux;

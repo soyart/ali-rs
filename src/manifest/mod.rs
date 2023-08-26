@@ -1,3 +1,4 @@
+pub mod apply;
 pub mod validation;
 
 use std::collections::HashSet;
@@ -49,7 +50,7 @@ impl Manifest {
     }
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum PartitionTable {
     #[serde(rename = "gpt")]
     Gpt,
@@ -65,7 +66,7 @@ pub struct ManifestDisk {
     pub partitions: Vec<ManifestPartition>,
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct ManifestPartition {
     pub label: String,
     pub size: Option<String>, // e.g. 200M
