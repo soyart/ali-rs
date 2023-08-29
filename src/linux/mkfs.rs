@@ -1,12 +1,16 @@
 use crate::errors::AliError;
 use crate::manifest;
-use crate::utils::shell::exec;
+use crate::utils::shell;
 
+/// Executes:
+/// ```shell
+/// mkfs.{fs.fs_type} {fs.fs_opts} {fs.device}
+/// ```
 pub fn create_fs(fs: manifest::ManifestFs) -> Result<(), AliError> {
-    let mkfs_cmd = format!("mkfs.{}", fs.fs_type);
-    match fs.fs_opts {
-        None => exec(&mkfs_cmd, &[fs.device.as_str()]),
-        // @TODO: find ways to spread opts
-        Some(opts) => exec(&mkfs_cmd, &[&opts, fs.device.as_str()]),
-    }
+    let cmd_mkfs = match fs.fs_opts {
+        Some(opts) => format!("'mkfs.{} {opts} {}'", fs.fs_type, fs.device),
+        None => format!("'mkfs.{} {}'", fs.fs_type, fs.device),
+    };
+
+    shell::exec("sh", &["-c", &cmd_mkfs])
 }
