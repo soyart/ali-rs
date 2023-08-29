@@ -148,7 +148,7 @@ pub enum Action {
     CreateDmLvmPv(String),
 
     #[serde(rename = "createLvmVg")]
-    CreateDmLvmVg { pv: String, vg: String },
+    CreateDmLvmVg { pvs: Vec<String>, vg: String },
 
     #[serde(rename = "createLvmLv")]
     CreateDmLvmLv { vg: String, lv: String },
