@@ -1,8 +1,8 @@
 use std::collections::{HashMap, LinkedList};
 
-use crate::entity::blockdev::*;
+use crate::entity::{blockdev::*, parse_human_bytes};
 use crate::errors::AliError;
-use crate::manifest::validation::*;
+use crate::manifest::{self, validation::*};
 use crate::manifest::{ManifestLuks, ManifestLvmLv, ManifestLvmVg};
 
 #[inline(always)]
@@ -41,6 +41,65 @@ fn is_luks_base(dev_type: &BlockDevType) -> bool {
         BlockDevType::Dm(DmType::LvmLv) => true,
         _ => false,
     }
+}
+
+// Only the last LV on each VG could be unsized
+// (uses 100% of the remaining space)
+#[inline]
+pub fn validate_lv_size(dms: &[manifest::Dm]) -> Result<(), AliError> {
+    // Collect VG -> LVs
+    let mut vg_lvs: HashMap<String, Vec<ManifestLvmLv>> = HashMap::new();
+    for dm in dms {
+        match dm {
+            manifest::Dm::Lvm(lvm) => {
+                if lvm.lvs.is_none() {
+                    continue;
+                }
+
+                let lvs = lvm.lvs.as_ref().unwrap();
+                for lv in lvs {
+                    // Check if size string is valid
+                    if let Some(ref size) = lv.size {
+                        if let Err(err) = parse_human_bytes(size) {
+                            return Err(AliError::BadManifest(format!(
+                                "bad lv size {size}: {err}"
+                            )));
+                        }
+                    }
+
+                    if vg_lvs.contains_key(&lv.vg) {
+                        vg_lvs.get_mut(&lv.vg).unwrap().push(lv.clone());
+                        continue;
+                    }
+
+                    vg_lvs.insert(lv.vg.clone(), vec![lv.clone()]);
+                }
+            }
+            _ => continue,
+        }
+    }
+
+    for (vg, lvs) in vg_lvs.into_iter() {
+        if lvs.is_empty() {
+            continue;
+        }
+
+        let l = lvs.len();
+        if l == 1 {
+            continue;
+        }
+
+        for (i, lv) in lvs.into_iter().enumerate() {
+            if lv.size.is_none() && (i != l - 1) {
+                return Err(AliError::BadManifest(format!(
+                    "lv {} on vg {vg} has None size",
+                    lv.name
+                )));
+            }
+        }
+    }
+
+    Ok(())
 }
 
 // Collects valid block device path(s) into valids

@@ -1,14 +1,15 @@
 mod blk; // Block device validation
 
 use crate::defaults;
+use crate::entity::ValidationReport;
 use crate::errors::AliError;
 use crate::manifest::Manifest;
 use crate::utils::fs::file_exists;
 use crate::utils::shell::in_path;
 
 // @TODO: return validation report
-pub fn validate(manifest: &Manifest, overwrite: bool) -> Result<(), AliError> {
-    let _ = blk::validate(manifest, overwrite)?;
+pub fn validate(manifest: &Manifest, overwrite: bool) -> Result<ValidationReport, AliError> {
+    let block_devs = blk::validate(manifest, overwrite)?;
 
     // Check mkfs for rootfs
     let mkfs_rootfs = &format!("mkfs.{}", manifest.rootfs.fs_type);
@@ -46,5 +47,5 @@ pub fn validate(manifest: &Manifest, overwrite: bool) -> Result<(), AliError> {
         )));
     }
 
-    Ok(())
+    Ok(ValidationReport { block_devs })
 }
