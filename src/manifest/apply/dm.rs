@@ -6,8 +6,16 @@ use crate::run::Action;
 pub fn apply_dms(dms: &[Dm]) -> Result<Vec<Action>, AliError> {
     let mut actions = Vec::new();
     for dm in dms {
-        let dm_actions = apply_dm(dm)?;
-        actions.extend(dm_actions);
+        let result = apply_dm(dm);
+        if let Err(err) = result {
+            return Err(AliError::InstallError {
+                error: Box::new(err),
+                action_failed: Action::PrepareDm,
+                actions_performed: actions,
+            });
+        }
+
+        actions.extend(result.unwrap());
     }
 
     Ok(actions)

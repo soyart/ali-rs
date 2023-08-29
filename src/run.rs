@@ -121,6 +121,9 @@ pub enum Action {
     #[serde(rename = "prepareDisk")]
     PrepareDisk { deviec: String },
 
+    #[serde(rename = "prepareDm")]
+    PrepareDm,
+
     #[serde(rename = "createPartitionTable")]
     CreatePartitionTable {
         device: String,
