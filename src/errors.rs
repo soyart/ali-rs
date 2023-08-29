@@ -2,24 +2,27 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum AliError {
-    #[error("no such file")]
+    #[error("no such file: {0}")]
     NoSuchFile(std::io::Error, String),
 
-    #[error("no such device")]
+    #[error("no such device: {0}")]
     NoSuchDevice(String),
 
-    #[error("bad manifest")]
+    #[error("bad manifest: {0}")]
     BadManifest(String),
 
-    #[error("shell command failed")]
-    CmdFailed(Option<std::io::Error>, String),
+    #[error("shell command (context: \"{context}\"): {error:?}")]
+    CmdFailed {
+        error: Option<std::io::Error>,
+        context: String,
+    },
 
-    #[error("bad cli arguments")]
+    #[error("bad cli arguments: {0}")]
     BadArgs(String),
 
     #[error("not implemented")]
     NotImplemented,
 
-    #[error("ali-rs bug")]
+    #[error("ali-rs bug: {0}")]
     AliRsBug(String),
 }

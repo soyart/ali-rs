@@ -1,4 +1,4 @@
-use clap::Parser;
+use clap::{Args, Parser, Subcommand};
 
 use crate::errors::AliError;
 
@@ -8,11 +8,34 @@ use crate::errors::AliError;
     version,
     about = "Rust-based ALI installer"
 )]
-pub struct Args {
+pub struct Cli {
+    #[command(subcommand)]
+    pub commands: Commands,
+
     /// Manifest file
-    #[arg(short = 'f', long = "file", value_parser = validate_filename)]
+    #[arg(
+        global = true,
+        short = 'f',
+        long = "file",
+        value_parser = validate_filename,
+        default_value_t = String::from("./manifest.yaml")
+    )]
     pub manifest: String,
 
+    /// Dry-run, ali-rs will not commit any changes to disks,
+    /// and will just print steps to be performed
+    #[arg(global = true, short = 'n', default_value_t = false)]
+    pub dry_run: bool,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum Commands {
+    Apply(ArgsApply),
+    Validate,
+}
+
+#[derive(Debug, Args)]
+pub struct ArgsApply {
     /// Do not validate manifest entries
     #[arg(long = "no-validate")]
     pub no_validate: bool,
@@ -22,11 +45,6 @@ pub struct Args {
     /// and existing system devices will not be considered
     #[arg(short = 'o', long = "overwrite")]
     pub overwrite: bool,
-
-    /// Dry-run, ali-rs will not commit any changes to disks,
-    /// and will just print steps to be performed
-    #[arg(short = 'n', default_value_t = false)]
-    pub dry_run: bool,
 }
 
 fn validate_filename(name: &str) -> Result<String, AliError> {

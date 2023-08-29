@@ -11,30 +11,30 @@ pub fn exec(cmd: &str, args: &[&str]) -> Result<(), AliError> {
             Ok(r) => match r.code() {
                 Some(code) => {
                     if code != 0 {
-                        return Err(AliError::CmdFailed(
-                            None,
-                            format!("command {cmd} exited with non-zero status {code}"),
-                        ));
+                        return Err(AliError::CmdFailed {
+                            error: None,
+                            context: format!("command {cmd} exited with non-zero status {code}"),
+                        });
                     }
 
                     Ok(())
                 }
-                None => Err(AliError::CmdFailed(
-                    None,
-                    format!("command {cmd} terminated by signal"),
-                )),
+                None => Err(AliError::CmdFailed {
+                    error: None,
+                    context: format!("command {cmd} terminated by signal"),
+                }),
             },
-            Err(err) => Err(AliError::CmdFailed(
-                Some(err),
-                format!("command ${cmd} failed to run"),
-            )),
+            Err(err) => Err(AliError::CmdFailed {
+                error: Some(err),
+                context: format!("command ${cmd} failed to run"),
+            }),
         },
 
         // Failed to spawn
-        Err(err) => Err(AliError::CmdFailed(
-            Some(err),
-            format!("command ${cmd} failed to spawn"),
-        )),
+        Err(err) => Err(AliError::CmdFailed {
+            error: Some(err),
+            context: format!("command ${cmd} failed to spawn"),
+        }),
     }
 }
 
