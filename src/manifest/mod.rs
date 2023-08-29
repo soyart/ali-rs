@@ -79,16 +79,16 @@ pub struct ManifestPartition {
 pub struct ManifestFs {
     pub device: String,
 
-    #[serde(alias = "mount_point")]
-    pub mnt: String,
-
-    #[serde(alias = "fstype")]
+    #[serde(alias = "fstype", alias = "filesystem")]
     pub fs_type: String,
 
-    #[serde(alias = "fsopts")]
+    #[serde(alias = "mount", alias = "mount_point", alias = "location")]
+    pub mnt: Option<String>,
+
+    #[serde(alias = "fsopts", alias = "filesystem_options")]
     pub fs_opts: Option<String>,
 
-    #[serde(alias = "mntopts")]
+    #[serde(alias = "mntopts", alias = "mount_options")]
     pub mnt_opts: Option<String>,
 }
 

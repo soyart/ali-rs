@@ -384,7 +384,7 @@ mod tests {
                     device_mappers: None,
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/sda1".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -430,7 +430,7 @@ mod tests {
                     device_mappers: None,
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -481,7 +481,7 @@ mod tests {
                     ]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/mapper/cryptroot".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -552,7 +552,7 @@ mod tests {
                     ]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/mapper/cryptroot".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -622,7 +622,7 @@ mod tests {
                     ]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/mapper/cryptroot".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -668,7 +668,7 @@ mod tests {
                     device_mappers: None,
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -718,7 +718,7 @@ mod tests {
                     })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -759,7 +759,7 @@ mod tests {
                         })]),
                         rootfs: ManifestRootFs(ManifestFs {
                             device: "/dev/myvg/mylv".into(),
-                            mnt: "/".into(),
+                            mnt: None,
                             fs_type: "btrfs".into(),
                             fs_opts: None,
                             mnt_opts: None,
@@ -814,7 +814,7 @@ mod tests {
                         })]),
                         rootfs: ManifestRootFs(ManifestFs {
                             device: "/dev/myvg/mylv".into(),
-                            mnt: "/".into(),
+                            mnt: None,
                             fs_type: "btrfs".into(),
                             fs_opts: None,
                             mnt_opts: None,
@@ -878,7 +878,7 @@ mod tests {
                         })]),
                         rootfs: ManifestRootFs(ManifestFs {
                             device: "/dev/myvg/mylv".into(),
-                            mnt: "/".into(),
+                            mnt: None,
                             fs_type: "btrfs".into(),
                             fs_opts: None,
                             mnt_opts:None,
@@ -955,7 +955,7 @@ mod tests {
                         })]),
                         rootfs: ManifestRootFs(ManifestFs {
                             device: "/dev/myvg/mylv".into(),
-                            mnt: "/".into(),
+                            mnt: None,
                             fs_type: "btrfs".into(),
                             fs_opts: None,
                             mnt_opts: None,
@@ -1039,7 +1039,7 @@ mod tests {
                         })]),
                         rootfs: ManifestRootFs(ManifestFs {
                             device: "/dev/myvg/mylv".into(),
-                            mnt: "/".into(),
+                            mnt: None,
                             fs_type: "btrfs".into(),
                             fs_opts: None,
                             mnt_opts: None,
@@ -1130,7 +1130,7 @@ mod tests {
                         })]),
                         rootfs: ManifestRootFs(ManifestFs {
                             device: "/dev/myvg/mylv".into(),
-                            mnt: "/".into(),
+                            mnt: None,
                             fs_type: "btrfs".into(),
                             fs_opts: None,
                             mnt_opts: None,
@@ -1225,14 +1225,14 @@ mod tests {
                     })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/mysatavg/rootlv".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
                     }),
                     filesystems: Some(vec![ManifestFs {
                         device: "/dev/mysatavg/datalv".into(),
-                        mnt: "/opt/data".into(),
+                        mnt: Some("/opt/data".into()),
                         fs_type: "xfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -1260,7 +1260,7 @@ mod tests {
                     device_mappers: None,
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/sda1".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -1290,7 +1290,7 @@ mod tests {
                     device_mappers: None,
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/sda1".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -1341,7 +1341,7 @@ mod tests {
                     ]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/mapper/cryptroot".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -1408,7 +1408,7 @@ mod tests {
                     ]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/mapper/cryptroot".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -1463,7 +1463,7 @@ mod tests {
                     })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -1529,7 +1529,7 @@ mod tests {
                     })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -1595,7 +1595,7 @@ mod tests {
                     })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -1661,7 +1661,7 @@ mod tests {
                     })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -1727,7 +1727,7 @@ mod tests {
                     })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -1793,7 +1793,7 @@ mod tests {
                     })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -1859,7 +1859,7 @@ mod tests {
                     })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -1918,7 +1918,7 @@ mod tests {
                     })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -1978,7 +1978,7 @@ mod tests {
                     })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -1986,7 +1986,7 @@ mod tests {
                     filesystems: Some(vec![
                         ManifestFs {
                             device: "/dev/myvg.mylv".into(),
-                            mnt: "/data".into(),
+                            mnt: Some("/data".into()),
                             fs_type: "btrfs".into(),
                             fs_opts: None,
                             mnt_opts: None,
@@ -2061,7 +2061,7 @@ mod tests {
                     })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -2134,7 +2134,7 @@ mod tests {
                     })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -2220,7 +2220,7 @@ mod tests {
                     })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -2313,7 +2313,7 @@ mod tests {
                     })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
