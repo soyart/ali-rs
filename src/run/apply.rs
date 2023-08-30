@@ -1,10 +1,12 @@
 use std::collections::HashSet;
+use std::env;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use crate::cli;
+use crate::defaults;
 use crate::errors::AliError;
 use crate::manifest::apply;
 use crate::manifest::validation;
@@ -46,7 +48,11 @@ pub(super) fn run(manifest_file: &str, args: cli::ArgsApply) -> Result<Report, A
     // Update manifest in some cases
     update_manifest(&mut manifest);
 
-    let actions = apply::apply_manifest(&manifest)?;
+    // Get install location
+    let location = env::var(defaults::ENV_ALI_LOC).map_or(None, |loc| Some(loc));
+
+    // Apply manifest
+    let actions = apply::apply_manifest(&manifest, location)?;
 
     Ok(Report {
         actions,

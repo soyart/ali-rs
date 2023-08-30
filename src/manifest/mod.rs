@@ -9,6 +9,9 @@ use crate::errors::AliError;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Manifest {
+    #[serde(alias = "location", alias = "install_location")]
+    pub location: Option<String>,
+
     #[serde(alias = "name", alias = "host")]
     pub hostname: Option<String>,
 

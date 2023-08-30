@@ -337,6 +337,7 @@ mod tests {
                 sys_lvms: None,
 
                 manifest: Manifest {
+                    location: None,
                     disks: None,
                     device_mappers: None,
                     rootfs: ManifestRootFs(ManifestFs {
@@ -383,6 +384,7 @@ mod tests {
                 )])),
 
                 manifest: Manifest {
+                    location: None,
                     disks: None,
                     device_mappers: None,
                     rootfs: ManifestRootFs(ManifestFs {
@@ -429,6 +431,7 @@ mod tests {
                 )])),
 
                 manifest: Manifest {
+                    location: None,
                     disks: None,
                     device_mappers: Some(vec![
                         Dm::Luks(ManifestLuks {
@@ -496,6 +499,7 @@ mod tests {
                 )])),
 
                 manifest: Manifest {
+                    location: None,
                     disks: None,
                     device_mappers: Some(vec![
                         Dm::Luks(ManifestLuks {
@@ -549,6 +553,7 @@ mod tests {
                 )])),
 
                 manifest: Manifest {
+                    location: None,
                     disks: None,
                     device_mappers: Some(vec![
                         Dm::Lvm(ManifestLvm {
@@ -621,6 +626,7 @@ mod tests {
                 )])),
 
                 manifest: Manifest {
+                    location: None,
                     disks: None,
                     device_mappers: None,
                     rootfs: ManifestRootFs(ManifestFs {
@@ -663,6 +669,7 @@ mod tests {
                 )])),
 
                 manifest: Manifest {
+                    location: None,
                     disks: None,
                     device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                         pvs: None,
@@ -701,6 +708,7 @@ mod tests {
                     sys_lvms: None,
 
                     manifest: Manifest {
+                        location: None,
                         disks: None,
                         device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                             pvs: Some(vec!["/dev/sda1".into()]),
@@ -741,6 +749,7 @@ mod tests {
                     sys_lvms: None,
 
                     manifest: Manifest {
+                        location: None,
                         disks: Some(vec![ManifestDisk {
                             device: "./mock_devs/sda".into(),
                             table: PartitionTable::Gpt,
@@ -797,6 +806,7 @@ mod tests {
                     sys_lvms: None,
 
                     manifest: Manifest {
+                        location: None,
                         disks: Some(vec![
                             ManifestDisk {
                                 device: "./mock_devs/sda".into(),
@@ -861,6 +871,7 @@ mod tests {
                     sys_lvms: None,
 
                     manifest: Manifest {
+                        location: None,
                         disks: Some(vec![
                             ManifestDisk {
                                 device: "./mock_devs/sda".into(),
@@ -938,6 +949,7 @@ mod tests {
                     sys_lvms: None,
 
                     manifest: Manifest {
+                        location: None,
                         disks: Some(vec![
                             ManifestDisk {
                                 device: "./mock_devs/sda".into(),
@@ -1028,6 +1040,7 @@ mod tests {
                     ])),
 
                     manifest: Manifest {
+                        location: None,
                         disks: Some(vec![
                             ManifestDisk {
                                 device: "./mock_devs/sda".into(),
@@ -1119,6 +1132,7 @@ mod tests {
                     )])),
 
                     manifest: Manifest {
+                        location: None,
                         disks: Some(vec![
                             ManifestDisk {
                                 device: "./mock_devs/sda".into(),
@@ -1213,6 +1227,7 @@ mod tests {
                 sys_lvms: None,
 
                 manifest: Manifest {
+                    location: None,
                     disks: None,
                     device_mappers: None,
                     rootfs: ManifestRootFs(ManifestFs {
@@ -1243,6 +1258,7 @@ mod tests {
                 sys_lvms: None,
 
                 manifest: Manifest {
+                    location: None,
                     disks: None,
                     device_mappers: None,
                     rootfs: ManifestRootFs(ManifestFs {
@@ -1289,6 +1305,7 @@ mod tests {
                 )])),
 
                 manifest: Manifest {
+                    location: None,
                     disks: None,
                     device_mappers: Some(vec![
                         Dm::Luks(ManifestLuks {
@@ -1356,6 +1373,7 @@ mod tests {
                 )])),
 
                 manifest: Manifest {
+                    location: None,
                     disks: None,
                     device_mappers: Some(vec![
                         Dm::Luks(ManifestLuks {
@@ -1391,6 +1409,7 @@ mod tests {
                 sys_lvms: None,
 
                 manifest: Manifest {
+                    location: None,
                     disks: Some(vec![
                         ManifestDisk {
                             device: "./mock_devs/sda".into(),
@@ -1446,6 +1465,7 @@ mod tests {
                 sys_lvms: None,
 
                 manifest: Manifest {
+                    location: None,
                     disks: Some(vec![
                         ManifestDisk {
                             device: "./mock_devs/sda".into(),
@@ -1512,6 +1532,7 @@ mod tests {
                 sys_lvms: None,
 
                 manifest: Manifest {
+                    location: None,
                     disks: Some(vec![
                         ManifestDisk {
                             device: "./mock_devs/sda".into(),
@@ -1578,6 +1599,7 @@ mod tests {
                 sys_lvms: None,
 
                 manifest: Manifest {
+                    location: None,
                     disks: Some(vec![
                         ManifestDisk {
                             device: "./mock_devs/sda".into(),
@@ -1644,6 +1666,7 @@ mod tests {
                 sys_lvms: None,
 
                 manifest: Manifest {
+                    location: None,
                     disks: Some(vec![
                         ManifestDisk {
                             device: "./mock_devs/sda".into(),
@@ -1710,6 +1733,7 @@ mod tests {
                 sys_lvms: None,
 
                 manifest: Manifest {
+                    location: None,
                     disks: Some(vec![
                         ManifestDisk {
                             device: "./mock_devs/sda".into(),
@@ -1776,6 +1800,7 @@ mod tests {
                 sys_lvms: None,
 
                 manifest: Manifest {
+                    location: None,
                     disks: Some(vec![
                         ManifestDisk {
                             device: "./mock_devs/sda".into(),
@@ -1842,6 +1867,7 @@ mod tests {
                 sys_lvms: None,
 
                 manifest: Manifest {
+                    location: None,
                     disks: Some(vec![
                         ManifestDisk {
                             device: "./mock_devs/sda".into(),
@@ -1901,6 +1927,7 @@ mod tests {
                 sys_lvms: None,
 
                 manifest: Manifest {
+                    location: None,
                     disks: Some(vec![
                         ManifestDisk {
                             device: "./mock_devs/sda".into(),
@@ -1968,6 +1995,7 @@ mod tests {
                 sys_lvms: None,
 
                 manifest: Manifest {
+                    location: None,
                     disks: Some(vec![
                         ManifestDisk {
                             device: "./mock_devs/sda".into(),
@@ -2040,6 +2068,7 @@ mod tests {
                 sys_fs_devs: None,
                 sys_lvms: None,
                 manifest: Manifest {
+                    location: None,
                     disks: Some(vec![
                         ManifestDisk {
                             device: "./mock_devs/sda".into(),
@@ -2119,6 +2148,7 @@ mod tests {
                 sys_lvms: None,
 
                 manifest: Manifest {
+                    location: None,
                     disks: Some(vec![
                         ManifestDisk {
                             device: "./mock_devs/sda".into(),
@@ -2212,6 +2242,7 @@ mod tests {
                 ])),
 
                 manifest: Manifest {
+                    location: None,
                     disks: Some(vec![
                         ManifestDisk {
                             device: "./mock_devs/sda".into(),

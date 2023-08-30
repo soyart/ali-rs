@@ -3,14 +3,17 @@ pub mod dm;
 pub mod fs;
 
 use self::fs::prepend_base;
-use crate::defaults::DEFAULT_CHROOT_LOC;
+use crate::defaults;
 use crate::errors::AliError;
 use crate::manifest::Manifest;
 use crate::run::apply::Action;
 use crate::utils::shell;
 
 // Use manifest to install a new system
-pub fn apply_manifest(manifest: &Manifest) -> Result<Vec<Action>, AliError> {
+pub fn apply_manifest(
+    manifest: &Manifest,
+    location_env: Option<String>,
+) -> Result<Vec<Action>, AliError> {
     let mut actions = Vec::new();
 
     // Format and partition disks
@@ -73,8 +76,10 @@ pub fn apply_manifest(manifest: &Manifest) -> Result<Vec<Action>, AliError> {
         }
     }
 
+    let install_location = location_env.unwrap_or(defaults::DEFAULT_CHROOT_LOC.to_string());
+
     // mkdir rootfs chroot mount
-    match shell::exec("mkdir", &["-p", DEFAULT_CHROOT_LOC]) {
+    match shell::exec("mkdir", &["-p", &install_location]) {
         Err(err) => {
             return Err(AliError::InstallError {
                 error: Box::new(err),
@@ -86,7 +91,7 @@ pub fn apply_manifest(manifest: &Manifest) -> Result<Vec<Action>, AliError> {
     }
 
     // Mount rootfs
-    match fs::mount_filesystem(&manifest.rootfs, DEFAULT_CHROOT_LOC) {
+    match fs::mount_filesystem(&manifest.rootfs, &install_location) {
         Err(err) => {
             return Err(AliError::InstallError {
                 error: Box::new(err),
@@ -107,7 +112,7 @@ pub fn apply_manifest(manifest: &Manifest) -> Result<Vec<Action>, AliError> {
             .map(|fs| fs.mnt.clone().unwrap())
             .map(|mountpoint| {
                 (
-                    prepend_base(&Some(DEFAULT_CHROOT_LOC.into()), &mountpoint),
+                    prepend_base(&Some(&install_location), &mountpoint),
                     Action::Mkdir(mountpoint),
                 )
             })
@@ -127,7 +132,7 @@ pub fn apply_manifest(manifest: &Manifest) -> Result<Vec<Action>, AliError> {
         }
 
         // Mount other filesystems under /{DEFAULT_CHROOT_LOC}
-        match fs::mount_filesystems(&filesystems, DEFAULT_CHROOT_LOC) {
+        match fs::mount_filesystems(&filesystems, &install_location) {
             Err(err) => {
                 return Err(AliError::InstallError {
                     error: Box::new(err),
