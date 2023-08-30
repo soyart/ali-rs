@@ -204,7 +204,7 @@ pub enum Action {
     },
 
     #[serde(rename = "installPackages")]
-    InstallPackages { packages: Vec<String> },
+    InstallPackages { packages: HashSet<String> },
 
     #[serde(rename = "commandsChroot")]
     RunCommandsChroot { commands: Vec<String> },

@@ -2,6 +2,8 @@ pub mod disks;
 pub mod dm;
 pub mod fs;
 
+use std::collections::HashSet;
+
 use self::fs::prepend_base;
 use crate::defaults;
 use crate::errors::AliError;
@@ -144,7 +146,31 @@ pub fn apply_manifest(
         }
     }
 
-    // TODO: pacstrap, install, and post-install
+    // Collect packages, with base as bare-minimum
+    let mut packages = HashSet::from(["base".to_string()]);
+    if let Some(pacstraps) = manifest.pacstraps.clone() {
+        packages.extend(pacstraps);
+    }
+
+    let cmd_pacstrap = cmd_pacstrap(packages.clone(), install_location.clone());
+    let action_pacstrap = Action::InstallPackages { packages: packages };
+    match shell::exec("sh", &["-c", &cmd_pacstrap]) {
+        Err(err) => {
+            return Err(AliError::InstallError {
+                error: Box::new(err),
+                action_failed: action_pacstrap,
+                actions_performed: actions,
+            });
+        }
+        Ok(()) => actions.push(action_pacstrap),
+    }
 
     Ok(actions)
+}
+
+fn cmd_pacstrap(packages: HashSet<String>, location: String) -> String {
+    let mut cmd_parts = vec!["pacstrap".to_string(), "-K".to_string(), location];
+    cmd_parts.extend(packages);
+
+    cmd_parts.join(" ")
 }
