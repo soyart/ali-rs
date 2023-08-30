@@ -23,9 +23,12 @@ struct EntryBlkid {
 }
 
 pub(super) fn run_blkid(cmd_blkid: &str) -> Result<String, AliError> {
-    let cmd_blkid = Command::new(cmd_blkid).output().map_err(|err| {
-        AliError::CmdFailed(Some(err), format!("blkid command {cmd_blkid} failed"))
-    })?;
+    let cmd_blkid = Command::new(cmd_blkid)
+        .output()
+        .map_err(|err| AliError::CmdFailed {
+            error: Some(err),
+            context: "blkid command failed".to_string(),
+        })?;
 
     String::from_utf8(cmd_blkid.stdout)
         .map_err(|err| AliError::AliRsBug(format!("blkid output not string: {}", err.to_string())))

@@ -66,19 +66,19 @@ pub fn run_fdisk_cmd(device: &str, cmd: &str) -> Result<(), AliError> {
 
     match fdisk_cmd.wait() {
         Ok(result) => match result.success() {
-            false => Err(AliError::CmdFailed(
-                None,
-                format!(
+            false => Err(AliError::CmdFailed {
+                error: None,
+                context: format!(
                     "fdisk command exited with bad status: {}",
                     result.code().expect("failed to get exit code"),
                 ),
-            )),
+            }),
             _ => Ok(()),
         },
-        Err(err) => Err(AliError::CmdFailed(
-            None,
-            format!("fdisk command failed to run: {}", err.to_string()),
-        )),
+        Err(err) => Err(AliError::CmdFailed {
+            error: None,
+            context: format!("fdisk command failed to run: {}", err.to_string()),
+        }),
     }
 }
 

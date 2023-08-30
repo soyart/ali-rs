@@ -1,7 +1,7 @@
 use crate::errors::AliError;
 use crate::linux::lvm;
 use crate::manifest::Dm;
-use crate::run::Action;
+use crate::run::apply::Action;
 
 pub fn apply_dms(dms: &[Dm]) -> Result<Vec<Action>, AliError> {
     let mut actions = Vec::new();

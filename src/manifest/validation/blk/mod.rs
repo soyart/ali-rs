@@ -5,11 +5,11 @@ use std::collections::{HashMap, HashSet, LinkedList};
 
 use crate::entity::{blockdev::*, parse_human_bytes};
 use crate::errors::AliError;
-use crate::manifest::{Dm, Manifest, ManifestLvmLv};
+use crate::manifest::{Dm, Manifest};
 use crate::utils::fs::file_exists;
 
-pub fn validate(manifest: &Manifest, overwrite: bool) -> Result<(), AliError> {
-    match overwrite {
+pub fn validate(manifest: &Manifest, overwrite: bool) -> Result<BlockDevPaths, AliError> {
+    let paths = match overwrite {
         true => {
             // Overwrite disk devices - we don't need to trace any existing devices,
             // as all devices required must already be in the manifest
@@ -19,6 +19,8 @@ pub fn validate(manifest: &Manifest, overwrite: bool) -> Result<(), AliError> {
                 HashMap::<String, BlockDevType>::new(),
                 HashMap::<String, BlockDevPaths>::new(),
             )?;
+
+            BlockDevPaths::new()
         }
 
         false => {
@@ -35,11 +37,11 @@ pub fn validate(manifest: &Manifest, overwrite: bool) -> Result<(), AliError> {
             // Unknown disks are not tracked - only LVM devices and their bases.
             let sys_lvms = trace_blk::sys_lvms("lvs", "pvs");
 
-            validate_blk(&manifest, &sys_fs_devs, sys_fs_ready_devs, sys_lvms)?;
+            validate_blk(&manifest, &sys_fs_devs, sys_fs_ready_devs, sys_lvms)?
         }
     };
 
-    Ok(())
+    Ok(paths)
 }
 
 // Validates manifest block storage.
@@ -73,7 +75,7 @@ fn validate_blk(
             // Find if this disk has any used partitions
             // A GPT table can hold a maximum of 128 partitions
             for i in 1_u8..128 {
-                let partition_name = format!("{partition_prefix}{}", i);
+                let partition_name = format!("{partition_prefix}{i}");
                 if sys_fs_devs.contains_key(&partition_name) {
                     let fs = sys_fs_devs.get(&partition_name).unwrap();
                     return Err(AliError::BadManifest(format!(
@@ -138,54 +140,9 @@ fn validate_blk(
     }
 
     if let Some(dms) = &manifest.device_mappers {
-        // Only the last LV on each VG could be unsized (100% sized)
-        let mut vg_lvs: HashMap<String, Vec<ManifestLvmLv>> = HashMap::new();
-        for dm in dms {
-            match dm {
-                Dm::Lvm(lvm) => {
-                    if let Some(ref lvs) = lvm.lvs {
-                        for lv in lvs {
-                            // Check if size string is valid
-                            if let Some(ref size) = lv.size {
-                                if let Err(err) = parse_human_bytes(size) {
-                                    return Err(AliError::BadManifest(format!(
-                                        "bad lv size {size}: {err}"
-                                    )));
-                                }
-                            }
-
-                            if vg_lvs.contains_key(&lv.vg) {
-                                vg_lvs.get_mut(&lv.vg).unwrap().push(lv.clone());
-                                continue;
-                            }
-
-                            vg_lvs.insert(lv.vg.clone(), vec![lv.clone()]);
-                        }
-                    }
-                }
-                _ => continue,
-            }
-        }
-
-        for (vg, lvs) in vg_lvs.into_iter() {
-            if lvs.is_empty() {
-                continue;
-            }
-
-            let l = lvs.len();
-            if l == 1 {
-                continue;
-            }
-
-            for (i, lv) in lvs.into_iter().enumerate() {
-                if lv.size.is_none() && (i != l - 1) {
-                    return Err(AliError::BadManifest(format!(
-                        "lv {} on vg {vg} has None size",
-                        lv.name
-                    )));
-                }
-            }
-        }
+        // Validate sizing of LVs
+        // Only the last LV on each VG could be unsized (100%FREE)
+        dm::validate_lv_size(dms)?;
 
         // Collect all DMs into valids to be used later in filesystems validation
         for dm in dms {

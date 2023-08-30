@@ -1,7 +1,7 @@
 use crate::errors::AliError;
 use crate::linux::fdisk;
 use crate::manifest;
-use crate::run::Action;
+use crate::run::apply::Action;
 
 pub fn apply_disks(disks: &[manifest::ManifestDisk]) -> Result<Vec<Action>, AliError> {
     let mut actions = Vec::new();
