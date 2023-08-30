@@ -6,7 +6,9 @@ use serde_json::json;
 
 use crate::cli;
 use crate::errors::AliError;
-use crate::manifest::{self, validation, Dm, Manifest};
+use crate::manifest::apply;
+use crate::manifest::validation;
+use crate::manifest::{self, Dm, Manifest};
 
 #[derive(Debug)]
 pub struct Report {
@@ -41,13 +43,13 @@ pub(super) fn run(manifest_file: &str, args: cli::ArgsApply) -> Result<Report, A
         validation::validate(&manifest, args.overwrite)?;
     }
 
+    // Update manifest in some cases
     update_manifest(&mut manifest);
 
-    // TODO: ali-rs just prints valid manifest to stdout
-    println!("{:?}", manifest);
+    let actions = apply::apply_manifest(&manifest)?;
 
     Ok(Report {
-        actions: vec![],
+        actions,
         duration: start.elapsed(),
     })
 }
@@ -118,11 +120,29 @@ fn update_manifest(manifest: &mut Manifest) {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Action {
+    #[serde(rename = "applyDisks")]
+    ApplyDisks,
+
+    #[serde(rename = "applyDms")]
+    ApplyDms,
+
     #[serde(rename = "prepareDisk")]
     PrepareDisk { deviec: String },
 
     #[serde(rename = "prepareDm")]
     PrepareDm,
+
+    #[serde(rename = "createRootFs")]
+    CreateRootFs,
+
+    #[serde(rename = "applyFilesystems")]
+    ApplyFilesystems,
+
+    #[serde(rename = "mountRootFs")]
+    MountRootFs,
+
+    #[serde(rename = "mountFilesystems")]
+    MountFilesystems,
 
     #[serde(rename = "createPartitionTable")]
     CreatePartitionTable {
@@ -160,7 +180,15 @@ pub enum Action {
     CreateFs {
         device: String,
         fs_type: String,
-        mountpoint: String,
+        fs_opts: Option<String>,
+        mountpoint: Option<String>,
+    },
+
+    #[serde(rename = "mountFilesystem")]
+    MountFs {
+        src: String,
+        dst: String,
+        opts: Option<String>,
     },
 
     #[serde(rename = "installPackages")]
@@ -192,7 +220,8 @@ fn test_json_actions() {
         Action::CreateFs {
             device: "/dev/sda1".into(),
             fs_type: "btrfs".into(),
-            mountpoint: "/".into(),
+            fs_opts: None,
+            mountpoint: Some("/".into()),
         },
     ];
 

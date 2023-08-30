@@ -1,5 +1,5 @@
 use crate::errors::AliError;
-use crate::linux::lvm;
+use crate::linux;
 use crate::manifest::Dm;
 use crate::run::apply::Action;
 
@@ -24,18 +24,18 @@ pub fn apply_dms(dms: &[Dm]) -> Result<Vec<Action>, AliError> {
 pub fn apply_dm(dm: &Dm) -> Result<Vec<Action>, AliError> {
     match dm {
         Dm::Luks(_) => Err(AliError::NotImplemented),
-        Dm::Lvm(lvms) => {
+        Dm::Lvm(lvm) => {
             let mut actions = vec![];
-            if let Some(pvs) = &lvms.pvs {
+            if let Some(pvs) = &lvm.pvs {
                 for pv in pvs {
                     let action_create_pv = Action::CreateDmLvmPv(pv.clone());
 
-                    lvm::create_pv(pv)?;
+                    linux::lvm::create_pv(pv)?;
                     actions.push(action_create_pv);
                 }
             }
 
-            if let Some(vgs) = &lvms.vgs {
+            if let Some(vgs) = &lvm.vgs {
                 for vg in vgs {
                     let vg_name = format!("/dev/{}", vg.name);
                     let action_create_vg = Action::CreateDmLvmVg {
@@ -43,12 +43,12 @@ pub fn apply_dm(dm: &Dm) -> Result<Vec<Action>, AliError> {
                         vg: vg_name.clone(),
                     };
 
-                    lvm::create_vg(vg)?;
+                    linux::lvm::create_vg(vg)?;
                     actions.push(action_create_vg);
                 }
             }
 
-            if let Some(lvs) = &lvms.lvs {
+            if let Some(lvs) = &lvm.lvs {
                 for lv in lvs {
                     let vg_name = format!("/dev/{}", lv.vg);
                     let lv_name = format!("{vg_name}/{}", lv.name);
@@ -57,7 +57,7 @@ pub fn apply_dm(dm: &Dm) -> Result<Vec<Action>, AliError> {
                         lv: lv_name.clone(),
                     };
 
-                    lvm::create_lv(lv)?;
+                    linux::lvm::create_lv(lv)?;
                     actions.push(action_create_lv);
                 }
             }
