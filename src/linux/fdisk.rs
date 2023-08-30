@@ -145,7 +145,7 @@ mod tests {
             );
         }
 
-        let create_gpt_table = create_table_cmd(fname, &PartitionTable::Gpt);
+        let create_gpt_table = create_table_cmd(&PartitionTable::Gpt);
         run_fdisk_cmd(fname, &create_gpt_table).expect("failed to create gpt table");
 
         let manifest_p1 = ManifestPartition {
