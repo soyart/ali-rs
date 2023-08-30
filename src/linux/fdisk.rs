@@ -7,7 +7,7 @@ use crate::errors::AliError;
 use crate::manifest::{ManifestPartition, PartitionTable};
 
 /// Returns fdisk cmd string for creating gpt/msdos partition table
-pub fn create_table_cmd(device: &str, table: &PartitionTable) -> String {
+pub fn create_table_cmd(table: &PartitionTable) -> String {
     match table {
         PartitionTable::Gpt => "g\nw\n".to_string(),
         PartitionTable::Mbr => "o\nw\n".to_string(),

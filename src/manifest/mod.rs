@@ -75,7 +75,7 @@ pub struct ManifestPartition {
     pub part_type: String,
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct ManifestFs {
     pub device: String,
 

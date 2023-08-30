@@ -2,9 +2,12 @@ pub mod disks;
 pub mod dm;
 pub mod fs;
 
+use self::fs::prepend_base;
+use crate::defaults::DEFAULT_CHROOT_LOC;
 use crate::errors::AliError;
 use crate::manifest::Manifest;
 use crate::run::apply::Action;
+use crate::utils::shell;
 
 // Use manifest to install a new system
 pub fn apply_manifest(manifest: &Manifest) -> Result<Vec<Action>, AliError> {
@@ -70,8 +73,20 @@ pub fn apply_manifest(manifest: &Manifest) -> Result<Vec<Action>, AliError> {
         }
     }
 
+    // mkdir rootfs chroot mount
+    match shell::exec("mkdir", &["-p", DEFAULT_CHROOT_LOC]) {
+        Err(err) => {
+            return Err(AliError::InstallError {
+                error: Box::new(err),
+                action_failed: Action::MkdirRootFs,
+                actions_performed: actions,
+            });
+        }
+        Ok(()) => actions.push(Action::MkdirRootFs),
+    }
+
     // Mount rootfs
-    match fs::mount_filesystem(&manifest.rootfs) {
+    match fs::mount_filesystem(&manifest.rootfs, DEFAULT_CHROOT_LOC) {
         Err(err) => {
             return Err(AliError::InstallError {
                 error: Box::new(err),
@@ -82,9 +97,37 @@ pub fn apply_manifest(manifest: &Manifest) -> Result<Vec<Action>, AliError> {
         Ok(action_mount_rootfs) => actions.push(action_mount_rootfs),
     }
 
-    // Mount other filesystems
+    // Mount other filesystems to /{DEFAULT_CHROOT_LOC}
     if let Some(filesystems) = &manifest.filesystems {
-        match fs::mount_filesystems(&filesystems) {
+        // Collect filesystems mountpoints and actions.
+        // The mountpoints will be prepended with default base
+        let mountpoints = filesystems
+            .iter()
+            .filter(|fs| fs.mnt.is_some())
+            .map(|fs| fs.mnt.clone().unwrap())
+            .map(|mountpoint| {
+                (
+                    prepend_base(&Some(DEFAULT_CHROOT_LOC.into()), &mountpoint),
+                    Action::Mkdir(mountpoint),
+                )
+            })
+            .collect::<Vec<(String, Action)>>();
+
+        // mkdir -p /{DEFAULT_CHROOT_LOC}/{mkdir_path}
+        for mkdir_path in mountpoints {
+            if let Err(err) = shell::exec("mkdir", &[&mkdir_path.0]) {
+                return Err(AliError::InstallError {
+                    error: Box::new(err),
+                    action_failed: mkdir_path.1,
+                    actions_performed: actions,
+                });
+            }
+
+            actions.push(mkdir_path.1);
+        }
+
+        // Mount other filesystems under /{DEFAULT_CHROOT_LOC}
+        match fs::mount_filesystems(&filesystems, DEFAULT_CHROOT_LOC) {
             Err(err) => {
                 return Err(AliError::InstallError {
                     error: Box::new(err),

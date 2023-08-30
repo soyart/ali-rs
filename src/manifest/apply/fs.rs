@@ -14,13 +14,20 @@ pub fn apply_filesystem(filesystem: &ManifestFs) -> Result<Action, AliError> {
     })
 }
 
-pub fn mount_filesystem(filesystem: &ManifestFs) -> Result<Action, AliError> {
-    linux::mount::mount_fs(filesystem)?;
+// mount_filesystem lets callers override mountpoint with `mountpoint`.
+pub fn mount_filesystem(filesystem: &ManifestFs, mountpoint: &str) -> Result<Action, AliError> {
+    let mountpoint = mountpoint.to_string();
+    let fs = ManifestFs {
+        mnt: Some(mountpoint.clone()),
+        ..filesystem.clone()
+    };
+
+    linux::mount::mount_fs(&fs)?;
 
     Ok(Action::MountFs {
-        src: filesystem.device.clone(),
-        dst: filesystem.mnt.clone().unwrap(),
-        opts: filesystem.mnt_opts.clone(),
+        src: fs.device.clone(),
+        dst: mountpoint,
+        opts: fs.mnt_opts.clone(),
     })
 }
 
@@ -49,23 +56,23 @@ pub fn apply_filesystems(filesystems: &[ManifestFs]) -> Result<Vec<Action>, AliE
     Ok(actions)
 }
 
-pub fn mount_filesystems(filesystems: &[ManifestFs]) -> Result<Vec<Action>, AliError> {
+// mount_filesystem lets callers defined base dir
+// for all filesystems to be mounted under.
+pub fn mount_filesystems(filesystems: &[ManifestFs], base: &str) -> Result<Vec<Action>, AliError> {
     let mut actions = Vec::new();
     for fs in filesystems {
         if fs.mnt.is_none() {
             continue;
         }
 
+        let mountpoint = prepend_base(&Some(base), &fs.mnt.clone().unwrap());
         let action_mount_fs = Action::MountFs {
             src: fs.device.clone(),
-            dst: fs
-                .mnt
-                .clone()
-                .expect("mount fs that's not supposed to be mounted"),
+            dst: mountpoint.to_string(),
             opts: fs.mnt_opts.clone(),
         };
 
-        match mount_filesystem(fs) {
+        match mount_filesystem(fs, &mountpoint) {
             Err(err) => {
                 return Err(AliError::InstallError {
                     error: Box::new(err),
@@ -80,4 +87,13 @@ pub fn mount_filesystems(filesystems: &[ManifestFs]) -> Result<Vec<Action>, AliE
     }
 
     Ok(actions)
+}
+
+pub fn prepend_base(base: &Option<&str>, mountpoint: &str) -> String {
+    if base.is_none() {
+        return mountpoint.to_string();
+    }
+
+    // e.g. base /data on manifest /foo => /data/foo
+    format!("{}{mountpoint}", base.clone().unwrap())
 }

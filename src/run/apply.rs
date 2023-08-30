@@ -138,8 +138,14 @@ pub enum Action {
     #[serde(rename = "applyFilesystems")]
     ApplyFilesystems,
 
+    #[serde(rename = "mkdirRootFs")]
+    MkdirRootFs,
+
     #[serde(rename = "mountRootFs")]
     MountRootFs,
+
+    #[serde(rename = "mkdirFs")]
+    Mkdir(String),
 
     #[serde(rename = "mountFilesystems")]
     MountFilesystems,

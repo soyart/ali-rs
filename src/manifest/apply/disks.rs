@@ -29,7 +29,7 @@ pub fn apply_disks(disks: &[manifest::ManifestDisk]) -> Result<Vec<Action>, AliE
 }
 
 pub fn apply_disk(disk: &manifest::ManifestDisk) -> Result<Vec<Action>, AliError> {
-    let cmd_create_table = fdisk::create_table_cmd(&disk.device, &disk.table);
+    let cmd_create_table = fdisk::create_table_cmd(&disk.table);
     fdisk::run_fdisk_cmd(&disk.device, &cmd_create_table)?;
 
     let mut actions = vec![Action::CreatePartitionTable {
