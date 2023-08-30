@@ -1,10 +1,11 @@
-pub mod disks;
-pub mod dm;
-pub mod fs;
+mod archchroot;
+mod disks;
+mod dm;
+mod fs;
+mod routine;
 
 use std::collections::HashSet;
 
-use self::fs::prepend_base;
 use crate::defaults;
 use crate::errors::AliError;
 use crate::manifest::Manifest;
@@ -114,7 +115,7 @@ pub fn apply_manifest(
             .map(|fs| fs.mnt.clone().unwrap())
             .map(|mountpoint| {
                 (
-                    prepend_base(&Some(&install_location), &mountpoint),
+                    fs::prepend_base(&Some(&install_location), &mountpoint),
                     Action::Mkdir(mountpoint),
                 )
             })
@@ -152,25 +153,41 @@ pub fn apply_manifest(
         packages.extend(pacstraps);
     }
 
-    let cmd_pacstrap = cmd_pacstrap(packages.clone(), install_location.clone());
+    // Install packages (manifest.pacstraps) to install_location
     let action_pacstrap = Action::InstallPackages { packages: packages };
-    match shell::exec("sh", &["-c", &cmd_pacstrap]) {
+    if let Err(err) = routine::pacstrap_to_location(&manifest.pacstraps, &install_location) {
+        return Err(AliError::InstallError {
+            error: Box::new(err),
+            action_failed: action_pacstrap,
+            actions_performed: actions,
+        });
+    }
+    actions.push(action_pacstrap);
+
+    let action_genfstab = Action::GenFstab;
+    if let Err(err) = routine::genfstab_uuid(&install_location) {
+        return Err(AliError::InstallError {
+            error: Box::new(err),
+            action_failed: action_genfstab,
+            actions_performed: actions,
+        });
+    }
+    actions.push(action_genfstab);
+
+    let action_ali_archchroot = Action::AliArchChroot;
+    match archchroot::archchroot_ali(&manifest) {
         Err(err) => {
             return Err(AliError::InstallError {
                 error: Box::new(err),
-                action_failed: action_pacstrap,
+                action_failed: action_ali_archchroot,
                 actions_performed: actions,
             });
         }
-        Ok(()) => actions.push(action_pacstrap),
+        Ok(actions_archchroot) => {
+            actions.push(action_ali_archchroot);
+            actions.extend(actions_archchroot);
+        }
     }
 
     Ok(actions)
-}
-
-fn cmd_pacstrap(packages: HashSet<String>, location: String) -> String {
-    let mut cmd_parts = vec!["pacstrap".to_string(), "-K".to_string(), location];
-    cmd_parts.extend(packages);
-
-    cmd_parts.join(" ")
 }
