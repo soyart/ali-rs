@@ -14,6 +14,7 @@ use crate::manifest::{self, Dm, Manifest};
 
 #[derive(Debug)]
 pub struct Report {
+    pub location: String,
     pub actions: Vec<Action>,
     pub duration: Duration,
 }
@@ -48,16 +49,19 @@ pub(super) fn run(manifest_file: &str, args: cli::ArgsApply) -> Result<Report, A
     // Update manifest in some cases
     update_manifest(&mut manifest);
 
-    // Get install location
-    let location = env::var(defaults::ENV_ALI_LOC).map_or(None, |loc| Some(loc));
-
-    // Apply manifest
-    let actions = apply::apply_manifest(&manifest, location)?;
+    // Apply manifest to location
+    let location = install_location();
+    let actions = apply::apply_manifest(&manifest, &location)?;
 
     Ok(Report {
         actions,
+        location,
         duration: start.elapsed(),
     })
+}
+
+fn install_location() -> String {
+    env::var(defaults::ENV_ALI_LOC).unwrap_or(defaults::DEFAULT_INSTALL_LOCATION.to_string())
 }
 
 // Update manifest to suit the manifest
@@ -261,6 +265,7 @@ fn test_json_actions() {
     let report = Report {
         actions,
         duration: Duration::from_secs(20),
+        location: "dummy".to_string(),
     };
 
     println!("{}", report.to_json_string());

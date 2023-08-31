@@ -6,7 +6,6 @@ mod routine;
 
 use std::collections::HashSet;
 
-use crate::defaults;
 use crate::errors::AliError;
 use crate::manifest::Manifest;
 use crate::run::apply::Action;
@@ -15,7 +14,7 @@ use crate::utils::shell;
 // Use manifest to install a new system
 pub fn apply_manifest(
     manifest: &Manifest,
-    location_env: Option<String>,
+    install_location: &str,
 ) -> Result<Vec<Action>, AliError> {
     let mut actions = Vec::new();
 
@@ -74,8 +73,6 @@ pub fn apply_manifest(
             }
         }
     }
-
-    let install_location = location_env.unwrap_or(defaults::DEFAULT_INSTALL_LOCATION.to_string());
 
     // mkdir rootfs chroot mount
     match shell::exec("mkdir", &["-p", &install_location]) {
