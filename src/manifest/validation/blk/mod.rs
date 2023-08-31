@@ -13,11 +13,11 @@ pub fn validate(manifest: &Manifest, overwrite: bool) -> Result<BlockDevPaths, A
     if let Some(ref filesystems) = manifest.filesystems {
         let mut known_mountpoints = HashSet::new();
         for fs in filesystems {
-            if fs.mnt.is_empty() {
+            if fs.mnt.is_none() {
                 continue;
             }
 
-            let mnt = fs.mnt.clone();
+            let mnt = fs.mnt.clone().unwrap();
             if !known_mountpoints.insert(mnt.clone()) {
                 return Err(AliError::BadManifest(format!(
                     "duplicate mountpoints {mnt}"
