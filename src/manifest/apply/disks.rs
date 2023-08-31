@@ -19,8 +19,8 @@ pub fn apply_disks(disks: &[manifest::ManifestDisk]) -> Result<Vec<Action>, AliE
                 });
             }
             Ok(disk_actions) => {
-                actions.push(action_prepare);
                 actions.extend(disk_actions);
+                actions.push(action_prepare);
             }
         }
     }

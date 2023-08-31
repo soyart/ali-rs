@@ -1,37 +1,51 @@
-use std::collections::HashSet;
-
 use crate::defaults;
 use crate::errors::AliError;
+use crate::manifest::apply::Action;
+use crate::manifest::Manifest;
 use crate::utils::shell;
 
-pub fn pacstrap_to_location(
-    pacstraps: &Option<HashSet<String>>,
-    location: &str,
-) -> Result<(), AliError> {
-    // Collect packages, with base as bare-minimum
-    let mut packages = HashSet::from(["base".to_string()]);
-    if let Some(pacstraps) = pacstraps.clone() {
-        packages.extend(pacstraps);
+pub fn apply_routine(manifest: &Manifest, install_location: &str) -> Result<Vec<Action>, AliError> {
+    let mut actions = Vec::new();
+
+    let action_genfstab = Action::GenFstab;
+    if let Err(err) = genfstab_uuid(install_location) {
+        return Err(AliError::InstallError {
+            error: Box::new(err),
+            action_failed: action_genfstab,
+            actions_performed: actions,
+        });
     }
+    actions.push(action_genfstab);
 
-    let cmd_pacstrap = cmd_pacstrap(packages.clone(), location.to_string());
+    let action_set_hostname = Action::SetHostname;
+    if let Err(err) = hostname(&manifest.hostname, install_location) {
+        return Err(AliError::InstallError {
+            error: Box::new(err),
+            action_failed: action_set_hostname,
+            actions_performed: actions,
+        });
+    }
+    actions.push(action_set_hostname);
 
-    shell::exec("sh", &["-c", &format!("'{cmd_pacstrap}'")])
+    let action_locale_conf = Action::LocaleConf;
+    if let Err(err) = locale_conf(install_location) {
+        return Err(AliError::InstallError {
+            error: Box::new(err),
+            action_failed: action_locale_conf,
+            actions_performed: actions,
+        });
+    }
+    actions.push(action_locale_conf);
+
+    Ok(actions)
 }
 
-fn cmd_pacstrap(packages: HashSet<String>, location: String) -> String {
-    let mut cmd_parts = vec!["pacstrap".to_string(), "-K".to_string(), location];
-    cmd_parts.extend(packages);
-
-    cmd_parts.join(" ")
-}
-
-pub fn genfstab_uuid(install_location: &str) -> Result<(), AliError> {
+fn genfstab_uuid(install_location: &str) -> Result<(), AliError> {
     let cmd = cmd_genfstab(install_location);
     shell::exec("sh", &["-c", &format!("'{cmd}'")])
 }
 
-pub fn hostname(hostname: &Option<String>, install_location: &str) -> Result<(), AliError> {
+fn hostname(hostname: &Option<String>, install_location: &str) -> Result<(), AliError> {
     let hostname = hostname
         .clone()
         .unwrap_or(defaults::DEFAULT_HOSTNAME.to_string());
@@ -43,7 +57,7 @@ pub fn hostname(hostname: &Option<String>, install_location: &str) -> Result<(),
     })
 }
 
-pub fn locale_conf(install_location: &str) -> Result<(), AliError> {
+fn locale_conf(install_location: &str) -> Result<(), AliError> {
     let dst = format!("{install_location}/etc/locale.conf");
 
     std::fs::write(&dst, defaults::DEFAULT_LOCALE_CONF)

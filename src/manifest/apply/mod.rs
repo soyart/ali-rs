@@ -29,9 +29,7 @@ pub fn apply_manifest(
                     actions_performed: actions,
                 })
             }
-            Ok(actions_disks) => {
-                actions.extend(actions_disks);
-            }
+            Ok(actions_disks) => actions.extend(actions_disks),
         };
     }
 
@@ -45,9 +43,7 @@ pub fn apply_manifest(
                     actions_performed: actions,
                 })
             }
-            Ok(actions_dms) => {
-                actions.extend(actions_dms);
-            }
+            Ok(actions_dms) => actions.extend(actions_dms),
         }
     }
 
@@ -155,7 +151,7 @@ pub fn apply_manifest(
 
     // Install packages (manifest.pacstraps) to install_location
     let action_pacstrap = Action::InstallPackages { packages };
-    if let Err(err) = routine::pacstrap_to_location(&manifest.pacstraps, &install_location) {
+    if let Err(err) = pacstrap_to_location(&manifest.pacstraps, &install_location) {
         return Err(AliError::InstallError {
             error: Box::new(err),
             action_failed: action_pacstrap,
@@ -163,36 +159,6 @@ pub fn apply_manifest(
         });
     }
     actions.push(action_pacstrap);
-
-    let action_genfstab = Action::GenFstab;
-    if let Err(err) = routine::genfstab_uuid(&install_location) {
-        return Err(AliError::InstallError {
-            error: Box::new(err),
-            action_failed: action_genfstab,
-            actions_performed: actions,
-        });
-    }
-    actions.push(action_genfstab);
-
-    let action_set_hostname = Action::SetHostname;
-    if let Err(err) = routine::hostname(&manifest.hostname, &install_location) {
-        return Err(AliError::InstallError {
-            error: Box::new(err),
-            action_failed: action_set_hostname,
-            actions_performed: actions,
-        });
-    }
-    actions.push(action_set_hostname);
-
-    let action_locale_conf = Action::LocaleConf;
-    if let Err(err) = routine::locale_conf(&install_location) {
-        return Err(AliError::InstallError {
-            error: Box::new(err),
-            action_failed: action_locale_conf,
-            actions_performed: actions,
-        });
-    }
-    actions.push(action_locale_conf);
 
     let action_ali_archchroot = Action::AliArchChroot;
     match archchroot::ali(&manifest, &install_location) {
@@ -204,10 +170,48 @@ pub fn apply_manifest(
             });
         }
         Ok(actions_archchroot) => {
-            actions.push(action_ali_archchroot);
             actions.extend(actions_archchroot);
+            actions.push(action_ali_archchroot);
+        }
+    }
+
+    let action_ali_routine = Action::AliRoutine;
+    match routine::apply_routine(manifest, &install_location) {
+        Err(err) => {
+            return Err(AliError::InstallError {
+                error: Box::new(err),
+                action_failed: action_ali_routine,
+                actions_performed: actions,
+            });
+        }
+        Ok(actions_routine) => {
+            actions.extend(actions_routine);
+            actions.push(action_ali_routine);
         }
     }
 
     Ok(actions)
+}
+
+fn pacstrap_to_location(
+    pacstraps: &Option<HashSet<String>>,
+    location: &str,
+) -> Result<(), AliError> {
+    // Collect packages, with base as bare-minimum
+    let mut packages = HashSet::from(["base".to_string()]);
+    if let Some(pacstraps) = pacstraps.clone() {
+        packages.extend(pacstraps);
+    }
+
+    let cmd_pacstrap = {
+        let mut cmd_parts = vec![
+            "pacstrap".to_string(),
+            "-K".to_string(),
+            location.to_string(),
+        ];
+        cmd_parts.extend(packages);
+        cmd_parts.join(" ")
+    };
+
+    shell::exec("sh", &["-c", &format!("'{cmd_pacstrap}'")])
 }

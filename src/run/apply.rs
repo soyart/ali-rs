@@ -206,6 +206,9 @@ pub enum Action {
     #[serde(rename = "installPackages")]
     InstallPackages { packages: HashSet<String> },
 
+    #[serde(rename = "AliRoutine")]
+    AliRoutine,
+
     #[serde(rename = "AliArchChroot")]
     AliArchChroot,
 
