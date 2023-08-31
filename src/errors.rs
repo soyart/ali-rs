@@ -11,6 +11,9 @@ pub enum AliError {
     #[error("bad manifest: {0}")]
     BadManifest(String),
 
+    #[error("validation error: {0}")]
+    Validation(String),
+
     #[error("shell command (context: \"{context}\"): {error:?}")]
     CmdFailed {
         error: Option<std::io::Error>,
