@@ -184,6 +184,16 @@ pub fn apply_manifest(
     }
     actions.push(action_set_hostname);
 
+    let action_locale_conf = Action::LocaleConf;
+    if let Err(err) = routine::locale_conf(&install_location) {
+        return Err(AliError::InstallError {
+            error: Box::new(err),
+            action_failed: action_locale_conf,
+            actions_performed: actions,
+        });
+    }
+    actions.push(action_locale_conf);
+
     let action_ali_archchroot = Action::AliArchChroot;
     match archchroot::ali(&manifest, &install_location) {
         Err(err) => {

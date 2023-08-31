@@ -7,7 +7,6 @@ use crate::manifest::Manifest;
 use crate::utils::fs::file_exists;
 use crate::utils::shell;
 
-// @TODO: return validation report
 pub fn validate(manifest: &Manifest, overwrite: bool) -> Result<ValidationReport, AliError> {
     let block_devs = blk::validate(manifest, overwrite)?;
 
