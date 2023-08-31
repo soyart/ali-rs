@@ -18,6 +18,13 @@ pub fn validate(manifest: &Manifest, overwrite: bool) -> Result<BlockDevPaths, A
             }
 
             let mnt = fs.mnt.clone();
+            if mnt.as_str() == "/" {
+                return Err(AliError::BadManifest(format!(
+                    "bad mountpoint / for non-rootfs {}",
+                    fs.device,
+                )));
+            }
+
             if !known_mountpoints.insert(mnt.clone()) {
                 return Err(AliError::BadManifest(format!(
                     "duplicate mountpoints {mnt}"
