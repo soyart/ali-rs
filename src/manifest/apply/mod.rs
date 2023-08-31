@@ -175,7 +175,7 @@ pub fn apply_manifest(
     actions.push(action_genfstab);
 
     let action_ali_archchroot = Action::AliArchChroot;
-    match archchroot::archchroot_ali(&manifest) {
+    match archchroot::ali(&manifest, &install_location) {
         Err(err) => {
             return Err(AliError::InstallError {
                 error: Box::new(err),

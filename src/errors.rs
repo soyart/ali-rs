@@ -4,8 +4,11 @@ use crate::run::apply::Action;
 
 #[derive(Debug, Error)]
 pub enum AliError {
-    #[error("no such file: {0}")]
+    #[error("no such file {1}: {0}")]
     NoSuchFile(std::io::Error, String),
+
+    #[error("file error {1}: {0}")]
+    FileError(std::io::Error, String),
 
     #[error("no such device: {0}")]
     NoSuchDevice(String),
