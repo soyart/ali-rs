@@ -5,7 +5,7 @@ use crate::entity::ValidationReport;
 use crate::errors::AliError;
 use crate::manifest::Manifest;
 use crate::utils::fs::file_exists;
-use crate::utils::shell::in_path;
+use crate::utils::shell;
 
 // @TODO: return validation report
 pub fn validate(manifest: &Manifest, overwrite: bool) -> Result<ValidationReport, AliError> {
@@ -13,7 +13,7 @@ pub fn validate(manifest: &Manifest, overwrite: bool) -> Result<ValidationReport
 
     // Check mkfs for rootfs
     let mkfs_rootfs = &format!("mkfs.{}", manifest.rootfs.fs_type);
-    if !in_path(mkfs_rootfs) {
+    if !shell::in_path(mkfs_rootfs) {
         return Err(AliError::BadManifest(format!(
             "no such program to create rootfs: {mkfs_rootfs}"
         )));
@@ -23,7 +23,7 @@ pub fn validate(manifest: &Manifest, overwrite: bool) -> Result<ValidationReport
     if let Some(filesystems) = &manifest.filesystems {
         for fs in filesystems {
             let mkfs_cmd = &format!("mkfs.{}", fs.fs_type);
-            if !in_path(mkfs_cmd) {
+            if !shell::in_path(mkfs_cmd) {
                 let device = &fs.device;
 
                 return Err(AliError::BadManifest(format!(
@@ -33,6 +33,7 @@ pub fn validate(manifest: &Manifest, overwrite: bool) -> Result<ValidationReport
         }
     }
 
+    // Check timezone file in local installer
     let zone_info = format!(
         "/usr/share/zoneinfo/{}",
         manifest
@@ -40,6 +41,13 @@ pub fn validate(manifest: &Manifest, overwrite: bool) -> Result<ValidationReport
             .clone()
             .unwrap_or(defaults::DEFAULT_TIMEZONE.into())
     );
+
+    // Check all commands used by ALI before ch-root
+    for cmd in &["arch-chroot"] {
+        if !shell::in_path(cmd) {
+            return Err(AliError::Validation(format!("command {cmd} not in path")));
+        }
+    }
 
     if !file_exists(&zone_info) {
         return Err(AliError::BadManifest(format!(

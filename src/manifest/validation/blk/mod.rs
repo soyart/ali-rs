@@ -9,6 +9,23 @@ use crate::manifest::{Dm, Manifest};
 use crate::utils::fs::file_exists;
 
 pub fn validate(manifest: &Manifest, overwrite: bool) -> Result<BlockDevPaths, AliError> {
+    // Validate no duplicate mountpoints
+    if let Some(ref filesystems) = manifest.filesystems {
+        let mut known_mountpoints = HashSet::new();
+        for fs in filesystems {
+            if fs.mnt.is_empty() {
+                continue;
+            }
+
+            let mnt = fs.mnt.clone();
+            if !known_mountpoints.insert(mnt.clone()) {
+                return Err(AliError::BadManifest(format!(
+                    "duplicate mountpoints {mnt}"
+                )));
+            }
+        }
+    }
+
     let paths = match overwrite {
         true => {
             // Overwrite disk devices - we don't need to trace any existing devices,

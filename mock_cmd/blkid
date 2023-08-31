@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 cat << EOF
 /dev/mapper/archvg-swaplv: LABEL="archswap" UUID="8737b84e-e1b5-4782-b9d3-c7e889eedc57" TYPE="swap"
