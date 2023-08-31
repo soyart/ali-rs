@@ -7,100 +7,60 @@ use crate::utils::shell;
 pub fn ali(manifest: &Manifest, install_location: &str) -> Result<Vec<Action>, AliError> {
     let mut actions = Vec::new();
 
-    let action_set_hostname = Action::SetHostname;
-    if let Err(err) = hostname(&manifest.hostname, install_location) {
+    let (action_tz, cmd_tz) = cmd_link_timezone(&manifest.timezone);
+    if let Err(err) = shell::chroot(install_location, &cmd_tz) {
         return Err(AliError::InstallError {
             error: Box::new(err),
-            action_failed: action_set_hostname,
+            action_failed: action_tz,
             actions_performed: actions,
         });
     }
+    actions.push(action_tz);
 
-    actions.push(action_set_hostname);
-
-    let action_set_tz = Action::SetTimezone;
-    if let Err(err) = timezone(&manifest.timezone, install_location) {
-        return Err(AliError::InstallError {
-            error: Box::new(err),
-            action_failed: action_set_tz,
-            actions_performed: actions,
-        });
-    }
-
-    actions.push(action_set_tz);
-
-    let action_locale_gen = Action::LocaleGen;
-    if let Err(err) = locale_gen(install_location) {
+    let (action_locale_gen, cmd_locale_gen) = cmd_locale_gen();
+    if let Err(err) = shell::chroot(install_location, &cmd_locale_gen) {
         return Err(AliError::InstallError {
             error: Box::new(err),
             action_failed: action_locale_gen,
             actions_performed: actions,
         });
     }
-
     actions.push(action_locale_gen);
 
-    let action_locale_conf = Action::LocaleConf;
-    if let Err(err) = locale_conf(install_location) {
+    let (action_locale_conf, cmd_locale_conf) = cmd_locale_conf();
+    if let Err(err) = shell::chroot(install_location, &cmd_locale_conf) {
         return Err(AliError::InstallError {
             error: Box::new(err),
             action_failed: action_locale_conf,
             actions_performed: actions,
         });
     }
-
     actions.push(action_locale_conf);
 
     Ok(actions)
 }
 
-fn hostname(hostname: &Option<String>, install_location: &str) -> Result<(), AliError> {
-    let hostname = hostname
-        .clone()
-        .unwrap_or(defaults::DEFAULT_HOSTNAME.to_string());
-
-    let etc_hostname = format!("{install_location}/etc/hostname");
-
-    std::fs::write(&etc_hostname, hostname).map_err(|err| {
-        AliError::FileError(err, format!("failed to write hostname to {etc_hostname}"))
-    })
-}
-
-fn timezone(tz: &Option<String>, install_location: &str) -> Result<(), AliError> {
+fn cmd_link_timezone(tz: &Option<String>) -> (Action, String) {
     let tz = tz.clone().unwrap_or(defaults::DEFAULT_TIMEZONE.to_string());
+    let tz_cmd = format!("ln -s /usr/share/zoneinfo/{} /etc/localtime", tz);
 
-    let src = format!("{install_location}/usr/share/zoneinfo/{tz}");
-    let dst = format!("{install_location}/etc/localtime");
-
-    std::os::unix::fs::symlink(&src, &dst)
-        .map_err(|err| AliError::FileError(err, format!("failed to link timezone {src} to {dst}")))
+    (Action::SetTimezone(tz), tz_cmd)
 }
 
-// Copies {install_location}/etc/locale.gen to {install_location}/etc/locale.gen.pac,
-// overwrites the source file with default locale, and finally calling `locale-gen`
-fn locale_gen(install_location: &str) -> Result<(), AliError> {
-    let src = format!("{install_location}/etc/locale.gen");
-    let bak = format!("{src}.pac");
-    let locale_gen_pac = std::fs::read_to_string(&src)
-        .map_err(|err| AliError::FileError(err, format!("failed to read {src}")))?;
-
-    std::fs::write(&bak, locale_gen_pac).map_err(|err| {
-        AliError::FileError(
-            err,
-            format!("failed to write locale.gen to back up file {bak}"),
-        )
-    })?;
-
-    std::fs::write(&src, defaults::DEFAULT_LOCALE_GEN).map_err(|err| {
-        AliError::FileError(err, format!("failed to write default locale.gen to {src}"))
-    })?;
-
-    shell::exec("locale-gen", &[])
+// Appends defaults::DEFAULT_LOCALE_GEN to /etc/locale.gen
+fn cmd_locale_gen() -> (Action, String) {
+    (
+        Action::LocaleGen,
+        format!(
+            "echo {} >> /etc/locale.gen && locale-gen",
+            defaults::DEFAULT_LOCALE_GEN
+        ),
+    )
 }
 
-fn locale_conf(install_location: &str) -> Result<(), AliError> {
-    let dst = format!("{install_location}/etc/locale.conf");
-
-    std::fs::write(&dst, defaults::DEFAULT_LOCALE_CONF)
-        .map_err(|err| AliError::FileError(err, format!("failed to create new locale.conf {dst}")))
+fn cmd_locale_conf() -> (Action, String) {
+    (
+        Action::LocaleConf,
+        format!("echo {} > /etc/locale.conf", defaults::DEFAULT_LOCALE_CONF),
+    )
 }

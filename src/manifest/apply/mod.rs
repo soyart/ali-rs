@@ -174,6 +174,16 @@ pub fn apply_manifest(
     }
     actions.push(action_genfstab);
 
+    let action_set_hostname = Action::SetHostname;
+    if let Err(err) = routine::hostname(&manifest.hostname, &install_location) {
+        return Err(AliError::InstallError {
+            error: Box::new(err),
+            action_failed: action_set_hostname,
+            actions_performed: actions,
+        });
+    }
+    actions.push(action_set_hostname);
+
     let action_ali_archchroot = Action::AliArchChroot;
     match archchroot::ali(&manifest, &install_location) {
         Err(err) => {

@@ -38,6 +38,11 @@ pub fn exec(cmd: &str, args: &[&str]) -> Result<(), AliError> {
     }
 }
 
+// @TODO: test chroot on Arch
+pub fn chroot(location: &str, cmd: &str) -> Result<(), AliError> {
+    exec("arch-chroot", &[location, cmd])
+}
+
 #[ignore]
 #[test]
 fn test_exec() {
@@ -63,6 +68,7 @@ pub fn in_path(program: &str) -> bool {
 }
 
 #[cfg(test)]
+#[allow(unused)]
 pub mod test_utils {
     use super::exec;
     use crate::errors::AliError;

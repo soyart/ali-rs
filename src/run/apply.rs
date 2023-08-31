@@ -216,7 +216,7 @@ pub enum Action {
     SetHostname,
 
     #[serde(rename = "setTimezone")]
-    SetTimezone,
+    SetTimezone(String),
 
     #[serde(rename = "localeGen")]
     LocaleGen,
