@@ -160,21 +160,6 @@ pub fn apply_manifest(
     }
     actions.push(action_pacstrap);
 
-    let action_ali_archchroot = Action::AliArchChroot;
-    match archchroot::ali(&manifest, &install_location) {
-        Err(err) => {
-            return Err(AliError::InstallError {
-                error: Box::new(err),
-                action_failed: action_ali_archchroot,
-                actions_performed: actions,
-            });
-        }
-        Ok(actions_archchroot) => {
-            actions.extend(actions_archchroot);
-            actions.push(action_ali_archchroot);
-        }
-    }
-
     let action_ali_routine = Action::AliRoutine;
     match routine::apply_routine(manifest, &install_location) {
         Err(err) => {
@@ -187,6 +172,21 @@ pub fn apply_manifest(
         Ok(actions_routine) => {
             actions.extend(actions_routine);
             actions.push(action_ali_routine);
+        }
+    }
+
+    let action_ali_archchroot = Action::AliArchChroot;
+    match archchroot::ali(&manifest, &install_location) {
+        Err(err) => {
+            return Err(AliError::InstallError {
+                error: Box::new(err),
+                action_failed: action_ali_archchroot,
+                actions_performed: actions,
+            });
+        }
+        Ok(actions_archchroot) => {
+            actions.extend(actions_archchroot);
+            actions.push(action_ali_archchroot);
         }
     }
 
