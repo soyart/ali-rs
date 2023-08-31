@@ -2,6 +2,7 @@ use crate::defaults;
 use crate::errors::AliError;
 use crate::manifest::Manifest;
 use crate::run::apply::Action;
+use crate::utils::shell;
 
 pub fn ali(manifest: &Manifest, install_location: &str) -> Result<Vec<Action>, AliError> {
     let mut actions = Vec::new();
@@ -29,7 +30,7 @@ pub fn ali(manifest: &Manifest, install_location: &str) -> Result<Vec<Action>, A
     actions.push(action_set_tz);
 
     let action_locale_gen = Action::LocaleGen;
-    if let Err(err) = locale_gen() {
+    if let Err(err) = locale_gen(install_location) {
         return Err(AliError::InstallError {
             error: Box::new(err),
             action_failed: action_locale_gen,
@@ -40,7 +41,7 @@ pub fn ali(manifest: &Manifest, install_location: &str) -> Result<Vec<Action>, A
     actions.push(action_locale_gen);
 
     let action_locale_conf = Action::LocaleConf;
-    if let Err(err) = locale_conf() {
+    if let Err(err) = locale_conf(install_location) {
         return Err(AliError::InstallError {
             error: Box::new(err),
             action_failed: action_locale_conf,
@@ -75,10 +76,31 @@ fn timezone(tz: &Option<String>, install_location: &str) -> Result<(), AliError>
         .map_err(|err| AliError::FileError(err, format!("failed to link timezone {src} to {dst}")))
 }
 
-fn locale_gen() -> Result<(), AliError> {
-    Err(AliError::NotImplemented)
+// Copies {install_location}/etc/locale.gen to {install_location}/etc/locale.gen.pac,
+// overwrites the source file with default locale, and finally calling `locale-gen`
+fn locale_gen(install_location: &str) -> Result<(), AliError> {
+    let src = format!("{install_location}/etc/locale.gen");
+    let bak = format!("{src}.pac");
+    let locale_gen_pac = std::fs::read_to_string(&src)
+        .map_err(|err| AliError::FileError(err, format!("failed to read {src}")))?;
+
+    std::fs::write(&bak, locale_gen_pac).map_err(|err| {
+        AliError::FileError(
+            err,
+            format!("failed to write locale.gen to back up file {bak}"),
+        )
+    })?;
+
+    std::fs::write(&src, defaults::DEFAULT_LOCALE_GEN).map_err(|err| {
+        AliError::FileError(err, format!("failed to write default locale.gen to {src}"))
+    })?;
+
+    shell::exec("locale-gen", &[])
 }
 
-fn locale_conf() -> Result<(), AliError> {
-    Err(AliError::NotImplemented)
+fn locale_conf(install_location: &str) -> Result<(), AliError> {
+    let dst = format!("{install_location}/etc/locale.conf");
+
+    std::fs::write(&dst, defaults::DEFAULT_LOCALE_CONF)
+        .map_err(|err| AliError::FileError(err, format!("failed to create new locale.conf {dst}")))
 }

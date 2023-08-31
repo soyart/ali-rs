@@ -79,7 +79,7 @@ pub fn apply_manifest(
         }
     }
 
-    let install_location = location_env.unwrap_or(defaults::DEFAULT_CHROOT_LOC.to_string());
+    let install_location = location_env.unwrap_or(defaults::DEFAULT_INSTALL_LOCATION.to_string());
 
     // mkdir rootfs chroot mount
     match shell::exec("mkdir", &["-p", &install_location]) {
@@ -154,7 +154,7 @@ pub fn apply_manifest(
     }
 
     // Install packages (manifest.pacstraps) to install_location
-    let action_pacstrap = Action::InstallPackages { packages: packages };
+    let action_pacstrap = Action::InstallPackages { packages };
     if let Err(err) = routine::pacstrap_to_location(&manifest.pacstraps, &install_location) {
         return Err(AliError::InstallError {
             error: Box::new(err),
