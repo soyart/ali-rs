@@ -75,7 +75,7 @@ pub fn apply_manifest(
     }
 
     // mkdir rootfs chroot mount
-    match shell::exec("mkdir", &["-p", &install_location]) {
+    match shell::exec("mkdir", &["-p", install_location]) {
         Err(err) => {
             return Err(AliError::InstallError {
                 error: Box::new(err),
@@ -87,7 +87,7 @@ pub fn apply_manifest(
     }
 
     // Mount rootfs
-    match fs::mount_filesystem(&manifest.rootfs, &install_location) {
+    match fs::mount_filesystem(&manifest.rootfs, install_location) {
         Err(err) => {
             return Err(AliError::InstallError {
                 error: Box::new(err),
@@ -108,7 +108,7 @@ pub fn apply_manifest(
             .map(|fs| fs.mnt.clone().unwrap())
             .map(|mountpoint| {
                 (
-                    fs::prepend_base(&Some(&install_location), &mountpoint),
+                    fs::prepend_base(&Some(install_location), &mountpoint),
                     Action::Mkdir(mountpoint),
                 )
             })
@@ -128,7 +128,7 @@ pub fn apply_manifest(
         }
 
         // Mount other filesystems under /{DEFAULT_CHROOT_LOC}
-        match fs::mount_filesystems(&filesystems, &install_location) {
+        match fs::mount_filesystems(&filesystems, install_location) {
             Err(err) => {
                 return Err(AliError::InstallError {
                     error: Box::new(err),
@@ -148,7 +148,7 @@ pub fn apply_manifest(
 
     // Install packages (manifest.pacstraps) to install_location
     let action_pacstrap = Action::InstallPackages { packages };
-    if let Err(err) = pacstrap_to_location(&manifest.pacstraps, &install_location) {
+    if let Err(err) = pacstrap_to_location(&manifest.pacstraps, install_location) {
         return Err(AliError::InstallError {
             error: Box::new(err),
             action_failed: action_pacstrap,
@@ -158,7 +158,7 @@ pub fn apply_manifest(
     actions.push(action_pacstrap);
 
     let action_ali_routine = Action::AliRoutine;
-    match routine::apply_routine(manifest, &install_location) {
+    match routine::apply_routine(manifest, install_location) {
         Err(err) => {
             return Err(AliError::InstallError {
                 error: Box::new(err),
@@ -173,7 +173,7 @@ pub fn apply_manifest(
     }
 
     let action_ali_archchroot = Action::AliArchChroot;
-    match archchroot::ali(&manifest, &install_location) {
+    match archchroot::ali(&manifest, install_location) {
         Err(err) => {
             return Err(AliError::InstallError {
                 error: Box::new(err),
