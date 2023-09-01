@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use crate::cli;
-use crate::defaults;
+use crate::constants::{self, defaults};
 use crate::errors::AliError;
 use crate::manifest::apply;
 use crate::manifest::validation;
@@ -61,7 +61,7 @@ pub(super) fn run(manifest_file: &str, args: cli::ArgsApply) -> Result<Report, A
 }
 
 fn install_location() -> String {
-    env::var(defaults::ENV_ALI_LOC).unwrap_or(defaults::DEFAULT_INSTALL_LOCATION.to_string())
+    env::var(constants::ENV_ALI_LOC).unwrap_or(defaults::INSTALL_LOCATION.to_string())
 }
 
 // Update manifest to suit the manifest

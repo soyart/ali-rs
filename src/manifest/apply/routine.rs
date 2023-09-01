@@ -1,4 +1,4 @@
-use crate::defaults;
+use crate::constants::defaults;
 use crate::errors::AliError;
 use crate::manifest::apply::Action;
 use crate::manifest::Manifest;
@@ -46,9 +46,7 @@ fn genfstab_uuid(install_location: &str) -> Result<(), AliError> {
 }
 
 fn hostname(hostname: &Option<String>, install_location: &str) -> Result<(), AliError> {
-    let hostname = hostname
-        .clone()
-        .unwrap_or(defaults::DEFAULT_HOSTNAME.to_string());
+    let hostname = hostname.clone().unwrap_or(defaults::HOSTNAME.to_string());
 
     let etc_hostname = format!("{install_location}/etc/hostname");
 
@@ -60,7 +58,7 @@ fn hostname(hostname: &Option<String>, install_location: &str) -> Result<(), Ali
 fn locale_conf(install_location: &str) -> Result<(), AliError> {
     let dst = format!("{install_location}/etc/locale.conf");
 
-    std::fs::write(&dst, defaults::DEFAULT_LOCALE_CONF)
+    std::fs::write(&dst, defaults::LOCALE_CONF)
         .map_err(|err| AliError::FileError(err, format!("failed to create new locale.conf {dst}")))
 }
 

@@ -1,6 +1,6 @@
 mod blk; // Block device validation
 
-use crate::defaults;
+use crate::constants::defaults;
 use crate::entity::ValidationReport;
 use crate::errors::AliError;
 use crate::manifest::Manifest;
@@ -38,7 +38,7 @@ pub fn validate(manifest: &Manifest, overwrite: bool) -> Result<ValidationReport
         manifest
             .timezone
             .clone()
-            .unwrap_or(defaults::DEFAULT_TIMEZONE.into())
+            .unwrap_or(defaults::TIMEZONE.into())
     );
 
     // Check all commands used by ALI before ch-root

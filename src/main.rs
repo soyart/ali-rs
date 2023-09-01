@@ -1,5 +1,5 @@
 mod cli;
-mod defaults;
+mod constants;
 mod entity;
 mod errors;
 mod linux;

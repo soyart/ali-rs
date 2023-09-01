@@ -1,4 +1,4 @@
-use crate::defaults;
+use crate::constants::defaults;
 use crate::errors::AliError;
 use crate::manifest::Manifest;
 use crate::run::apply::Action;
@@ -32,7 +32,7 @@ pub fn ali(manifest: &Manifest, install_location: &str) -> Result<Vec<Action>, A
 }
 
 fn cmd_link_timezone(tz: &Option<String>) -> (Action, String) {
-    let tz = tz.clone().unwrap_or(defaults::DEFAULT_TIMEZONE.to_string());
+    let tz = tz.clone().unwrap_or(defaults::TIMEZONE.to_string());
     let tz_cmd = format!("ln -s /usr/share/zoneinfo/{} /etc/localtime", tz);
 
     (Action::SetTimezone(tz), tz_cmd)
@@ -44,7 +44,7 @@ fn cmd_locale_gen() -> (Action, String) {
         Action::LocaleGen,
         format!(
             "echo {} >> /etc/locale.gen && locale-gen",
-            defaults::DEFAULT_LOCALE_GEN
+            defaults::LOCALE_GEN
         ),
     )
 }
