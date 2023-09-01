@@ -1,6 +1,6 @@
 mod blk; // Block device validation
 
-use crate::constants::defaults;
+use crate::constants::{self, defaults};
 use crate::entity::ValidationReport;
 use crate::errors::AliError;
 use crate::manifest::Manifest;
@@ -42,7 +42,7 @@ pub fn validate(manifest: &Manifest, overwrite: bool) -> Result<ValidationReport
     );
 
     // Check all commands used by ALI before ch-root
-    for cmd in &["arch-chroot"] {
+    for cmd in constants::REQUIRED_COMMANDS {
         if !shell::in_path(cmd) {
             return Err(AliError::Validation(format!("command {cmd} not in path")));
         }
