@@ -102,29 +102,28 @@ pub fn apply_manifest(
     if let Some(filesystems) = &manifest.filesystems {
         // Collect filesystems mountpoints and actions.
         // The mountpoints will be prepended with default base
-        let mountpoints = filesystems
+        let mountpoints: Vec<(String, Action)> = filesystems
             .iter()
-            .filter(|fs| fs.mnt.is_some())
-            .map(|fs| fs.mnt.clone().unwrap())
-            .map(|mountpoint| {
-                (
+            .filter_map(|fs| match fs.mnt.clone() {
+                Some(mountpoint) => Some((
                     fs::prepend_base(&Some(install_location), &mountpoint),
                     Action::Mkdir(mountpoint),
-                )
+                )),
+                None => None,
             })
-            .collect::<Vec<(String, Action)>>();
+            .collect();
 
         // mkdir -p /{DEFAULT_CHROOT_LOC}/{mkdir_path}
-        for mkdir_path in mountpoints {
-            if let Err(err) = shell::exec("mkdir", &[&mkdir_path.0]) {
+        for (dir, action_mkdir) in mountpoints {
+            if let Err(err) = shell::exec("mkdir", &[&dir]) {
                 return Err(AliError::InstallError {
                     error: Box::new(err),
-                    action_failed: mkdir_path.1,
+                    action_failed: action_mkdir,
                     actions_performed: actions,
                 });
             }
 
-            actions.push(mkdir_path.1);
+            actions.push(action_mkdir);
         }
 
         // Mount other filesystems under /{DEFAULT_CHROOT_LOC}
