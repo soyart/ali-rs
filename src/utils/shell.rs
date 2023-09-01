@@ -43,14 +43,14 @@ pub fn chroot(location: &str, cmd: &str) -> Result<(), AliError> {
     exec("arch-chroot", &[location, cmd])
 }
 
-// Surrounds `cmd_str` with single quotes to execute:
+// Execute cmd_str with `sh -c`:
 /// ```shell
-/// sh -c '{cmd_str}'
+/// sh -c {cmd_str}
 /// ```
 ///
 /// cmd_str MUST NOT be surrounded beforehand
 pub fn sh_c(cmd_str: &str) -> Result<(), AliError> {
-    exec("sh", &["-c", &format!("'{cmd_str}'")])
+    exec("sh", &["-c", cmd_str])
 }
 
 #[ignore]
@@ -59,15 +59,15 @@ fn test_shell_fns() {
     use super::fs::file_exists;
 
     exec("echo", &["hello, world!"]).expect("failed to execute `echo \"hello, world!\"` command");
-    exec("echo", &["hello", " world!"])
-        .expect("failed to execute `echo \"hello\" \" world!\"` command");
+    exec("echo", &["hello,", "world!"])
+        .expect("failed to execute `echo \"hello,\" \" world!\"` command");
 
     exec("ls", &["-al", "./src"]).expect("failed to execute `ls -al ./src`");
     exec("sh", &["-c", "ls -al ./src"]).expect("failed to execute `sh -c \"ls -al ./src\"`");
 
     sh_c("ls -al ./src").expect("failed to use sh_c to execute `ls -al ./src`");
-    sh_c("touch boobs").expect("failed to use sh_c to execute `touch boobs`");
-    assert!(file_exists("boobs"));
+    sh_c("touch ./boobs").expect("failed to use sh_c to execute `touch boobs`");
+    assert!(file_exists("./boobs"));
 
     sh_c("touch ./boobs && rm ./boobs")
         .expect("failed to use sh_c to execute `touch boobs && rm boobs`");
