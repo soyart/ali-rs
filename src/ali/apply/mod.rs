@@ -51,7 +51,7 @@ pub fn apply_manifest(
         Err(err) => {
             return Err(AliError::InstallError {
                 error: Box::new(err),
-                action_failed: Box::new(Action::CreateRootFs),
+                action_failed: Box::new(Action::ApplyRootfs),
                 actions_performed: actions,
             });
         }

@@ -5,8 +5,9 @@ use crate::run::apply::Action;
 
 pub fn apply_disks(disks: &[ali::ManifestDisk]) -> Result<Vec<Action>, AliError> {
     let mut actions = Vec::new();
+
     for disk in disks.iter() {
-        let action_prepare = Action::PrepareDisk {
+        let action_apply_disk = Action::ApplyDisk {
             deviec: disk.device.clone(),
         };
 
@@ -14,13 +15,13 @@ pub fn apply_disks(disks: &[ali::ManifestDisk]) -> Result<Vec<Action>, AliError>
             Err(err) => {
                 return Err(AliError::InstallError {
                     error: Box::new(err),
-                    action_failed: Box::new(action_prepare),
+                    action_failed: Box::new(action_apply_disk),
                     actions_performed: actions,
                 });
             }
             Ok(disk_actions) => {
                 actions.extend(disk_actions);
-                actions.push(action_prepare);
+                actions.push(action_apply_disk);
             }
         }
     }
@@ -29,13 +30,22 @@ pub fn apply_disks(disks: &[ali::ManifestDisk]) -> Result<Vec<Action>, AliError>
 }
 
 pub fn apply_disk(disk: &ali::ManifestDisk) -> Result<Vec<Action>, AliError> {
-    let cmd_create_table = fdisk::create_table_cmd(&disk.table);
-    fdisk::run_fdisk_cmd(&disk.device, &cmd_create_table)?;
+    let mut actions = Vec::new();
 
-    let mut actions = vec![Action::CreatePartitionTable {
+    let action_create_table = Action::CreatePartitionTable {
         device: disk.device.clone(),
         table: disk.table.clone(),
-    }];
+    };
+    let cmd_create_table = fdisk::create_table_cmd(&disk.table);
+    if let Err(err) = fdisk::run_fdisk_cmd(&disk.device, &cmd_create_table) {
+        return Err(AliError::InstallError {
+            error: Box::new(err),
+            action_failed: Box::new(action_create_table),
+            actions_performed: actions,
+        });
+    }
+
+    actions.push(action_create_table);
 
     // Actions:
     // 1. Create partition
@@ -60,7 +70,7 @@ pub fn apply_disk(disk: &ali::ManifestDisk) -> Result<Vec<Action>, AliError> {
 
         actions.push(action_create_partition);
 
-        let action_set_type = Action::SetPartitionType {
+        let action_set_part_type = Action::SetPartitionType {
             device: disk.device.clone(),
             number: partition_number,
             partition_type: part.part_type.clone(),
@@ -72,12 +82,12 @@ pub fn apply_disk(disk: &ali::ManifestDisk) -> Result<Vec<Action>, AliError> {
         if let Err(err) = result_set_type {
             return Err(AliError::InstallError {
                 error: Box::new(err),
-                action_failed: Box::new(action_set_type),
+                action_failed: Box::new(action_set_part_type),
                 actions_performed: actions,
             });
         }
 
-        actions.push(action_set_type);
+        actions.push(action_set_part_type);
     }
 
     Ok(actions)

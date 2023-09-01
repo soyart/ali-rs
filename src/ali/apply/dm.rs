@@ -5,12 +5,13 @@ use crate::run::apply::Action;
 
 pub fn apply_dms(dms: &[Dm]) -> Result<Vec<Action>, AliError> {
     let mut actions = Vec::new();
+
     for dm in dms {
         let result = apply_dm(dm);
         if let Err(err) = result {
             return Err(AliError::InstallError {
                 error: Box::new(err),
-                action_failed: Box::new(Action::PrepareDm),
+                action_failed: Box::new(Action::ApplyDm),
                 actions_performed: actions,
             });
         }
@@ -25,7 +26,8 @@ pub fn apply_dm(dm: &Dm) -> Result<Vec<Action>, AliError> {
     match dm {
         Dm::Luks(_) => Err(AliError::NotImplemented),
         Dm::Lvm(lvm) => {
-            let mut actions = vec![];
+            let mut actions = Vec::new();
+
             if let Some(pvs) = &lvm.pvs {
                 for pv in pvs {
                     let action_create_pv = Action::CreateDmLvmPv(pv.clone());

@@ -125,22 +125,23 @@ fn update_manifest(manifest: &mut Manifest) {
     }
 }
 
+// @TODO: stages
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Action {
     #[serde(rename = "applyDisks")]
     ApplyDisks,
 
+    #[serde(rename = "applyDisk")]
+    ApplyDisk { deviec: String },
+
     #[serde(rename = "applyDms")]
     ApplyDms,
 
-    #[serde(rename = "prepareDisk")]
-    PrepareDisk { deviec: String },
+    #[serde(rename = "applyDm")]
+    ApplyDm,
 
-    #[serde(rename = "prepareDm")]
-    PrepareDm,
-
-    #[serde(rename = "createRootFs")]
-    CreateRootFs,
+    #[serde(rename = "applyRootFs")]
+    ApplyRootfs,
 
     #[serde(rename = "applyFilesystems")]
     ApplyFilesystems,
