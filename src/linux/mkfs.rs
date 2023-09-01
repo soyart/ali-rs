@@ -12,5 +12,5 @@ pub fn create_fs(fs: &ManifestFs) -> Result<(), AliError> {
         None => format!("'mkfs.{} {}'", fs.fs_type, fs.device),
     };
 
-    shell::exec("sh", &["-c", &cmd_mkfs])
+    shell::sh_c(&cmd_mkfs)
 }

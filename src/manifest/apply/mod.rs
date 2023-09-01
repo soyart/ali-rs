@@ -214,7 +214,7 @@ pub fn apply_manifest(
 
         for cmd in cmds {
             let action_postinstall_cmd = Action::UserPostInstallCmd(cmd.clone());
-            if let Err(err) = shell::exec("sh", &["-c", &format!("'{cmd}'")]) {
+            if let Err(err) = shell::sh_c(cmd) {
                 return Err(AliError::InstallError {
                     error: Box::new(err),
                     action_failed: Box::new(action_user_postinstall),
@@ -251,5 +251,5 @@ fn pacstrap_to_location(
         cmd_parts.join(" ")
     };
 
-    shell::exec("sh", &["-c", &format!("'{cmd_pacstrap}'")])
+    shell::sh_c(&cmd_pacstrap)
 }

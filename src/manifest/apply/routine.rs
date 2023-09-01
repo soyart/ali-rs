@@ -41,8 +41,7 @@ pub fn apply_routine(manifest: &Manifest, install_location: &str) -> Result<Vec<
 }
 
 fn genfstab_uuid(install_location: &str) -> Result<(), AliError> {
-    let cmd = cmd_genfstab(install_location);
-    shell::exec("sh", &["-c", &format!("'{cmd}'")])
+    shell::sh_c(&cmd_genfstab_uuid(install_location))
 }
 
 fn hostname(hostname: &Option<String>, install_location: &str) -> Result<(), AliError> {
@@ -63,6 +62,6 @@ fn locale_conf(install_location: &str) -> Result<(), AliError> {
 }
 
 #[inline(always)]
-fn cmd_genfstab(install_location: &str) -> String {
+fn cmd_genfstab_uuid(install_location: &str) -> String {
     format!("genfstab -U {install_location} >> {install_location}/etc/fstab")
 }

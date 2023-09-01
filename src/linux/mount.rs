@@ -20,5 +20,5 @@ pub fn mount_fs(fs: &ManifestFs) -> Result<(), AliError> {
         None => format!("mount {} {mount_point}", fs.device),
     };
 
-    shell::exec("sh", &["-c", &cmd_mount])
+    shell::sh_c(&cmd_mount)
 }
