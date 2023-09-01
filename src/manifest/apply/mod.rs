@@ -157,6 +157,7 @@ pub fn apply_manifest(
     }
     actions.push(action_pacstrap);
 
+    // Apply ALI routine installation outside of arch-chroot
     let action_ali_routine = Action::AliRoutine;
     match routine::apply_routine(manifest, install_location) {
         Err(err) => {
@@ -172,6 +173,7 @@ pub fn apply_manifest(
         }
     }
 
+    // Apply ALI routine installation in arch-chroot
     let action_ali_archchroot = Action::AliArchChroot;
     match archchroot::ali(manifest, install_location) {
         Err(err) => {
@@ -187,6 +189,7 @@ pub fn apply_manifest(
         }
     }
 
+    // Apply manifest.chroot
     if let Some(ref cmds) = manifest.chroot {
         let action_user_archchroot = Action::UserArchChroot;
 
@@ -203,6 +206,26 @@ pub fn apply_manifest(
                 actions.push(action_user_archchroot);
             }
         }
+    }
+
+    // Apply manifest.postinstall with sh -c 'cmd'
+    if let Some(ref cmds) = manifest.postinstall {
+        let action_user_postinstall = Action::UserPostInstall;
+
+        for cmd in cmds {
+            let action_postinstall_cmd = Action::UserPostInstallCmd(cmd.clone());
+            if let Err(err) = shell::exec("sh", &["-c", &format!("'{cmd}'")]) {
+                return Err(AliError::InstallError {
+                    error: Box::new(err),
+                    action_failed: Box::new(action_user_postinstall),
+                    actions_performed: actions,
+                });
+            }
+
+            actions.push(action_postinstall_cmd);
+        }
+
+        actions.push(action_user_postinstall);
     }
 
     Ok(actions)

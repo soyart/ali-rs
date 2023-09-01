@@ -210,9 +210,6 @@ pub enum Action {
     #[serde(rename = "aliRoutine")]
     AliRoutine,
 
-    #[serde(rename = "genfstab")]
-    GenFstab,
-
     #[serde(rename = "aliArchChroot")]
     AliArchChroot,
 
@@ -221,6 +218,15 @@ pub enum Action {
 
     #[serde(rename = "userArchChrootCmd")]
     UserArchChrootCmd(String),
+
+    #[serde(rename = "userPostInstall")]
+    UserPostInstall,
+
+    #[serde(rename = "userPostInstallCmd")]
+    UserPostInstallCmd(String),
+
+    #[serde(rename = "genfstab")]
+    GenFstab,
 
     #[serde(rename = "setHostname")]
     SetHostname,
@@ -233,12 +239,6 @@ pub enum Action {
 
     #[serde(rename = "localeConf")]
     LocaleConf,
-
-    #[serde(rename = "commandsChroot")]
-    RunCommandsChroot { commands: Vec<String> },
-
-    #[serde(rename = "commandsPostInstall")]
-    RunCommandsPostInstall { commands: Vec<String> },
 }
 
 #[ignore = "Ignored because just dummy print JSON"]
