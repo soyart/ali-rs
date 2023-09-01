@@ -207,14 +207,20 @@ pub enum Action {
     #[serde(rename = "installPackages")]
     InstallPackages { packages: HashSet<String> },
 
-    #[serde(rename = "AliRoutine")]
+    #[serde(rename = "aliRoutine")]
     AliRoutine,
-
-    #[serde(rename = "AliArchChroot")]
-    AliArchChroot,
 
     #[serde(rename = "genfstab")]
     GenFstab,
+
+    #[serde(rename = "aliArchChroot")]
+    AliArchChroot,
+
+    #[serde(rename = "userArchChroot")]
+    UserArchChroot,
+
+    #[serde(rename = "userArchChrootCmd")]
+    UserArchChrootCmd(String),
 
     #[serde(rename = "setHostname")]
     SetHostname,

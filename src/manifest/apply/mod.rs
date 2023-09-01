@@ -187,6 +187,24 @@ pub fn apply_manifest(
         }
     }
 
+    if let Some(ref cmds) = manifest.chroot {
+        let action_user_archchroot = Action::UserArchChroot;
+
+        match archchroot::user_chroot(cmds.iter(), install_location) {
+            Err(err) => {
+                return Err(AliError::InstallError {
+                    error: Box::new(err),
+                    action_failed: Box::new(action_user_archchroot),
+                    actions_performed: actions,
+                });
+            }
+            Ok(actions_user_cmds) => {
+                actions.extend(actions_user_cmds);
+                actions.push(action_user_archchroot);
+            }
+        }
+    }
+
     Ok(actions)
 }
 
