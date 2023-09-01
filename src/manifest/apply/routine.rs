@@ -11,7 +11,7 @@ pub fn apply_routine(manifest: &Manifest, install_location: &str) -> Result<Vec<
     if let Err(err) = genfstab_uuid(install_location) {
         return Err(AliError::InstallError {
             error: Box::new(err),
-            action_failed: action_genfstab,
+            action_failed: Box::new(action_genfstab),
             actions_performed: actions,
         });
     }
@@ -21,7 +21,7 @@ pub fn apply_routine(manifest: &Manifest, install_location: &str) -> Result<Vec<
     if let Err(err) = hostname(&manifest.hostname, install_location) {
         return Err(AliError::InstallError {
             error: Box::new(err),
-            action_failed: action_set_hostname,
+            action_failed: Box::new(action_set_hostname),
             actions_performed: actions,
         });
     }
@@ -31,7 +31,7 @@ pub fn apply_routine(manifest: &Manifest, install_location: &str) -> Result<Vec<
     if let Err(err) = locale_conf(install_location) {
         return Err(AliError::InstallError {
             error: Box::new(err),
-            action_failed: action_locale_conf,
+            action_failed: Box::new(action_locale_conf),
             actions_performed: actions,
         });
     }

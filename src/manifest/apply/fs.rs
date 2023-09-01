@@ -45,7 +45,7 @@ pub fn apply_filesystems(filesystems: &[ManifestFs]) -> Result<Vec<Action>, AliE
             Err(err) => {
                 return Err(AliError::InstallError {
                     error: Box::new(err),
-                    action_failed: action_create_fs,
+                    action_failed: Box::new(action_create_fs),
                     actions_performed: actions,
                 });
             }
@@ -76,7 +76,7 @@ pub fn mount_filesystems(filesystems: &[ManifestFs], base: &str) -> Result<Vec<A
             Err(err) => {
                 return Err(AliError::InstallError {
                     error: Box::new(err),
-                    action_failed: action_mount_fs,
+                    action_failed: Box::new(action_mount_fs),
                     actions_performed: actions,
                 });
             }

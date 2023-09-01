@@ -14,7 +14,7 @@ pub fn apply_disks(disks: &[manifest::ManifestDisk]) -> Result<Vec<Action>, AliE
             Err(err) => {
                 return Err(AliError::InstallError {
                     error: Box::new(err),
-                    action_failed: action_prepare,
+                    action_failed: Box::new(action_prepare),
                     actions_performed: actions,
                 });
             }
@@ -53,7 +53,7 @@ pub fn apply_disk(disk: &manifest::ManifestDisk) -> Result<Vec<Action>, AliError
         if let Err(err) = fdisk::run_fdisk_cmd(&disk.device, &cmd_create_part) {
             return Err(AliError::InstallError {
                 error: Box::new(err),
-                action_failed: action_create_partition,
+                action_failed: Box::new(action_create_partition),
                 actions_performed: actions,
             });
         }
@@ -72,7 +72,7 @@ pub fn apply_disk(disk: &manifest::ManifestDisk) -> Result<Vec<Action>, AliError
         if let Err(err) = result_set_type {
             return Err(AliError::InstallError {
                 error: Box::new(err),
-                action_failed: action_set_type,
+                action_failed: Box::new(action_set_type),
                 actions_performed: actions,
             });
         }

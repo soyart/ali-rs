@@ -34,7 +34,7 @@ pub enum AliError {
     #[error("installation error")]
     InstallError {
         error: Box<AliError>,
-        action_failed: Action,
+        action_failed: Box<Action>,
         actions_performed: Vec<Action>,
     },
 

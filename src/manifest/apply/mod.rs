@@ -24,7 +24,7 @@ pub fn apply_manifest(
             Err(err) => {
                 return Err(AliError::InstallError {
                     error: Box::new(err),
-                    action_failed: Action::ApplyDisks,
+                    action_failed: Box::new(Action::ApplyDisks),
                     actions_performed: actions,
                 })
             }
@@ -38,7 +38,7 @@ pub fn apply_manifest(
             Err(err) => {
                 return Err(AliError::InstallError {
                     error: Box::new(err),
-                    action_failed: Action::ApplyDms,
+                    action_failed: Box::new(Action::ApplyDms),
                     actions_performed: actions,
                 })
             }
@@ -51,7 +51,7 @@ pub fn apply_manifest(
         Err(err) => {
             return Err(AliError::InstallError {
                 error: Box::new(err),
-                action_failed: Action::CreateRootFs,
+                action_failed: Box::new(Action::CreateRootFs),
                 actions_performed: actions,
             });
         }
@@ -64,7 +64,7 @@ pub fn apply_manifest(
             Err(err) => {
                 return Err(AliError::InstallError {
                     error: Box::new(err),
-                    action_failed: Action::ApplyFilesystems,
+                    action_failed: Box::new(Action::ApplyFilesystems),
                     actions_performed: actions,
                 });
             }
@@ -79,7 +79,7 @@ pub fn apply_manifest(
         Err(err) => {
             return Err(AliError::InstallError {
                 error: Box::new(err),
-                action_failed: Action::MkdirRootFs,
+                action_failed: Box::new(Action::MkdirRootFs),
                 actions_performed: actions,
             });
         }
@@ -91,7 +91,7 @@ pub fn apply_manifest(
         Err(err) => {
             return Err(AliError::InstallError {
                 error: Box::new(err),
-                action_failed: Action::MountRootFs,
+                action_failed: Box::new(Action::MountRootFs),
                 actions_performed: actions,
             });
         }
@@ -119,7 +119,7 @@ pub fn apply_manifest(
             if let Err(err) = shell::exec("mkdir", &[&dir]) {
                 return Err(AliError::InstallError {
                     error: Box::new(err),
-                    action_failed: action_mkdir,
+                    action_failed: Box::new(action_mkdir),
                     actions_performed: actions,
                 });
             }
@@ -132,7 +132,7 @@ pub fn apply_manifest(
             Err(err) => {
                 return Err(AliError::InstallError {
                     error: Box::new(err),
-                    action_failed: Action::MountFilesystems,
+                    action_failed: Box::new(Action::MountFilesystems),
                     actions_performed: actions,
                 });
             }
@@ -151,7 +151,7 @@ pub fn apply_manifest(
     if let Err(err) = pacstrap_to_location(&manifest.pacstraps, install_location) {
         return Err(AliError::InstallError {
             error: Box::new(err),
-            action_failed: action_pacstrap,
+            action_failed: Box::new(action_pacstrap),
             actions_performed: actions,
         });
     }
@@ -162,7 +162,7 @@ pub fn apply_manifest(
         Err(err) => {
             return Err(AliError::InstallError {
                 error: Box::new(err),
-                action_failed: action_ali_routine,
+                action_failed: Box::new(action_ali_routine),
                 actions_performed: actions,
             });
         }
@@ -177,7 +177,7 @@ pub fn apply_manifest(
         Err(err) => {
             return Err(AliError::InstallError {
                 error: Box::new(err),
-                action_failed: action_ali_archchroot,
+                action_failed: Box::new(action_ali_archchroot),
                 actions_performed: actions,
             });
         }

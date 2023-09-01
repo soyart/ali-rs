@@ -10,7 +10,7 @@ pub fn apply_dms(dms: &[Dm]) -> Result<Vec<Action>, AliError> {
         if let Err(err) = result {
             return Err(AliError::InstallError {
                 error: Box::new(err),
-                action_failed: Action::PrepareDm,
+                action_failed: Box::new(Action::PrepareDm),
                 actions_performed: actions,
             });
         }

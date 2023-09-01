@@ -126,7 +126,7 @@ pub(super) fn sys_lvms(lvs_cmd: &str, pvs_cmd: &str) -> HashMap<String, BlockDev
             continue;
         }
 
-        let line = line.split_whitespace().collect::<Vec<&str>>();
+        let line: Vec<&str> = line.split_whitespace().collect();
 
         if line.len() < 2 {
             continue;

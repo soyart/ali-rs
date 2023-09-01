@@ -12,7 +12,7 @@ pub fn ali(manifest: &Manifest, install_location: &str) -> Result<Vec<Action>, A
     if let Err(err) = shell::chroot(install_location, &cmd_tz) {
         return Err(AliError::InstallError {
             error: Box::new(err),
-            action_failed: action_tz,
+            action_failed: Box::new(action_tz),
             actions_performed: actions,
         });
     }
@@ -22,7 +22,7 @@ pub fn ali(manifest: &Manifest, install_location: &str) -> Result<Vec<Action>, A
     if let Err(err) = shell::chroot(install_location, &cmd_locale_gen) {
         return Err(AliError::InstallError {
             error: Box::new(err),
-            action_failed: action_locale_gen,
+            action_failed: Box::new(action_locale_gen),
             actions_performed: actions,
         });
     }
