@@ -6,8 +6,8 @@ mod routine;
 
 use std::collections::HashSet;
 
+use crate::ali::Manifest;
 use crate::errors::AliError;
-use crate::manifest::Manifest;
 use crate::run::apply::Action;
 use crate::utils::shell;
 

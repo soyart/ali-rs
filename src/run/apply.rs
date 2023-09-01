@@ -5,12 +5,12 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
+use crate::ali::apply;
+use crate::ali::validation;
+use crate::ali::{self, Dm, Manifest};
 use crate::cli;
 use crate::constants::{self, defaults};
 use crate::errors::AliError;
-use crate::manifest::apply;
-use crate::manifest::validation;
-use crate::manifest::{self, Dm, Manifest};
 
 #[derive(Debug)]
 pub struct Report {
@@ -160,7 +160,7 @@ pub enum Action {
     #[serde(rename = "createPartitionTable")]
     CreatePartitionTable {
         device: String,
-        table: manifest::PartitionTable,
+        table: ali::PartitionTable,
     },
 
     #[serde(rename = "createPartition")]
@@ -245,7 +245,7 @@ pub enum Action {
 #[test]
 // Dummy function to see JSON result
 fn test_json_actions() {
-    use manifest::PartitionTable;
+    use ali::PartitionTable;
 
     let actions = vec![
         Action::CreatePartitionTable {

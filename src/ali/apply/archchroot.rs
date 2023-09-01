@@ -1,6 +1,6 @@
+use crate::ali::Manifest;
 use crate::constants::defaults;
 use crate::errors::AliError;
-use crate::manifest::Manifest;
 use crate::run::apply::Action;
 use crate::utils::shell;
 

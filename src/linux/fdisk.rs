@@ -3,8 +3,8 @@
 ///
 use std::process::{Command, Stdio};
 
+use crate::ali::{ManifestPartition, PartitionTable};
 use crate::errors::AliError;
-use crate::manifest::{ManifestPartition, PartitionTable};
 
 /// Returns fdisk cmd string for creating gpt/msdos partition table
 pub fn create_table_cmd(table: &PartitionTable) -> String {

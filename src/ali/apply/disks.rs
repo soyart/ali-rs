@@ -1,9 +1,9 @@
+use crate::ali;
 use crate::errors::AliError;
 use crate::linux::fdisk;
-use crate::manifest;
 use crate::run::apply::Action;
 
-pub fn apply_disks(disks: &[manifest::ManifestDisk]) -> Result<Vec<Action>, AliError> {
+pub fn apply_disks(disks: &[ali::ManifestDisk]) -> Result<Vec<Action>, AliError> {
     let mut actions = Vec::new();
     for disk in disks.iter() {
         let action_prepare = Action::PrepareDisk {
@@ -28,7 +28,7 @@ pub fn apply_disks(disks: &[manifest::ManifestDisk]) -> Result<Vec<Action>, AliE
     Ok(actions)
 }
 
-pub fn apply_disk(disk: &manifest::ManifestDisk) -> Result<Vec<Action>, AliError> {
+pub fn apply_disk(disk: &ali::ManifestDisk) -> Result<Vec<Action>, AliError> {
     let cmd_create_table = fdisk::create_table_cmd(&disk.table);
     fdisk::run_fdisk_cmd(&disk.device, &cmd_create_table)?;
 

@@ -1,5 +1,5 @@
+use crate::ali::ManifestFs;
 use crate::errors::AliError;
-use crate::manifest::ManifestFs;
 use crate::utils::shell;
 
 /// Executes:

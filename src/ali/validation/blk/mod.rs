@@ -3,9 +3,9 @@ mod trace_blk;
 
 use std::collections::{HashMap, HashSet, LinkedList};
 
+use crate::ali::{Dm, Manifest};
 use crate::entity::{blockdev::*, parse_human_bytes};
 use crate::errors::AliError;
-use crate::manifest::{Dm, Manifest};
 use crate::utils::fs::file_exists;
 
 pub fn validate(manifest: &Manifest, overwrite: bool) -> Result<BlockDevPaths, AliError> {
@@ -333,7 +333,7 @@ impl std::fmt::Display for BlockDevType {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::manifest::*;
+    use crate::ali::*;
 
     #[derive(Debug)]
     struct Test {

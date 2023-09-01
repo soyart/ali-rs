@@ -1,6 +1,6 @@
+use crate::ali::ManifestFs;
 use crate::errors::AliError;
 use crate::linux;
-use crate::manifest::ManifestFs;
 use crate::run::apply::Action;
 
 pub fn apply_filesystem(filesystem: &ManifestFs) -> Result<Action, AliError> {

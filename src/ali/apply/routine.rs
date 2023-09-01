@@ -1,7 +1,7 @@
+use crate::ali::apply::Action;
+use crate::ali::Manifest;
 use crate::constants::defaults;
 use crate::errors::AliError;
-use crate::manifest::apply::Action;
-use crate::manifest::Manifest;
 use crate::utils::shell;
 
 pub fn apply_routine(manifest: &Manifest, install_location: &str) -> Result<Vec<Action>, AliError> {

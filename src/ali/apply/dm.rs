@@ -1,6 +1,6 @@
+use crate::ali::Dm;
 use crate::errors::AliError;
 use crate::linux;
-use crate::manifest::Dm;
 use crate::run::apply::Action;
 
 pub fn apply_dms(dms: &[Dm]) -> Result<Vec<Action>, AliError> {

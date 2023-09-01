@@ -1,9 +1,9 @@
 use std::collections::{HashMap, LinkedList};
 
+use crate::ali::{self, validation::*};
+use crate::ali::{ManifestLuks, ManifestLvmLv, ManifestLvmVg};
 use crate::entity::{blockdev::*, parse_human_bytes};
 use crate::errors::AliError;
-use crate::manifest::{self, validation::*};
-use crate::manifest::{ManifestLuks, ManifestLvmLv, ManifestLvmVg};
 
 #[inline(always)]
 fn is_luks_base(dev_type: &BlockDevType) -> bool {
@@ -40,12 +40,12 @@ fn is_lv_base(dev_type: &BlockDevType) -> bool {
 // Only the last LV on each VG could be unsized
 // (uses 100% of the remaining space)
 #[inline]
-pub fn validate_lv_size(dms: &[manifest::Dm]) -> Result<(), AliError> {
+pub fn validate_lv_size(dms: &[ali::Dm]) -> Result<(), AliError> {
     // Collect VG -> LVs
     let mut vg_lvs: HashMap<String, Vec<ManifestLvmLv>> = HashMap::new();
     for dm in dms {
         match dm {
-            manifest::Dm::Lvm(lvm) => {
+            ali::Dm::Lvm(lvm) => {
                 if lvm.lvs.is_none() {
                     continue;
                 }

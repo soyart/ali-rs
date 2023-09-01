@@ -1,9 +1,9 @@
+mod ali;
 mod cli;
 mod constants;
 mod entity;
 mod errors;
 mod linux;
-mod manifest;
 mod run;
 mod utils;
 
