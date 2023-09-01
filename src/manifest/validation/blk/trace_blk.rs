@@ -113,6 +113,7 @@ pub(super) fn sys_fs(output_blkid: &str) -> HashMap<String, BlockDevType> {
 // and we construct VGs based on LVs and PVs
 //
 // Note: Takes in `lvs_cmd` and `pvs_cmd` to allow tests.
+#[allow(clippy::get_first)]
 pub(super) fn sys_lvms(lvs_cmd: &str, pvs_cmd: &str) -> HashMap<String, BlockDevPaths> {
     let cmd_lvs = Command::new(lvs_cmd).output().expect("failed to run `lvs`");
     let output_lvs = String::from_utf8(cmd_lvs.stdout).expect("output is not utf-8");
@@ -131,7 +132,7 @@ pub(super) fn sys_lvms(lvs_cmd: &str, pvs_cmd: &str) -> HashMap<String, BlockDev
             continue;
         }
 
-        if line[0] == "LV" {
+        if line.first().unwrap() == &"LV" {
             continue;
         }
 

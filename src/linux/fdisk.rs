@@ -77,7 +77,7 @@ pub fn run_fdisk_cmd(device: &str, cmd: &str) -> Result<(), AliError> {
         },
         Err(err) => Err(AliError::CmdFailed {
             error: None,
-            context: format!("fdisk command failed to run: {}", err.to_string()),
+            context: format!("fdisk command failed to run: {err}"),
         }),
     }
 }
