@@ -95,5 +95,5 @@ pub fn prepend_base(base: &Option<&str>, mountpoint: &str) -> String {
     }
 
     // e.g. base /data on manifest /foo => /data/foo
-    format!("{}{mountpoint}", base.clone().unwrap())
+    format!("{}{mountpoint}", (*base).unwrap())
 }

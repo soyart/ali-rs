@@ -6,41 +6,35 @@ use crate::manifest::{self, validation::*};
 use crate::manifest::{ManifestLuks, ManifestLvmLv, ManifestLvmVg};
 
 #[inline(always)]
+fn is_luks_base(dev_type: &BlockDevType) -> bool {
+    matches!(
+        dev_type,
+        BlockDevType::UnknownBlock
+            | BlockDevType::Disk
+            | BlockDevType::Partition
+            | BlockDevType::Dm(DmType::LvmLv)
+    )
+}
+
+#[inline(always)]
 fn is_pv_base(dev_type: &BlockDevType) -> bool {
-    match dev_type {
-        BlockDevType::Disk => true,
-        BlockDevType::Partition => true,
-        BlockDevType::UnknownBlock => true,
-        BlockDevType::Dm(DmType::Luks) => true,
-        _ => false,
-    }
+    matches!(
+        dev_type,
+        BlockDevType::UnknownBlock
+            | BlockDevType::Disk
+            | BlockDevType::Partition
+            | BlockDevType::Dm(DmType::Luks)
+    )
 }
 
 #[inline(always)]
 fn is_vg_base(dev_type: &BlockDevType) -> bool {
-    match dev_type {
-        BlockDevType::Dm(DmType::LvmPv) => true,
-        _ => false,
-    }
+    matches!(dev_type, BlockDevType::Dm(DmType::LvmPv))
 }
 
 #[inline(always)]
 fn is_lv_base(dev_type: &BlockDevType) -> bool {
-    match dev_type {
-        BlockDevType::Dm(DmType::LvmVg) => true,
-        _ => false,
-    }
-}
-
-#[inline(always)]
-fn is_luks_base(dev_type: &BlockDevType) -> bool {
-    match dev_type {
-        BlockDevType::Disk => true,
-        BlockDevType::Partition => true,
-        BlockDevType::UnknownBlock => true,
-        BlockDevType::Dm(DmType::LvmLv) => true,
-        _ => false,
-    }
+    matches!(dev_type, BlockDevType::Dm(DmType::LvmVg))
 }
 
 // Only the last LV on each VG could be unsized
@@ -158,7 +152,8 @@ pub(super) fn collect_valid_luks(
 
             if should_be_vg.device_type != TYPE_VG {
                 return Err(AliError::AliRsBug(format!(
-                    "unexpected device type - expecting a VG"
+                    "unexpected device type {} - expecting a VG",
+                    should_be_vg.device_type,
                 )));
             }
 
@@ -364,7 +359,7 @@ pub(super) fn collect_valid_pv(
         },
     ]));
 
-    return Ok(());
+    Ok(())
 }
 
 // Collect valid VG device path into valids

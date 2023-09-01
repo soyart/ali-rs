@@ -73,9 +73,9 @@ pub struct ValidationReport {
 }
 
 pub fn parse_human_bytes(s: &str) -> Result<bytes::Bytes, AliError> {
-    (s.to_lowercase()).parse::<bytes::Bytes>().map_err(|err| {
-        AliError::BadManifest(format!("bad byte unit string {s}: {}", err.to_string()))
-    })
+    (s.to_lowercase())
+        .parse::<bytes::Bytes>()
+        .map_err(|err| AliError::BadManifest(format!("bad byte unit string {s}: {err}")))
 }
 
 #[test]

@@ -60,7 +60,7 @@ pub fn apply_manifest(
 
     // Create other filesystems
     if let Some(filesystems) = &manifest.filesystems {
-        match fs::apply_filesystems(&filesystems) {
+        match fs::apply_filesystems(filesystems) {
             Err(err) => {
                 return Err(AliError::InstallError {
                     error: Box::new(err),
@@ -104,12 +104,13 @@ pub fn apply_manifest(
         // The mountpoints will be prepended with default base
         let mountpoints: Vec<(String, Action)> = filesystems
             .iter()
-            .filter_map(|fs| match fs.mnt.clone() {
-                Some(mountpoint) => Some((
-                    fs::prepend_base(&Some(install_location), &mountpoint),
-                    Action::Mkdir(mountpoint),
-                )),
-                None => None,
+            .filter_map(|fs| {
+                fs.mnt.clone().map(|mountpoint| {
+                    (
+                        fs::prepend_base(&Some(install_location), &mountpoint),
+                        Action::Mkdir(mountpoint),
+                    )
+                })
             })
             .collect();
 
@@ -127,7 +128,7 @@ pub fn apply_manifest(
         }
 
         // Mount other filesystems under /{DEFAULT_CHROOT_LOC}
-        match fs::mount_filesystems(&filesystems, install_location) {
+        match fs::mount_filesystems(filesystems, install_location) {
             Err(err) => {
                 return Err(AliError::InstallError {
                     error: Box::new(err),
@@ -172,7 +173,7 @@ pub fn apply_manifest(
     }
 
     let action_ali_archchroot = Action::AliArchChroot;
-    match archchroot::ali(&manifest, install_location) {
+    match archchroot::ali(manifest, install_location) {
         Err(err) => {
             return Err(AliError::InstallError {
                 error: Box::new(err),

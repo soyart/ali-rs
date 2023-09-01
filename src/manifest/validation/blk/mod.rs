@@ -38,7 +38,7 @@ pub fn validate(manifest: &Manifest, overwrite: bool) -> Result<BlockDevPaths, A
             // Overwrite disk devices - we don't need to trace any existing devices,
             // as all devices required must already be in the manifest
             validate_blk(
-                &manifest,
+                manifest,
                 &HashMap::<String, BlockDevType>::new(),
                 HashMap::<String, BlockDevType>::new(),
                 HashMap::<String, BlockDevPaths>::new(),
@@ -61,7 +61,7 @@ pub fn validate(manifest: &Manifest, overwrite: bool) -> Result<BlockDevPaths, A
             // Unknown disks are not tracked - only LVM devices and their bases.
             let sys_lvms = trace_blk::sys_lvms("lvs", "pvs");
 
-            validate_blk(&manifest, &sys_fs_devs, sys_fs_ready_devs, sys_lvms)?
+            validate_blk(manifest, &sys_fs_devs, sys_fs_ready_devs, sys_lvms)?
         }
     };
 
@@ -124,12 +124,10 @@ fn validate_blk(
 
                 // If multiple partitions are to be created on this disk,
                 // only the last partition could be unsized
-                if i != l - 1 && l != 1 {
-                    if part.size.is_none() {
-                        return Err(AliError::BadManifest(format!(
-                            "unsized partition {partition_name} must be the last partition"
-                        )));
-                    }
+                if i != l - 1 && l != 1 && part.size.is_none() {
+                    return Err(AliError::BadManifest(format!(
+                        "unsized partition {partition_name} must be the last partition"
+                    )));
                 }
 
                 if sys_fs_ready_devs.get(&partition_name).is_some() {
@@ -299,14 +297,14 @@ fn validate_blk(
 }
 
 fn is_fs_base(dev_type: &BlockDevType) -> bool {
-    match dev_type {
-        BlockDevType::Disk => true,
-        BlockDevType::Partition => true,
-        BlockDevType::UnknownBlock => true,
-        BlockDevType::Dm(DmType::Luks) => true,
-        BlockDevType::Dm(DmType::LvmLv) => true,
-        _ => false,
-    }
+    matches!(
+        dev_type,
+        BlockDevType::Disk
+            | BlockDevType::Partition
+            | BlockDevType::UnknownBlock
+            | BlockDevType::Dm(DmType::Luks)
+            | BlockDevType::Dm(DmType::LvmLv)
+    )
 }
 
 impl std::fmt::Display for DmType {

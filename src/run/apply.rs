@@ -80,16 +80,13 @@ fn update_manifest(manifest: &mut Manifest) {
     }
 
     // See if other FS is Btrfs
-    match (has_btrfs, &manifest.filesystems) {
-        (false, Some(filesystems)) => {
-            for fs in filesystems {
-                if fs.fs_type.as_str() == btrfs {
-                    has_btrfs = true;
-                    break;
-                }
+    if let (false, Some(filesystems)) = (has_btrfs, &manifest.filesystems) {
+        for fs in filesystems {
+            if fs.fs_type.as_str() == btrfs {
+                has_btrfs = true;
+                break;
             }
         }
-        _ => {}
     }
 
     // Update manifest.pacstraps if any of the filesystems is Btrfs

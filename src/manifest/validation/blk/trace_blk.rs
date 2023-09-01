@@ -31,7 +31,7 @@ pub(super) fn run_blkid(cmd_blkid: &str) -> Result<String, AliError> {
         })?;
 
     String::from_utf8(cmd_blkid.stdout)
-        .map_err(|err| AliError::AliRsBug(format!("blkid output not string: {}", err.to_string())))
+        .map_err(|err| AliError::AliRsBug(format!("blkid output not string: {err}")))
 }
 
 pub(super) fn sys_fs_ready(output_blkid: &str) -> HashMap<String, BlockDevType> {
@@ -39,7 +39,7 @@ pub(super) fn sys_fs_ready(output_blkid: &str) -> HashMap<String, BlockDevType> 
 
     let mut fs_ready = HashMap::new();
     for line in lines_blkid {
-        if line.len() == 0 {
+        if line.is_empty() {
             continue;
         }
 
@@ -77,7 +77,7 @@ pub(super) fn sys_fs(output_blkid: &str) -> HashMap<String, BlockDevType> {
 
     let mut fs = HashMap::new();
     for line in lines_blkid {
-        if line.len() == 0 {
+        if line.is_empty() {
             continue;
         }
 
@@ -121,7 +121,7 @@ pub(super) fn sys_lvms(lvs_cmd: &str, pvs_cmd: &str) -> HashMap<String, BlockDev
     let mut lv_paths = Vec::<BlockDevPath>::new();
 
     for line in lines_lvs {
-        if line.len() == 0 {
+        if line.is_empty() {
             continue;
         }
 
@@ -158,7 +158,7 @@ pub(super) fn sys_lvms(lvs_cmd: &str, pvs_cmd: &str) -> HashMap<String, BlockDev
     let mut lvms = HashMap::new();
 
     for line in lines_pvs {
-        if line.len() == 0 {
+        if line.is_empty() {
             continue;
         }
 
@@ -173,7 +173,7 @@ pub(super) fn sys_lvms(lvs_cmd: &str, pvs_cmd: &str) -> HashMap<String, BlockDev
         }
 
         let pv_name = line
-            .get(0)
+            .first()
             .expect("missing 1st string on pvs output")
             .to_string();
 
