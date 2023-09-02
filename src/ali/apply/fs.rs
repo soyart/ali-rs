@@ -1,12 +1,12 @@
 use crate::ali::ManifestFs;
 use crate::errors::AliError;
 use crate::linux;
-use crate::run::apply::Action;
+use crate::run::apply::{map_err_mountpoints, ActionMountpoints};
 
-pub fn apply_filesystem(filesystem: &ManifestFs) -> Result<Action, AliError> {
+pub fn apply_filesystem(filesystem: &ManifestFs) -> Result<ActionMountpoints, AliError> {
     linux::mkfs::create_fs(filesystem)?;
 
-    Ok(Action::CreateFs {
+    Ok(ActionMountpoints::CreateFs {
         device: filesystem.device.clone(),
         fs_type: filesystem.fs_type.clone(),
         fs_opts: filesystem.fs_opts.clone(),
@@ -15,7 +15,10 @@ pub fn apply_filesystem(filesystem: &ManifestFs) -> Result<Action, AliError> {
 }
 
 // mount_filesystem lets callers override mountpoint with `mountpoint`.
-pub fn mount_filesystem(filesystem: &ManifestFs, mountpoint: &str) -> Result<Action, AliError> {
+pub fn mount_filesystem(
+    filesystem: &ManifestFs,
+    mountpoint: &str,
+) -> Result<ActionMountpoints, AliError> {
     let mountpoint = mountpoint.to_string();
     let fs = ManifestFs {
         mnt: Some(mountpoint.clone()),
@@ -24,17 +27,18 @@ pub fn mount_filesystem(filesystem: &ManifestFs, mountpoint: &str) -> Result<Act
 
     linux::mount::mount_fs(&fs)?;
 
-    Ok(Action::MountFs {
+    Ok(ActionMountpoints::MountFs {
         src: fs.device.clone(),
         dst: mountpoint,
         opts: fs.mnt_opts.clone(),
     })
 }
 
-pub fn apply_filesystems(filesystems: &[ManifestFs]) -> Result<Vec<Action>, AliError> {
+pub fn apply_filesystems(filesystems: &[ManifestFs]) -> Result<Vec<ActionMountpoints>, AliError> {
     let mut actions = Vec::new();
+
     for fs in filesystems {
-        let action_create_fs = Action::CreateFs {
+        let action_create_fs = ActionMountpoints::CreateFs {
             device: fs.device.clone(),
             fs_type: fs.fs_type.clone(),
             fs_opts: fs.fs_opts.clone(),
@@ -43,11 +47,7 @@ pub fn apply_filesystems(filesystems: &[ManifestFs]) -> Result<Vec<Action>, AliE
 
         match apply_filesystem(fs) {
             Err(err) => {
-                return Err(AliError::InstallError {
-                    error: Box::new(err),
-                    action_failed: Box::new(action_create_fs),
-                    actions_performed: actions,
-                });
+                return Err(map_err_mountpoints(err, action_create_fs, actions));
             }
             Ok(action) => actions.push(action),
         }
@@ -58,7 +58,10 @@ pub fn apply_filesystems(filesystems: &[ManifestFs]) -> Result<Vec<Action>, AliE
 
 // mount_filesystem lets callers defined base dir
 // for all filesystems to be mounted under.
-pub fn mount_filesystems(filesystems: &[ManifestFs], base: &str) -> Result<Vec<Action>, AliError> {
+pub fn mount_filesystems(
+    filesystems: &[ManifestFs],
+    base: &str,
+) -> Result<Vec<ActionMountpoints>, AliError> {
     let mut actions = Vec::new();
     for fs in filesystems {
         if fs.mnt.is_none() {
@@ -66,7 +69,7 @@ pub fn mount_filesystems(filesystems: &[ManifestFs], base: &str) -> Result<Vec<A
         }
 
         let mountpoint = prepend_base(&Some(base), &fs.mnt.clone().unwrap());
-        let action_mount_fs = Action::MountFs {
+        let action_mount_fs = ActionMountpoints::MountFs {
             src: fs.device.clone(),
             dst: mountpoint.to_string(),
             opts: fs.mnt_opts.clone(),
@@ -74,11 +77,7 @@ pub fn mount_filesystems(filesystems: &[ManifestFs], base: &str) -> Result<Vec<A
 
         match mount_filesystem(fs, &mountpoint) {
             Err(err) => {
-                return Err(AliError::InstallError {
-                    error: Box::new(err),
-                    action_failed: Box::new(action_mount_fs),
-                    actions_performed: actions,
-                });
+                return Err(map_err_mountpoints(err, action_mount_fs, actions));
             }
             Ok(action) => {
                 actions.push(action);

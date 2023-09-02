@@ -8,15 +8,15 @@ use std::collections::HashSet;
 
 use crate::ali::Manifest;
 use crate::errors::AliError;
-use crate::run::apply::Action;
+use crate::run::apply::{ActionBootstrap, ActionMountpoints, ActionPostInstallUser, Stages};
 use crate::utils::shell;
 
 // Use manifest to install a new system
 pub fn apply_manifest(
     manifest: &Manifest,
     install_location: &str,
-) -> Result<Vec<Action>, AliError> {
-    let mut actions = Vec::new();
+) -> Result<Box<Stages>, AliError> {
+    let mut stages = Box::<Stages>::default();
 
     // Format and partition disks
     if let Some(ref m_disks) = manifest.disks {
@@ -24,11 +24,12 @@ pub fn apply_manifest(
             Err(err) => {
                 return Err(AliError::InstallError {
                     error: Box::new(err),
-                    action_failed: Box::new(Action::ApplyDisks),
-                    actions_performed: actions,
-                })
+                    stages_performed: stages,
+                });
             }
-            Ok(actions_disks) => actions.extend(actions_disks),
+            Ok(actions_disks) => {
+                stages.mountpoints.extend(actions_disks);
+            }
         };
     }
 
@@ -38,11 +39,12 @@ pub fn apply_manifest(
             Err(err) => {
                 return Err(AliError::InstallError {
                     error: Box::new(err),
-                    action_failed: Box::new(Action::ApplyDms),
-                    actions_performed: actions,
+                    stages_performed: stages,
                 })
             }
-            Ok(actions_dms) => actions.extend(actions_dms),
+            Ok(actions_dms) => {
+                stages.mountpoints.extend(actions_dms);
+            }
         }
     }
 
@@ -51,11 +53,12 @@ pub fn apply_manifest(
         Err(err) => {
             return Err(AliError::InstallError {
                 error: Box::new(err),
-                action_failed: Box::new(Action::ApplyRootfs),
-                actions_performed: actions,
+                stages_performed: stages,
             });
         }
-        Ok(action_create_rootfs) => actions.push(action_create_rootfs),
+        Ok(action_create_rootfs) => {
+            stages.mountpoints.push(action_create_rootfs);
+        }
     };
 
     // Create other filesystems
@@ -64,12 +67,11 @@ pub fn apply_manifest(
             Err(err) => {
                 return Err(AliError::InstallError {
                     error: Box::new(err),
-                    action_failed: Box::new(Action::ApplyFilesystems),
-                    actions_performed: actions,
+                    stages_performed: stages,
                 });
             }
             Ok(actions_create_filesystems) => {
-                actions.extend(actions_create_filesystems);
+                stages.mountpoints.extend(actions_create_filesystems);
             }
         }
     }
@@ -79,11 +81,12 @@ pub fn apply_manifest(
         Err(err) => {
             return Err(AliError::InstallError {
                 error: Box::new(err),
-                action_failed: Box::new(Action::MkdirRootFs),
-                actions_performed: actions,
+                stages_performed: stages,
             });
         }
-        Ok(()) => actions.push(Action::MkdirRootFs),
+        Ok(()) => {
+            stages.mountpoints.push(ActionMountpoints::MkdirRootFs);
+        }
     }
 
     // Mount rootfs
@@ -91,24 +94,25 @@ pub fn apply_manifest(
         Err(err) => {
             return Err(AliError::InstallError {
                 error: Box::new(err),
-                action_failed: Box::new(Action::MountRootFs),
-                actions_performed: actions,
+                stages_performed: stages,
             });
         }
-        Ok(action_mount_rootfs) => actions.push(action_mount_rootfs),
+        Ok(action_mount_rootfs) => {
+            stages.mountpoints.push(action_mount_rootfs);
+        }
     }
 
     // Mount other filesystems to /{DEFAULT_CHROOT_LOC}
     if let Some(filesystems) = &manifest.filesystems {
         // Collect filesystems mountpoints and actions.
         // The mountpoints will be prepended with default base
-        let mountpoints: Vec<(String, Action)> = filesystems
+        let mountpoints: Vec<(String, ActionMountpoints)> = filesystems
             .iter()
             .filter_map(|fs| {
                 fs.mnt.clone().map(|mountpoint| {
                     (
                         fs::prepend_base(&Some(install_location), &mountpoint),
-                        Action::Mkdir(mountpoint),
+                        ActionMountpoints::MkdirFs(mountpoint),
                     )
                 })
             })
@@ -119,12 +123,11 @@ pub fn apply_manifest(
             if let Err(err) = shell::exec("mkdir", &[&dir]) {
                 return Err(AliError::InstallError {
                     error: Box::new(err),
-                    action_failed: Box::new(action_mkdir),
-                    actions_performed: actions,
+                    stages_performed: stages,
                 });
             }
 
-            actions.push(action_mkdir);
+            stages.mountpoints.push(action_mkdir);
         }
 
         // Mount other filesystems under /{DEFAULT_CHROOT_LOC}
@@ -132,11 +135,12 @@ pub fn apply_manifest(
             Err(err) => {
                 return Err(AliError::InstallError {
                     error: Box::new(err),
-                    action_failed: Box::new(Action::MountFilesystems),
-                    actions_performed: actions,
+                    stages_performed: stages,
                 });
             }
-            Ok(actions_mount_filesystems) => actions.extend(actions_mount_filesystems),
+            Ok(actions_mount_filesystems) => {
+                stages.mountpoints.extend(actions_mount_filesystems);
+            }
         }
     }
 
@@ -147,88 +151,72 @@ pub fn apply_manifest(
     }
 
     // Install packages (manifest.pacstraps) to install_location
-    let action_pacstrap = Action::InstallPackages { packages };
+    let action_pacstrap = ActionBootstrap::InstallPackages { packages };
     if let Err(err) = pacstrap_to_location(&manifest.pacstraps, install_location) {
         return Err(AliError::InstallError {
             error: Box::new(err),
-            action_failed: Box::new(action_pacstrap),
-            actions_performed: actions,
+            stages_performed: stages,
         });
     }
-    actions.push(action_pacstrap);
+    stages.bootstrap.push(action_pacstrap);
 
     // Apply ALI routine installation outside of arch-chroot
-    let action_ali_routine = Action::AliRoutine;
     match routine::apply_routine(manifest, install_location) {
         Err(err) => {
             return Err(AliError::InstallError {
                 error: Box::new(err),
-                action_failed: Box::new(action_ali_routine),
-                actions_performed: actions,
+                stages_performed: stages,
             });
         }
         Ok(actions_routine) => {
-            actions.extend(actions_routine);
-            actions.push(action_ali_routine);
+            stages.routines.extend(actions_routine);
         }
     }
 
     // Apply ALI routine installation in arch-chroot
-    let action_ali_archchroot = Action::AliArchChroot;
-    match archchroot::ali(manifest, install_location) {
+    match archchroot::chroot_ali(manifest, install_location) {
         Err(err) => {
             return Err(AliError::InstallError {
                 error: Box::new(err),
-                action_failed: Box::new(action_ali_archchroot),
-                actions_performed: actions,
+                stages_performed: stages,
             });
         }
         Ok(actions_archchroot) => {
-            actions.extend(actions_archchroot);
-            actions.push(action_ali_archchroot);
+            stages.chroot_ali.extend(actions_archchroot);
         }
     }
 
     // Apply manifest.chroot
     if let Some(ref cmds) = manifest.chroot {
-        let action_user_archchroot = Action::UserArchChroot;
-
-        match archchroot::user_chroot(cmds.iter(), install_location) {
+        match archchroot::chroot_user(cmds.iter(), install_location) {
             Err(err) => {
                 return Err(AliError::InstallError {
                     error: Box::new(err),
-                    action_failed: Box::new(action_user_archchroot),
-                    actions_performed: actions,
+                    stages_performed: stages,
                 });
             }
             Ok(actions_user_cmds) => {
-                actions.extend(actions_user_cmds);
-                actions.push(action_user_archchroot);
+                stages.chroot_user.extend(actions_user_cmds);
             }
         }
     }
 
     // Apply manifest.postinstall with sh -c 'cmd'
     if let Some(ref cmds) = manifest.postinstall {
-        let action_user_postinstall = Action::UserPostInstall;
-
         for cmd in cmds {
-            let action_postinstall_cmd = Action::UserPostInstallCmd(cmd.clone());
+            let action_postinstall_cmd = ActionPostInstallUser::UserPostInstallCmd(cmd.clone());
             if let Err(err) = shell::sh_c(cmd) {
                 return Err(AliError::InstallError {
                     error: Box::new(err),
-                    action_failed: Box::new(action_user_postinstall),
-                    actions_performed: actions,
+                    stages_performed: stages,
                 });
             }
 
-            actions.push(action_postinstall_cmd);
+            stages.postinstall_user.push(action_postinstall_cmd);
         }
-
-        actions.push(action_user_postinstall);
     }
 
-    Ok(actions)
+    Ok(stages)
 }
 
 fn pacstrap_to_location(

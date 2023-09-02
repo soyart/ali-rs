@@ -14,9 +14,12 @@ fn main() -> Result<(), errors::AliError> {
     let manifest = args.manifest.clone();
 
     match run::run(args) {
-        Err(err) => eprintln!("ali-rs: failed to apply manifest {manifest}: {err}"),
+        Err(err) => eprintln!(
+            "ali-rs: failed to apply manifest {manifest}: {}",
+            err.to_json_string()
+        ),
         Ok(()) => {
-            println!("ali-rs: manifest {} applied succesfully", manifest);
+            println!("ali-rs: manifest {manifest} applied succesfully");
         }
     };
 

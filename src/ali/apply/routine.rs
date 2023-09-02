@@ -1,39 +1,30 @@
-use crate::ali::apply::Action;
 use crate::ali::Manifest;
 use crate::constants::defaults;
 use crate::errors::AliError;
+use crate::run::apply::{map_err_routine, ActionRoutine};
 use crate::utils::shell;
 
-pub fn apply_routine(manifest: &Manifest, install_location: &str) -> Result<Vec<Action>, AliError> {
+pub fn apply_routine(
+    manifest: &Manifest,
+    install_location: &str,
+) -> Result<Vec<ActionRoutine>, AliError> {
     let mut actions = Vec::new();
 
-    let action_genfstab = Action::GenFstab;
+    let action_genfstab = ActionRoutine::GenFstab;
     if let Err(err) = genfstab_uuid(install_location) {
-        return Err(AliError::InstallError {
-            error: Box::new(err),
-            action_failed: Box::new(action_genfstab),
-            actions_performed: actions,
-        });
+        return Err(map_err_routine(err, action_genfstab, actions));
     }
     actions.push(action_genfstab);
 
-    let action_set_hostname = Action::SetHostname;
+    let action_set_hostname = ActionRoutine::SetHostname;
     if let Err(err) = hostname(&manifest.hostname, install_location) {
-        return Err(AliError::InstallError {
-            error: Box::new(err),
-            action_failed: Box::new(action_set_hostname),
-            actions_performed: actions,
-        });
+        return Err(map_err_routine(err, action_set_hostname, actions));
     }
     actions.push(action_set_hostname);
 
-    let action_locale_conf = Action::LocaleConf;
+    let action_locale_conf = ActionRoutine::LocaleConf;
     if let Err(err) = locale_conf(install_location) {
-        return Err(AliError::InstallError {
-            error: Box::new(err),
-            action_failed: Box::new(action_locale_conf),
-            actions_performed: actions,
-        });
+        return Err(map_err_routine(err, action_locale_conf, actions));
     }
     actions.push(action_locale_conf);
 
