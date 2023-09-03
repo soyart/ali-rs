@@ -1,7 +1,6 @@
-# ali-rs
+# {{crate}}
 
-[![Workflow Status](https://github.com/soyart/ali-rs/workflows/cargo%5Ftest/badge.svg)](https://github.com/soyart/ali-rs/actions?query=workflow%3A%22cargo%5Ftest%22)
-![Maintenance](https://img.shields.io/badge/maintenance-activly--developed-brightgreen.svg)
+{{badges}}
 
 ```text
        _ _
@@ -134,5 +133,7 @@ systems.
 ali-rs will soon have an option to only run these commands without
 messing with block devices.
 
-Version: 0.1.0
-License: GPL-2.0
+{{readme}}
+
+Version: {{version}}
+License: {{license}}
