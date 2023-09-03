@@ -45,11 +45,11 @@ pub struct Stages {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub bootstrap: Vec<ActionBootstrap>,
 
-    #[serde(rename = "stage-routine")]
+    #[serde(rename = "stage-routines")]
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub routines: Vec<ActionRoutine>,
 
-    #[serde(rename = "stage-chroot_routine")]
+    #[serde(rename = "stage-chroot_ali")]
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub chroot_ali: Vec<ActionChrootAli>,
 

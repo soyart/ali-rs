@@ -5,7 +5,7 @@ mod disks;
 mod dm;
 mod fs;
 mod map_err;
-mod routine;
+mod routines;
 
 use crate::ali::Manifest;
 use crate::entity::report::Stages;
@@ -21,7 +21,7 @@ pub fn apply_manifest(
     // @TODO: skip stages from arg
     progress = apply_stages::mountpoints(manifest, install_location, progress)?;
     progress = apply_stages::bootstrap(manifest, install_location, progress)?;
-    progress = apply_stages::routine(manifest, install_location, progress)?;
+    progress = apply_stages::routines(manifest, install_location, progress)?;
     progress = apply_stages::chroot_ali(manifest, install_location, progress)?;
     progress = apply_stages::chroot_user(manifest, install_location, progress)?;
     progress = apply_stages::postinstall_user(manifest, install_location, progress)?;

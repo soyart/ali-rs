@@ -177,15 +177,15 @@ pub fn bootstrap(
     Ok(stages_performed)
 }
 
-pub fn routine(
+pub fn routines(
     manifest: &Manifest,
     install_location: &str,
     mut stages_performed: Box<Stages>,
 ) -> Result<Box<Stages>, AliError> {
-    use super::routine;
+    use super::routines;
 
-    // Apply ALI routine installation outside of arch-chroot
-    match routine::apply_routine(manifest, install_location) {
+    // Apply ALI routines installation outside of arch-chroot
+    match routines::ali_routines(manifest, install_location) {
         Err(err) => {
             return Err(AliError::InstallError {
                 error: Box::new(err),

@@ -49,14 +49,14 @@ failed, ali-rs exits.
    This stage contains actions relating to using `pacstrap(8)` to
    pre-install packages before ali-rs does `arch-chroot(1)`.
 
-3. `stage-routine`
+3. `stage-routines`
 
    This stage contains actions that ali-rs will apply on the behalf
    of the users **outside of a `chroot(1)`**, e.g. writing `/etc/locale.gen`,
    `/etc/locale.conf`, `/etc/hostname`, and populating `/etc/fstab`
    with `genfstab(8)`.
 
-4. `stage-chroot_routine`
+4. `stage-chroot_ali`
 
    This stage contains actions that ali-rs will apply on the behalf
    of the users **inside of `chroot(1)`**, e.g. linking timezones, and
@@ -65,13 +65,13 @@ failed, ali-rs exits.
 5. `stage-chroot_user`
 
    This stage executes user-defined shell commands in manifest key `chroot`
-   **inside of `chroot(1)`**.
+   **inside of `chroot(1)`**. Users could use this stage to configure their
+   bootloader or set root password.
 
 6. `stage-postinstall_user`
 
    This stage executes user-defined shell commands in manifest key `postinstall`
-   **outside of `chroot(1)`**. This stage is where users would configure
-   bootloader.
+   **outside of `chroot(1)`**. This is currently the last stage of ALI.
 
 ## [Validation details](./src/ali/validation/)
 

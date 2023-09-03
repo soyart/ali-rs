@@ -6,7 +6,7 @@ use crate::utils::shell;
 
 use super::map_err::map_err_routine;
 
-pub fn apply_routine(
+pub fn ali_routines(
     manifest: &Manifest,
     install_location: &str,
 ) -> Result<Vec<ActionRoutine>, AliError> {
