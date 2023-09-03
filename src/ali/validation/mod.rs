@@ -2,7 +2,7 @@ mod blk; // Block device validation
 
 use crate::ali::Manifest;
 use crate::constants::{self, defaults};
-use crate::entity::ValidationReport;
+use crate::entity::report::ValidationReport;
 use crate::errors::AliError;
 use crate::utils::fs::file_exists;
 use crate::utils::shell;

@@ -1,7 +1,9 @@
 use crate::ali;
+use crate::entity::report::ActionMountpoints;
 use crate::errors::AliError;
 use crate::linux::fdisk;
-use crate::run::apply::{map_err_mountpoints, ActionMountpoints};
+
+use super::map_err::map_err_mountpoints;
 
 pub fn apply_disks(disks: &[ali::ManifestDisk]) -> Result<Vec<ActionMountpoints>, AliError> {
     let mut actions: Vec<ActionMountpoints> = Vec::new();

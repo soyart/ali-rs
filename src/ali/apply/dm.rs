@@ -1,7 +1,9 @@
 use crate::ali::Dm;
+use crate::entity::report::ActionMountpoints;
 use crate::errors::AliError;
 use crate::linux;
-use crate::run::apply::{map_err_mountpoints, ActionMountpoints};
+
+use super::map_err::map_err_mountpoints;
 
 pub fn apply_dms(dms: &[Dm]) -> Result<Vec<ActionMountpoints>, AliError> {
     let mut actions = Vec::new();

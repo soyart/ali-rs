@@ -1,7 +1,9 @@
 use crate::ali::ManifestFs;
+use crate::entity::report::ActionMountpoints;
 use crate::errors::AliError;
 use crate::linux;
-use crate::run::apply::{map_err_mountpoints, ActionMountpoints};
+
+use super::map_err::map_err_mountpoints;
 
 pub fn apply_filesystem(filesystem: &ManifestFs) -> Result<ActionMountpoints, AliError> {
     linux::mkfs::create_fs(filesystem)?;

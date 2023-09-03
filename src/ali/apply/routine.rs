@@ -1,8 +1,10 @@
 use crate::ali::Manifest;
 use crate::constants::defaults;
+use crate::entity::report::ActionRoutine;
 use crate::errors::AliError;
-use crate::run::apply::{map_err_routine, ActionRoutine};
 use crate::utils::shell;
+
+use super::map_err::map_err_routine;
 
 pub fn apply_routine(
     manifest: &Manifest,

@@ -1,10 +1,10 @@
 use crate::ali::Manifest;
 use crate::constants::defaults;
+use crate::entity::report::{ActionChrootAli, ActionChrootUser};
 use crate::errors::AliError;
-use crate::run::apply::{
-    map_err_chroot_ali, map_err_chroot_user, ActionChrootAli, ActionChrootUser,
-};
 use crate::utils::shell;
+
+use super::map_err::*;
 
 // @TODO: root password
 pub fn chroot_ali(manifest: &Manifest, location: &str) -> Result<Vec<ActionChrootAli>, AliError> {

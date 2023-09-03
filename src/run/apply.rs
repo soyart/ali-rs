@@ -1,46 +1,13 @@
-mod map_err;
-mod state;
-
-pub use map_err::*;
-pub use state::*;
-
 use std::collections::HashSet;
 use std::env;
-
-use serde_json::json;
 
 use crate::ali::apply;
 use crate::ali::validation;
 use crate::ali::{Dm, Manifest};
 use crate::cli;
 use crate::constants::{self, defaults};
+use crate::entity::report::Report;
 use crate::errors::AliError;
-
-#[derive(Debug)]
-pub struct Report {
-    pub location: String,
-    pub summary: Box<Stages>,
-    pub duration: std::time::Duration,
-}
-
-impl Report {
-    pub fn to_json(&self) -> serde_json::Value {
-        json!({
-            "summary": self.summary,
-            "elaspedTime": self.duration,
-        })
-    }
-
-    pub fn to_json_string(&self) -> String {
-        self.to_json().to_string()
-    }
-}
-
-impl ToString for Report {
-    fn to_string(&self) -> String {
-        self.to_json_string()
-    }
-}
 
 pub(super) fn run(manifest_file: &str, args: cli::ArgsApply) -> Result<Report, AliError> {
     let start = std::time::Instant::now();
