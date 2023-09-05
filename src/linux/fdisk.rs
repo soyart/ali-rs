@@ -5,6 +5,7 @@ use std::process::{Command, Stdio};
 
 use crate::ali::{ManifestPartition, PartitionTable};
 use crate::errors::AliError;
+use crate::utils::shell::CmdError;
 
 /// Returns fdisk cmd string for creating gpt/msdos partition table
 pub fn create_table_cmd(table: &PartitionTable) -> String {
@@ -58,6 +59,7 @@ pub fn run_fdisk_cmd(device: &str, cmd: &str) -> Result<(), AliError> {
         .spawn()
         .expect("failed to spawn printf");
 
+    // Ignore fdisk stderr - it will be inherited from ali-rs
     let mut fdisk_cmd = Command::new("fdisk")
         .arg(device)
         .stdin(printf_cmd.stdout.unwrap())
@@ -67,7 +69,11 @@ pub fn run_fdisk_cmd(device: &str, cmd: &str) -> Result<(), AliError> {
     match fdisk_cmd.wait() {
         Ok(result) => match result.success() {
             false => Err(AliError::CmdFailed {
-                error: None,
+                error: CmdError::ErrRun {
+                    code: result.code(),
+                    stdout: None,
+                    stderr: None,
+                },
                 context: format!(
                     "fdisk command exited with bad status: {}",
                     result.code().expect("failed to get exit code"),
@@ -75,9 +81,13 @@ pub fn run_fdisk_cmd(device: &str, cmd: &str) -> Result<(), AliError> {
             }),
             _ => Ok(()),
         },
-        Err(err) => Err(AliError::CmdFailed {
-            error: None,
-            context: format!("fdisk command failed to run: {err}"),
+        Err(error) => Err(AliError::CmdFailed {
+            error: CmdError::ErrRun {
+                code: None,
+                stdout: None,
+                stderr: None,
+            },
+            context: format!("fdisk command failed to run: {error}"),
         }),
     }
 }

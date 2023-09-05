@@ -4,6 +4,8 @@ use std::process::Command;
 use serde::{Deserialize, Serialize};
 use toml;
 
+use crate::utils::shell::CmdError;
+
 use super::*;
 
 // For parsing Linux blkid output
@@ -26,7 +28,7 @@ pub(super) fn run_blkid(cmd_blkid: &str) -> Result<String, AliError> {
     let cmd = Command::new(cmd_blkid)
         .output()
         .map_err(|err| AliError::CmdFailed {
-            error: Some(err),
+            error: CmdError::ErrSpawn { error: err },
             context: "blkid command failed".to_string(),
         })?;
 
