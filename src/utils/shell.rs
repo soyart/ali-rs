@@ -62,7 +62,7 @@ pub fn exec(cmd: &str, args: &[&str]) -> Result<(), AliError> {
 ///
 /// Throws an error if command fails to spawn
 #[allow(unused)]
-pub fn exec_output(cmd: &str, args: &[&str]) -> Result<Vec<u8>, AliError> {
+pub fn exec_with_output(cmd: &str, args: &[&str]) -> Result<Vec<u8>, AliError> {
     let output = Command::new(cmd)
         .args(args)
         .output()
@@ -110,6 +110,7 @@ pub fn pipe(producer_cmd: (&str, &[&str]), consumer_cmd: (&str, &[&str])) -> Res
                 consumer_cmd.1.join(" ")
             )
         });
+
     // Ignore fdisk stderr - it will be inherited from ali-rs
     let consumer = Command::new(consumer_cmd.0)
         .args(consumer_cmd.1)

@@ -61,6 +61,7 @@ fn update_manifest(manifest: &mut Manifest) {
         for fs in filesystems {
             if fs.fs_type.as_str() == btrfs {
                 has_btrfs = true;
+
                 break;
             }
         }
@@ -83,6 +84,7 @@ fn update_manifest(manifest: &mut Manifest) {
             match dm {
                 Dm::Lvm(_) => {
                     has_lvm = true;
+
                     break;
                 }
                 _ => continue,
@@ -95,6 +97,7 @@ fn update_manifest(manifest: &mut Manifest) {
         (true, Some(ref mut pacstraps)) => {
             pacstraps.insert(lvm2.clone());
         }
+
         (true, None) => {
             manifest.pacstraps = Some(HashSet::from([lvm2.clone()]));
         }
