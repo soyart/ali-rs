@@ -1,11 +1,9 @@
 /// This modules formats block devices by simply piping printf output to fdisk binary
 /// @TODO: Consider fdisk sys https://github.com/IBM/fdisk-sys
 ///
-use std::process::{Command, Stdio};
-
 use crate::ali::{ManifestPartition, PartitionTable};
 use crate::errors::AliError;
-use crate::utils::shell::CmdError;
+use crate::utils::shell;
 
 /// Returns fdisk cmd string for creating gpt/msdos partition table
 pub fn create_table_cmd(table: &PartitionTable) -> String {
@@ -53,43 +51,10 @@ pub fn set_partition_type_cmd(part_num: usize, part: &ManifestPartition) -> Stri
 /// printf $cmd | fdisk $device
 /// ```
 pub fn run_fdisk_cmd(device: &str, cmd: &str) -> Result<(), AliError> {
-    let printf_cmd = Command::new("printf")
-        .arg(cmd)
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("failed to spawn printf");
+    let printf_cmd: (&str, &[&str]) = ("printf", &[cmd]);
+    let fdisk_cmd: (&str, &[&str]) = ("fdisk", &[device]);
 
-    // Ignore fdisk stderr - it will be inherited from ali-rs
-    let mut fdisk_cmd = Command::new("fdisk")
-        .arg(device)
-        .stdin(printf_cmd.stdout.unwrap())
-        .spawn()
-        .expect("failed to spawn fdisk");
-
-    match fdisk_cmd.wait() {
-        Ok(result) => match result.success() {
-            false => Err(AliError::CmdFailed {
-                error: CmdError::ErrRun {
-                    code: result.code(),
-                    stdout: None,
-                    stderr: None,
-                },
-                context: format!(
-                    "fdisk command exited with bad status: {}",
-                    result.code().expect("failed to get exit code"),
-                ),
-            }),
-            _ => Ok(()),
-        },
-        Err(error) => Err(AliError::CmdFailed {
-            error: CmdError::ErrRun {
-                code: None,
-                stdout: None,
-                stderr: None,
-            },
-            context: format!("fdisk command failed to run: {error}"),
-        }),
-    }
+    shell::pipe(printf_cmd, fdisk_cmd)
 }
 
 fn assemble_and_w(slice: &[&str]) -> String {

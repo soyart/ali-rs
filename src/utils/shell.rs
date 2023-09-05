@@ -1,6 +1,6 @@
 use std::env;
 use std::fs;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 use crate::errors::AliError;
 
@@ -9,7 +9,7 @@ pub enum CmdError {
     ErrRun {
         code: Option<i32>,
         stdout: Option<Vec<u8>>,
-        stderr: Option<String>,
+        stderr: Option<Vec<u8>>,
     },
 
     /// Command failed to spawn
@@ -72,7 +72,7 @@ pub fn exec_output(cmd: &str, args: &[&str]) -> Result<Vec<u8>, AliError> {
 
     if !output.status.success() {
         let stdout = Some(output.stdout);
-        let stderr = Some(String::from_utf8_lossy(&output.stderr).into());
+        let stderr = Some(output.stderr);
 
         return Err(AliError::CmdFailed {
             error: CmdError::ErrRun {
@@ -88,6 +88,62 @@ pub fn exec_output(cmd: &str, args: &[&str]) -> Result<Vec<u8>, AliError> {
     }
 
     Ok(output.stdout)
+}
+
+/// Pipe stdout of `producer_cmd` to stdin of `consumer_cmd`,
+/// and waits for `consumer_cmd` to finish.
+/// Akin to:
+/// ```shell
+/// producer_cmd | consume_cmd
+/// ```
+/// The structure of both argument tuples is (cmd, &[arg1, arg2, ..])
+pub fn pipe(producer_cmd: (&str, &[&str]), consumer_cmd: (&str, &[&str])) -> Result<(), AliError> {
+    let producer = Command::new(producer_cmd.0)
+        .args(producer_cmd.1)
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect(&format!(
+            "failed to spawn producer {} {}",
+            producer_cmd.0,
+            producer_cmd.1.join(" ")
+        ));
+
+    // Ignore fdisk stderr - it will be inherited from ali-rs
+    let consumer = Command::new(consumer_cmd.0)
+        .args(consumer_cmd.1)
+        .stdin(producer.stdout.unwrap())
+        .spawn()
+        .expect(&format!(
+            "failed to spawn consumer {} {}",
+            consumer_cmd.0,
+            consumer_cmd.1.join(" ")
+        ));
+
+    match consumer.wait_with_output() {
+        Ok(result) => match result.status.success() {
+            false => Err(AliError::CmdFailed {
+                error: CmdError::ErrRun {
+                    code: result.status.code(),
+                    stdout: None,
+                    stderr: Some(result.stderr),
+                },
+                context: format!(
+                    "consumer {} command exited with bad status: {}",
+                    consumer_cmd.0,
+                    result.status.code().expect("failed to get exit code"),
+                ),
+            }),
+            _ => Ok(()),
+        },
+        Err(error) => Err(AliError::CmdFailed {
+            error: CmdError::ErrRun {
+                code: None,
+                stdout: None,
+                stderr: None,
+            },
+            context: format!("consumer {} command failed to run: {error}", consumer_cmd.0),
+        }),
+    }
 }
 
 // Executes cmd_str with `sh -c`:
@@ -143,7 +199,7 @@ impl std::fmt::Debug for CmdError {
                 };
 
                 let stderr = match stderr {
-                    Some(err) => err.clone(),
+                    Some(err) => String::from_utf8_lossy(&err).into(),
                     None => "ali-rs discarded stderr output".to_string(),
                 };
 
