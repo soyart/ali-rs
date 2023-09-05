@@ -4,8 +4,8 @@ use crate::errors::AliError;
 
 #[derive(Debug, Parser)]
 #[clap(
-    author = "github.com/soyart",
     version,
+    author = "github.com/soyart",
     about = "Rust-based ALI installer"
 )]
 pub struct Cli {
@@ -17,8 +17,8 @@ pub struct Cli {
         global = true,
         short = 'f',
         long = "file",
+        default_value_t = String::from("./manifest.yaml"),
         value_parser = validate_filename,
-        default_value_t = String::from("./manifest.yaml")
     )]
     pub manifest: String,
 
@@ -30,7 +30,10 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Commands {
+    /// Applies manifest to create a new system
     Apply(ArgsApply),
+
+    /// Validates manifest
     Validate,
 }
 

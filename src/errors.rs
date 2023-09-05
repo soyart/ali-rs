@@ -2,6 +2,7 @@ use serde_json::json;
 use thiserror::Error;
 
 use crate::entity::report;
+use crate::utils::shell;
 
 #[derive(Debug, Error)]
 pub enum AliError {
@@ -22,7 +23,7 @@ pub enum AliError {
 
     #[error("shell command (context: \"{context}\"), embeddedError: {error:?}")]
     CmdFailed {
-        error: Option<std::io::Error>,
+        error: shell::CmdError,
         context: String,
     },
 
@@ -130,7 +131,9 @@ fn test_json_error() {
     // Failed during bootstrap user packages
     let err_pkg = AliError::ApplyError {
         error: Box::new(AliError::CmdFailed {
-            error: None,
+            error: shell::CmdError::ErrSpawn {
+                error: std::io::ErrorKind::NotFound.into(),
+            },
             context: "no such command foobar".to_string(),
         }),
         action_failed: Box::new(Action::Bootstrap(ActionBootstrap::InstallPackages {
