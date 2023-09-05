@@ -38,11 +38,6 @@ pub fn exec(cmd: &str, args: &[&str]) -> Result<(), AliError> {
     }
 }
 
-// @TODO: test chroot on Arch
-pub fn chroot(location: &str, cmd: &str) -> Result<(), AliError> {
-    exec("arch-chroot", &[location, cmd])
-}
-
 // Execute cmd_str with `sh -c`:
 /// ```shell
 /// sh -c {cmd_str}
@@ -51,6 +46,15 @@ pub fn chroot(location: &str, cmd: &str) -> Result<(), AliError> {
 /// cmd_str MUST NOT be surrounded beforehand
 pub fn sh_c(cmd_str: &str) -> Result<(), AliError> {
     exec("sh", &["-c", cmd_str])
+}
+
+/// Executes cmd with `arch-chroot` to `location`
+/// Example: location: `"/mnt"`, cmd: `"cat /etc/fstab"`:
+/// ```shell
+/// sh -c arch-chroot /mnt cat /etc/fstab
+/// ```
+pub fn arch_chroot(location: &str, cmd: &str) -> Result<(), AliError> {
+    sh_c(&format!("arch-chroot {location} {cmd}"))
 }
 
 #[ignore]

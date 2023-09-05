@@ -11,13 +11,13 @@ pub fn chroot_ali(manifest: &Manifest, location: &str) -> Result<Vec<ActionChroo
     let mut actions = Vec::new();
 
     let (action_tz, cmd_tz) = cmd_link_timezone(&manifest.timezone);
-    if let Err(err) = shell::chroot(location, &cmd_tz) {
+    if let Err(err) = shell::arch_chroot(location, &cmd_tz) {
         return Err(map_err_chroot_ali(err, action_tz, actions));
     }
     actions.push(action_tz);
 
     let (action_locale_gen, cmd_locale_gen) = cmd_locale_gen();
-    if let Err(err) = shell::chroot(location, &cmd_locale_gen) {
+    if let Err(err) = shell::arch_chroot(location, &cmd_locale_gen) {
         return Err(map_err_chroot_ali(err, action_locale_gen, actions));
     }
     actions.push(action_locale_gen);
@@ -33,7 +33,7 @@ where
 
     for cmd in cmds {
         let action_user_cmd = ActionChrootUser::UserArchChrootCmd(cmd.to_string());
-        if let Err(err) = shell::chroot(location, cmd) {
+        if let Err(err) = shell::arch_chroot(location, cmd) {
             return Err(map_err_chroot_user(err, action_user_cmd, actions));
         }
 
