@@ -61,6 +61,7 @@ pub fn exec(cmd: &str, args: &[&str]) -> Result<(), AliError> {
 /// or stderr output as lossy UTF-8 strings.
 ///
 /// Throws an error if command fails to spawn
+#[allow(unused)]
 pub fn exec_output(cmd: &str, args: &[&str]) -> Result<Vec<u8>, AliError> {
     let output = Command::new(cmd)
         .args(args)
@@ -102,22 +103,25 @@ pub fn pipe(producer_cmd: (&str, &[&str]), consumer_cmd: (&str, &[&str])) -> Res
         .args(producer_cmd.1)
         .stdout(Stdio::piped())
         .spawn()
-        .expect(&format!(
-            "failed to spawn producer {} {}",
-            producer_cmd.0,
-            producer_cmd.1.join(" ")
-        ));
-
+        .unwrap_or_else(|_| {
+            panic!(
+                "failed to spawn producer {} {}",
+                consumer_cmd.0,
+                consumer_cmd.1.join(" ")
+            )
+        });
     // Ignore fdisk stderr - it will be inherited from ali-rs
     let consumer = Command::new(consumer_cmd.0)
         .args(consumer_cmd.1)
         .stdin(producer.stdout.unwrap())
         .spawn()
-        .expect(&format!(
-            "failed to spawn consumer {} {}",
-            consumer_cmd.0,
-            consumer_cmd.1.join(" ")
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "failed to spawn consumer {} {}",
+                consumer_cmd.0,
+                consumer_cmd.1.join(" ")
+            )
+        });
 
     match consumer.wait_with_output() {
         Ok(result) => match result.status.success() {
@@ -199,7 +203,7 @@ impl std::fmt::Debug for CmdError {
                 };
 
                 let stderr = match stderr {
-                    Some(err) => String::from_utf8_lossy(&err).into(),
+                    Some(err) => String::from_utf8_lossy(err).into(),
                     None => "ali-rs discarded stderr output".to_string(),
                 };
 
