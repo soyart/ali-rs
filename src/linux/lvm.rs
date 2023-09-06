@@ -33,7 +33,7 @@ pub fn create_vg(vg: &ali::ManifestLvmVg) -> Result<(), AliError> {
 pub fn create_lv(lv: &ali::ManifestLvmLv) -> Result<(), AliError> {
     let (size_flag, size) = match &lv.size {
         Some(size) => ("-L", size.as_str()),
-        None => ("-l", "100FREE"),
+        None => ("-l", "100%FREE"),
     };
 
     shell::exec("lvcreate", &[size_flag, size, "-n", &lv.name])
