@@ -1,7 +1,7 @@
 use serde_json::json;
 use thiserror::Error;
 
-use crate::entity::report;
+use crate::entity::{action, stage};
 use crate::utils::shell;
 
 #[derive(Debug, Error)]
@@ -36,14 +36,14 @@ pub enum AliError {
     #[error("manifest application error: {error}")]
     ApplyError {
         error: Box<AliError>,
-        action_failed: Box<report::Action>,
-        actions_performed: Vec<report::Action>,
+        action_failed: Box<action::Action>,
+        actions_performed: Vec<action::Action>,
     },
 
     #[error("installation error")]
     InstallError {
         error: Box<AliError>,
-        stages_performed: Box<report::Stages>,
+        stages_performed: Box<stage::StageActions>,
     },
 
     #[error("ali-rs bug: {0}")]
@@ -89,7 +89,7 @@ fn test_json_error() {
     use std::collections::HashSet;
 
     use crate::ali::PartitionTable;
-    use crate::entity::report::*;
+    use crate::entity::action::*;
 
     let actions_mountpoints = vec![
         Action::Mountpoints(ActionMountpoints::CreatePartitionTable {

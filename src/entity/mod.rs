@@ -1,5 +1,7 @@
+pub mod action;
 pub mod blockdev;
 pub mod report;
+pub mod stage;
 
 use humanize_rs::bytes;
 

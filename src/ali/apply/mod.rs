@@ -8,14 +8,14 @@ mod map_err;
 mod routines;
 
 use crate::ali::Manifest;
-use crate::entity::report::Stages;
+use crate::entity::stage::StageActions;
 use crate::errors::AliError;
 
 // Use manifest to install a new system
 pub fn apply_manifest(
     manifest: &Manifest,
     install_location: &str,
-) -> Result<Box<Stages>, AliError> {
+) -> Result<Box<StageActions>, AliError> {
     let mut progress = Box::default();
 
     // @TODO: skip stages from arg

@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use crate::ali::Manifest;
-use crate::entity::report::Stages;
+use crate::entity::stage::StageActions;
 use crate::errors::AliError;
 use crate::utils::shell;
 
@@ -9,10 +9,10 @@ use crate::utils::shell;
 pub fn mountpoints(
     manifest: &Manifest,
     mnt_location: &str,
-    mut stages_performed: Box<Stages>,
-) -> Result<Box<Stages>, AliError> {
+    mut stages_performed: Box<StageActions>,
+) -> Result<Box<StageActions>, AliError> {
     use super::{disks, dm, fs};
-    use crate::entity::report::ActionMountpoints;
+    use crate::entity::action::ActionMountpoints;
 
     // Format and partition disks
     if let Some(ref m_disks) = manifest.disks {
@@ -153,10 +153,10 @@ pub fn mountpoints(
 pub fn bootstrap(
     manifest: &Manifest,
     install_location: &str,
-    mut stages_performed: Box<Stages>,
-) -> Result<Box<Stages>, AliError> {
+    mut stages_performed: Box<StageActions>,
+) -> Result<Box<StageActions>, AliError> {
     use super::bootstrap;
-    use crate::entity::report::ActionBootstrap;
+    use crate::entity::action::ActionBootstrap;
 
     // Collect packages, with base as bare-minimum
     let mut packages = HashSet::from(["base".to_string()]);
@@ -180,8 +180,8 @@ pub fn bootstrap(
 pub fn routines(
     manifest: &Manifest,
     install_location: &str,
-    mut stages_performed: Box<Stages>,
-) -> Result<Box<Stages>, AliError> {
+    mut stages_performed: Box<StageActions>,
+) -> Result<Box<StageActions>, AliError> {
     use super::routines;
 
     // Apply ALI routines installation outside of arch-chroot
@@ -203,8 +203,8 @@ pub fn routines(
 pub fn chroot_ali(
     manifest: &Manifest,
     install_location: &str,
-    mut stages_performed: Box<Stages>,
-) -> Result<Box<Stages>, AliError> {
+    mut stages_performed: Box<StageActions>,
+) -> Result<Box<StageActions>, AliError> {
     use super::archchroot;
 
     // Apply ALI routine installation in arch-chroot
@@ -226,8 +226,8 @@ pub fn chroot_ali(
 pub fn chroot_user(
     manifest: &Manifest,
     install_location: &str,
-    mut stages_performed: Box<Stages>,
-) -> Result<Box<Stages>, AliError> {
+    mut stages_performed: Box<StageActions>,
+) -> Result<Box<StageActions>, AliError> {
     use super::archchroot;
 
     if let Some(ref cmds) = manifest.chroot {
@@ -250,9 +250,9 @@ pub fn chroot_user(
 pub fn postinstall_user(
     manifest: &Manifest,
     _install_location: &str,
-    mut stages_performed: Box<Stages>,
-) -> Result<Box<Stages>, AliError> {
-    use crate::entity::report::ActionPostInstallUser;
+    mut stages_performed: Box<StageActions>,
+) -> Result<Box<StageActions>, AliError> {
+    use crate::entity::action::ActionPostInstallUser;
 
     // Apply manifest.postinstall with sh -c 'cmd'
     if let Some(ref cmds) = manifest.postinstall {

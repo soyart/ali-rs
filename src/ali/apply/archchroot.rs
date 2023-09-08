@@ -1,6 +1,6 @@
 use crate::ali::Manifest;
 use crate::constants::defaults;
-use crate::entity::report::{ActionChrootAli, ActionChrootUser};
+use crate::entity::action::{ActionChrootAli, ActionChrootUser};
 use crate::errors::AliError;
 use crate::utils::shell;
 

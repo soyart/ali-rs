@@ -1,5 +1,5 @@
 use crate::ali::Dm;
-use crate::entity::report::ActionMountpoints;
+use crate::entity::action::ActionMountpoints;
 use crate::errors::AliError;
 use crate::linux;
 

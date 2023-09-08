@@ -1,4 +1,4 @@
-use crate::entity::report::{
+use crate::entity::action::{
     Action, ActionChrootAli, ActionChrootUser, ActionMountpoints, ActionRoutine,
 };
 use crate::errors::AliError;
