@@ -2,6 +2,7 @@ use crate::ali::Manifest;
 use crate::constants::defaults;
 use crate::entity::action::{ActionChrootAli, ActionChrootUser};
 use crate::errors::AliError;
+use crate::hooks;
 use crate::utils::shell;
 
 use super::map_err::*;
@@ -32,6 +33,13 @@ where
     let mut actions = Vec::new();
 
     for cmd in cmds {
+        if cmd.starts_with('#') {
+            let action_hook = hooks::apply_hook(cmd, true, location)?;
+            actions.push(ActionChrootUser::Hook(action_hook));
+
+            continue;
+        }
+
         let action_user_cmd = ActionChrootUser::UserArchChrootCmd(cmd.to_string());
         if let Err(err) = shell::arch_chroot(location, cmd) {
             return Err(map_err_chroot_user(err, action_user_cmd, actions));
