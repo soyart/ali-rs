@@ -28,7 +28,11 @@ pub(super) fn run(manifest_file: &str, args: cli::ArgsApply) -> Result<Report, A
 
     // Apply manifest to location
     let location = install_location();
-    let stages = apply::apply_manifest(&manifest, &location)?;
+    let stages = apply::apply_manifest(
+        &manifest,
+        &location,
+        HashSet::from_iter(args.skip_stages.iter()),
+    )?;
 
     Ok(Report {
         location,
