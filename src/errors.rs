@@ -4,8 +4,32 @@ use thiserror::Error;
 use crate::entity::{action, stage};
 use crate::utils::shell;
 
+/// App-wide ali-rs error
 #[derive(Debug, Error)]
 pub enum AliError {
+    /// InstallError represents top-level error
+    /// after ApplyError.
+    ///
+    /// It keeps a state of stages successfully applied,
+    /// and the actual ApplyError
+    #[error("ali-rs installation error")]
+    InstallError {
+        error: Box<AliError>,
+        stages_performed: Box<stage::StageActions>,
+    },
+
+    /// ApplyError represents action-level error.
+    ///
+    /// Because some actions may have child actions,
+    /// we have to keep both failed action and its
+    /// relatives that were successfully performed.
+    #[error("ali manifest application error: {error}")]
+    ApplyError {
+        error: Box<AliError>,
+        action_failed: Box<action::Action>,
+        actions_performed: Vec<action::Action>,
+    },
+
     #[error("no such file {1}: {0}")]
     NoSuchFile(std::io::Error, String),
 
@@ -32,19 +56,6 @@ pub enum AliError {
 
     #[error("not implemented: {0}")]
     NotImplemented(String),
-
-    #[error("manifest application error: {error}")]
-    ApplyError {
-        error: Box<AliError>,
-        action_failed: Box<action::Action>,
-        actions_performed: Vec<action::Action>,
-    },
-
-    #[error("installation error")]
-    InstallError {
-        error: Box<AliError>,
-        stages_performed: Box<stage::StageActions>,
-    },
 
     #[error("ali-rs bug: {0}")]
     AliRsBug(String),
