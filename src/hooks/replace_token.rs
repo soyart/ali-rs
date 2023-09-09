@@ -1,16 +1,15 @@
-// @TODO: Use shell expression to extract strings
-
 use serde_json::json;
+use shlex;
 
 use crate::errors::AliError;
 
 use super::ActionHook;
 
-struct ReplaceToken<'a> {
-    token: &'a str,
-    value: &'a str,
-    template: &'a str,
-    output: &'a str,
+struct ReplaceToken {
+    token: String,
+    value: String,
+    template: String,
+    output: String,
 }
 
 /// #replace-token <TOKEN> <VALUE> <TEMPLATE> [OUTPUT]
@@ -26,13 +25,13 @@ struct ReplaceToken<'a> {
 pub(super) fn replace_token(cmd: &str) -> Result<ActionHook, AliError> {
     let r = parse_replace_token(cmd)?;
 
-    let template = std::fs::read_to_string(r.template).map_err(|err| {
+    let template = std::fs::read_to_string(&r.template).map_err(|err| {
         AliError::FileError(err, format!("#replace-token: read template {}", r.template))
     })?;
 
     let result = r.replace(&template)?;
 
-    std::fs::write(r.output, result).map_err(|err| {
+    std::fs::write(&r.output, result).map_err(|err| {
         AliError::FileError(
             err,
             format!("#replace-token: failed to write to output to {}", r.output),
@@ -44,30 +43,42 @@ pub(super) fn replace_token(cmd: &str) -> Result<ActionHook, AliError> {
 
 fn parse_replace_token(cmd: &str) -> Result<ReplaceToken, AliError> {
     let parts: Vec<&str> = cmd.split_whitespace().collect();
-    let l = parts.len();
-
-    if l <= 3 {
-        return Err(AliError::BadArgs(format!("#replace-token: only {l} parts")));
-    }
-
     if parts[0] != "#replace-token" {
         return Err(AliError::AliRsBug(
             "#replace-token: hook command does not starts with `#replace-token`".to_string(),
         ));
     }
 
-    let (token, value, template) = (parts[1], parts[2], parts[3]);
-    let output = parts.get(4).unwrap_or(&template).to_owned();
+    // shlex will return empty array if 1st word starts with '#'
+    let parts = shlex::split(&parts[1..].join(" "));
+    if parts.is_none() {
+        return Err(AliError::BadArgs(format!("#replace-token: bad args")));
+    }
+
+    let parts = parts.unwrap();
+    let l = parts.len();
+
+    if l != 3 && l != 4 {
+        return Err(AliError::BadArgs(format!(
+            "#replace-token: extra args (expecting 3-4): {l}"
+        )));
+    }
+
+    let (token, value, template) = (parts[0].clone(), parts[1].clone(), parts[2].clone());
+    let output = parts
+        .last()
+        .map(|s| s.to_owned())
+        .unwrap_or(template.clone());
 
     Ok(ReplaceToken {
         token,
         value,
         template,
-        output,
+        output: output.clone(),
     })
 }
 
-impl<'a> ToString for ReplaceToken<'a> {
+impl ToString for ReplaceToken {
     fn to_string(&self) -> String {
         json!({
             "token": self.token,
@@ -79,7 +90,7 @@ impl<'a> ToString for ReplaceToken<'a> {
     }
 }
 
-impl<'a> ReplaceToken<'a> {
+impl ReplaceToken {
     fn replace(&self, s: &str) -> Result<String, AliError> {
         let token = &format!("{{ {} }}", self.token);
         if !s.contains(token) {
@@ -89,7 +100,7 @@ impl<'a> ReplaceToken<'a> {
             )));
         }
 
-        Ok(s.replace(token, self.value))
+        Ok(s.replace(token, &self.value))
     }
 }
 
@@ -98,12 +109,17 @@ fn test_parse_replace_token() {
     let should_pass = vec![
         "#replace-token PORT 3322 /etc/ssh/sshd",
         "#replace-token foo bar https://example.com/template /some/file",
+        "#replace-token linux_boot \"loglevel=3 quiet root=/dev/archvg/archlv ro\" /etc/default/grub",
+        "#replace-token \"linux boot\" \"loglevel=3 quiet root=/dev/archvg/archlv ro\" /some/template /etc/default/grub",
     ];
 
     let should_err = vec![
         "PORT 3322 /etc/ssh/sshd",
         "#replace-token PORT",
         "#replace-token PORT 3322",
+        "#replace-token PORT \"3322\"",
+        "#replace-token PORT \"3322 /some/template",
+        "#replace-token PORT \"3322 /some/template /some/output",
     ];
 
     for cmd in should_pass {
