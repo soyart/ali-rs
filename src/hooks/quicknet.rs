@@ -31,13 +31,13 @@ fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
 
     if l <= 1 {
         return Err(AliError::BadArgs(
-            "@quicknet: bad arguments: only 1 string is supplied".to_string(),
+            "@quicknet: bad cmd: only 1 string is supplied".to_string(),
         ));
     }
 
     if parts[0] != "@quicknet" {
         return Err(AliError::BadArgs(
-            "@quicknet: bad arguments: first part is not \"@quicknet\"".to_string(),
+            "@quicknet: bad cmd: 1st part does not start with \"@quicknet\"".to_string(),
         ));
     }
 
@@ -114,12 +114,11 @@ fn apply_quicknet(qn: QuickNet, root_location: &str) -> Result<ActionHook, AliEr
 
 impl<'a> ToString for QuickNet<'a> {
     fn to_string(&self) -> String {
-        let j = json!({
+        json!({
             "interface": self.interface,
             "dns_upstream": self.dns_upstream,
-        });
-
-        j.to_string()
+        })
+        .to_string()
     }
 }
 

@@ -45,15 +45,13 @@ fn parse_replace_token(cmd: &str) -> Result<ReplaceToken, AliError> {
     // shlex will return empty array if 1st word starts with '#'
     let parts = shlex::split(cmd);
     if parts.is_none() {
-        return Err(AliError::BadArgs(format!(
-            "@replace-token: bad args: {cmd}"
-        )));
+        return Err(AliError::BadArgs(format!("@replace-token: bad cmd: {cmd}")));
     }
 
     let parts = parts.unwrap();
     if parts[0] != "@replace-token" {
         return Err(AliError::BadArgs(format!(
-            "@replace-token: cmd does not start with `@replace-token`: {cmd}"
+            "@replace-token: bad cmd: 1st part does not start with \"@replace-token\": {cmd}"
         )));
     }
 

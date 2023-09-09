@@ -44,7 +44,7 @@ fn parse_uncomment(cmd: &str) -> Result<Uncomment, AliError> {
     let parts = parts.unwrap();
     if parts[0] != "@uncomment" {
         return Err(AliError::BadArgs(format!(
-            "@uncomment: cmd does not start with `@uncomment`: {cmd}"
+            "@uncomment: bad cmd: 1st part does not start with \"@uncomment\": {cmd}"
         )));
     }
 
@@ -69,18 +69,17 @@ fn parse_uncomment(cmd: &str) -> Result<Uncomment, AliError> {
                 file: parts.last().unwrap().clone(),
             })
         }
-        _ => Err(AliError::BadArgs(format!("@uncomment: bad arg parts: {l}"))),
+        _ => Err(AliError::BadArgs(format!("@uncomment: bad cmd parts: {l}"))),
     }
 }
 
 impl ToString for Uncomment {
     fn to_string(&self) -> String {
-        let j = json!({
+        json!({
             "comment_marker": self.marker,
             "pattern": self.pattern,
             "file": self.file
-        });
-
-        j.to_string()
+        })
+        .to_string()
     }
 }
