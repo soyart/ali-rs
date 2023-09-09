@@ -1,4 +1,4 @@
-pub const QUICKNET_DHCP_FILENAME: &str = "00-dhcp_{{inf}}-quicknet.conf";
+pub const QUICKNET_FILENAME: &str = "00-dhcp_{{inf}}-quicknet.conf";
 
 pub const QUICKNET_DHCP: &str = r#"# Installed by ali-rs hook #quicknet
 [Match]

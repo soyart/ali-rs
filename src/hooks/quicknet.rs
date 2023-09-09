@@ -1,13 +1,11 @@
-use std::fs::OpenOptions;
-use std::io::Write;
-
 use serde::Serialize;
 
 use super::{
-    constants::{QUICKNET_DHCP, QUICKNET_DHCP_FILENAME, QUICKNET_DNS},
+    constants::{QUICKNET_DHCP, QUICKNET_DNS, QUICKNET_FILENAME},
     ActionHook,
 };
 use crate::errors::AliError;
+use crate::utils::shell;
 
 #[derive(Serialize)]
 struct QuickNet<'a> {
@@ -93,36 +91,18 @@ fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
     }
 }
 
+/// Creates directory "{root_location}/etc/systemd/network/"
+/// and write networkd quicknet config file for it
 fn apply_quicknet(qn: QuickNet, root_location: &str) -> Result<ActionHook, AliError> {
-    let dhcp_filename = QUICKNET_DHCP_FILENAME.replace("{{inf}}", qn.interface);
-    let dhcp_filename = format!("{root_location}/{dhcp_filename}");
+    // Extends to include systemd path
+    let root_location = format!("{root_location}/etc/systemd/network");
+    shell::exec("mkdir", &["-p", &root_location])?;
 
-    let dhcp_conf = QUICKNET_DHCP.replace("{{inf}}", qn.interface);
+    let filename = QUICKNET_FILENAME.replace("{{inf}}", qn.interface);
+    let filename = format!("{root_location}/{filename}");
 
-    let mut f = OpenOptions::new()
-        .create(true)
-        .write(true)
-        .append(true)
-        .open(&dhcp_filename)
-        .map_err(|err| AliError::FileError(err, format!("open #quicknet file {dhcp_filename}")))?;
-
-    writeln!(f, "{dhcp_conf}").map_err(|err| {
-        AliError::FileError(
-            err,
-            format!("append/write #quicknet file (DHCP) {dhcp_filename}"),
-        )
-    })?;
-
-    if let Some(upstream) = qn.dns_upstream {
-        let dns_conf = QUICKNET_DNS.replace("{{dns_upstream}}", upstream);
-
-        writeln!(f, "{dns_conf}").map_err(|err| {
-            AliError::FileError(
-                err,
-                format!("append/write #quicknet file (DNS) {dhcp_filename}"),
-            )
-        })?;
-    }
+    std::fs::write(&filename, qn.encode_to_string())
+        .map_err(|err| AliError::FileError(err, format!("writing file {filename}")))?;
 
     Ok(ActionHook::QuickNet(qn.to_string()))
 }
@@ -130,6 +110,20 @@ fn apply_quicknet(qn: QuickNet, root_location: &str) -> Result<ActionHook, AliEr
 impl<'a> ToString for QuickNet<'a> {
     fn to_string(&self) -> String {
         serde_json::to_string(&self).expect("failed to serialize to JSON")
+    }
+}
+
+impl<'a> QuickNet<'a> {
+    fn encode_to_string(&self) -> String {
+        serde_json::to_string(&self).expect("failed to serialize to JSON");
+        let mut s = QUICKNET_DHCP.replace("{{inf}}", self.interface);
+        if let Some(upstream) = self.dns_upstream {
+            let dns_conf = QUICKNET_DNS.replace("{{dns_upstream}}", upstream);
+
+            s = format!("{s}\n{dns_conf}");
+        }
+
+        s
     }
 }
 
@@ -162,5 +156,56 @@ fn test_parse_quicknet() {
             let result = result.unwrap();
             panic!("got ok result from bad arg {cmd}: {}", result.to_string());
         }
+    }
+}
+
+#[test]
+fn test_quicknet_encode() {
+    use std::collections::HashMap;
+
+    let tests = HashMap::from([
+        (
+            "#quicknet eth0",
+            r#"# Installed by ali-rs hook #quicknet
+[Match]
+Name=eth0
+
+[Network]
+DHCP=yes
+"#,
+        ),
+        (
+            "#quicknet eth0 dns 9.9.9.9",
+            r#"# Installed by ali-rs hook #quicknet
+[Match]
+Name=eth0
+
+[Network]
+DHCP=yes
+
+# Installed by ali-rs hook #quicknet
+DNS=9.9.9.9
+"#,
+        ),
+        (
+            "#quicknet dns 8.8.8.8 ens3",
+            r#"# Installed by ali-rs hook #quicknet
+[Match]
+Name=ens3
+
+[Network]
+DHCP=yes
+
+# Installed by ali-rs hook #quicknet
+DNS=8.8.8.8
+"#,
+        ),
+    ]);
+
+    for (cmd, expected) in tests {
+        let qn = parse_quicknet(cmd).unwrap();
+        let s = qn.encode_to_string();
+
+        assert_eq!(expected, s);
     }
 }
