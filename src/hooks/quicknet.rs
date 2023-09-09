@@ -26,6 +26,7 @@ pub(super) fn quicknet(cmd_string: &str, root_location: &str) -> Result<ActionHo
 fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
     let parts: Vec<&str> = cmd.split_whitespace().collect();
     let l = parts.len();
+
     if l <= 1 {
         return Err(AliError::BadArgs(
             "#quicknet: bad arguments: only 1 string is supplied".to_string(),
@@ -39,6 +40,18 @@ fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
     }
 
     match l {
+        2 => {
+            let interface = parts[1];
+            if interface == "dns" {
+                return Err(AliError::BadArgs("got only keyword `dns`".to_string()));
+            }
+
+            Ok(QuickNet {
+                interface,
+                dns_upstream: None,
+            })
+        }
+
         4 => {
             let mut dns_keyword_idx = None;
             for (i, word) in parts.iter().enumerate() {
@@ -74,17 +87,7 @@ fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
                 dns_upstream: Some(parts[dns_keyword_idx + 1]),
             })
         }
-        2 => {
-            let interface = parts[1];
-            if interface == "dns" {
-                return Err(AliError::BadArgs("got only dns keyword".to_string()));
-            }
 
-            Ok(QuickNet {
-                interface,
-                dns_upstream: None,
-            })
-        }
         _ => Err(AliError::BadArgs(format!(
             "bad quicknet arguments length: {l}"
         ))),
@@ -135,6 +138,7 @@ fn test_parse_quicknet() {
         "#quicknet dns 1.1.1.1 eth0",
         "#quicknet eth0 dns 1.1.1.1",
     ];
+
     let should_err = vec![
         "eth0",
         "#quicknet",
@@ -152,9 +156,8 @@ fn test_parse_quicknet() {
 
     for cmd in should_err {
         let result = parse_quicknet(cmd);
-        if result.is_ok() {
-            let result = result.unwrap();
-            panic!("got ok result from bad arg {cmd}: {}", result.to_string());
+        if let Ok(qn) = result {
+            panic!("got ok result from bad arg {cmd}: {}", qn.to_string());
         }
     }
 }
