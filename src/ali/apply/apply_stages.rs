@@ -151,8 +151,8 @@ pub fn postinstall_user(
     // Apply manifest.postinstall with sh -c 'cmd'
     if let Some(ref cmds) = manifest.postinstall {
         for cmd in cmds {
-            if cmd.starts_with("#") {
-                let action_hook = hooks::apply_hook(&cmd, false, install_location)?;
+            if cmd.starts_with('#') {
+                let action_hook = hooks::apply_hook(cmd, false, install_location)?;
                 stages
                     .postinstall_user
                     .push(ActionPostInstallUser::Hook(action_hook));

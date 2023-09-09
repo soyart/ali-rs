@@ -2,7 +2,6 @@ use std::fs::OpenOptions;
 use std::io::Write;
 
 use serde::Serialize;
-use serde_json;
 
 use super::{
     constants::{QUICKNET_DHCP, QUICKNET_DHCP_FILENAME, QUICKNET_DNS},
@@ -16,18 +15,18 @@ struct QuickNet<'a> {
     dns_upstream: Option<&'a str>,
 }
 
-impl<'a> ToString for QuickNet<'a> {
-    fn to_string(&self) -> String {
-        serde_json::to_string(&self).expect("failed to serialize to JSON")
-    }
+pub(super) fn quicknet(cmd_string: &str, root_location: &str) -> Result<ActionHook, AliError> {
+    let qn = parse_quicknet(cmd_string)?;
+
+    apply_quicknet(qn, root_location)
 }
 
 // #quicknet [dns <DNS_UPSTREAM>] <INTERFACE>
 // Examples:
 // #quicknet ens3 ==> Setup simple DHCP for ens3
 // #quicknet dns 1.1.1.1 ens3 => Setup simple DHCP and DNS upstream 1.1.1.1 for ens3
-pub(super) fn quicknet(cmd_string: &str, root_location: &str) -> Result<ActionHook, AliError> {
-    let parts = cmd_string.split_whitespace().collect::<Vec<&str>>();
+fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
+    let parts: Vec<&str> = cmd.split_whitespace().collect();
     let l = parts.len();
     if l <= 1 {
         return Err(AliError::BadArgs(
@@ -41,13 +40,13 @@ pub(super) fn quicknet(cmd_string: &str, root_location: &str) -> Result<ActionHo
         ));
     }
 
-    let qn = match l {
+    match l {
         4 => {
             let mut dns_keyword_idx = None;
-            for (i, word) in parts.iter().skip(1).enumerate() {
+            for (i, word) in parts.iter().enumerate() {
                 if *word == "dns" {
                     // We skipped 1 in iter
-                    dns_keyword_idx = Some(i - 1);
+                    dns_keyword_idx = Some(i);
                     break;
                 }
             }
@@ -72,19 +71,26 @@ pub(super) fn quicknet(cmd_string: &str, root_location: &str) -> Result<ActionHo
                 }
             };
 
-            QuickNet {
+            Ok(QuickNet {
                 interface: parts[interface_idx],
                 dns_upstream: Some(parts[dns_keyword_idx + 1]),
-            }
+            })
         }
-        2 => QuickNet {
-            interface: parts[1],
-            dns_upstream: None,
-        },
-        _ => return Err(AliError::BadArgs("bad quicknet arguments".to_string())),
-    };
+        2 => {
+            let interface = parts[1];
+            if interface == "dns" {
+                return Err(AliError::BadArgs("got only dns keyword".to_string()));
+            }
 
-    apply_quicknet(qn, root_location)
+            Ok(QuickNet {
+                interface,
+                dns_upstream: None,
+            })
+        }
+        _ => Err(AliError::BadArgs(format!(
+            "bad quicknet arguments length: {l}"
+        ))),
+    }
 }
 
 fn apply_quicknet(qn: QuickNet, root_location: &str) -> Result<ActionHook, AliError> {
@@ -119,4 +125,42 @@ fn apply_quicknet(qn: QuickNet, root_location: &str) -> Result<ActionHook, AliEr
     }
 
     Ok(ActionHook::QuickNet(qn.to_string()))
+}
+
+impl<'a> ToString for QuickNet<'a> {
+    fn to_string(&self) -> String {
+        serde_json::to_string(&self).expect("failed to serialize to JSON")
+    }
+}
+
+#[test]
+fn test_parse_quicknet() {
+    let should_pass = vec![
+        "#quicknet eth0",
+        "#quicknet inf",
+        "#quicknet dns 1.1.1.1 eth0",
+        "#quicknet eth0 dns 1.1.1.1",
+    ];
+    let should_err = vec![
+        "eth0",
+        "#quicknet",
+        "#quicknet dns",
+        "#quicknet eth0 1.1.1.1 dns",
+        "#quickmet eth0 dns",
+    ];
+
+    for cmd in should_pass {
+        let result = parse_quicknet(cmd);
+        if let Err(err) = result {
+            panic!("got error from cmd {cmd}: {err}");
+        }
+    }
+
+    for cmd in should_err {
+        let result = parse_quicknet(cmd);
+        if result.is_ok() {
+            let result = result.unwrap();
+            panic!("got ok result from bad arg {cmd}: {}", result.to_string());
+        }
+    }
 }
