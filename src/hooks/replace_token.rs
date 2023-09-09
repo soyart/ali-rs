@@ -5,6 +5,7 @@ use crate::errors::AliError;
 
 use super::ActionHook;
 
+#[derive(Debug, PartialEq)]
 struct ReplaceToken {
     token: String,
     value: String,
@@ -50,7 +51,7 @@ fn parse_replace_token(cmd: &str) -> Result<ReplaceToken, AliError> {
     }
 
     // shlex will return empty array if 1st word starts with '#'
-    let parts = shlex::split(&parts[1..].join(" "));
+    let parts = shlex::split(&cmd.replace("#replace-token", ""));
     if parts.is_none() {
         return Err(AliError::BadArgs(format!("#replace-token: bad args")));
     }
@@ -106,6 +107,8 @@ impl ReplaceToken {
 
 #[test]
 fn test_parse_replace_token() {
+    use std::collections::HashMap;
+
     let should_pass = vec![
         "#replace-token PORT 3322 /etc/ssh/sshd",
         "#replace-token foo bar https://example.com/template /some/file",
@@ -134,5 +137,41 @@ fn test_parse_replace_token() {
         if let Ok(qn) = result {
             panic!("got ok result from bad arg {cmd}: {}", qn.to_string());
         }
+    }
+
+    let tests = HashMap::from([
+        (
+            "#replace-token PORT 3322 /etc/ssh/sshd",
+            ReplaceToken{
+                token: String::from("PORT"),
+                value: String::from("3322"),
+                template: String::from("/etc/ssh/sshd"),
+                output: String::from("/etc/ssh/sshd")
+            }
+        ),
+        (
+            "#replace-token linux_boot \"loglevel=3 quiet root=/dev/archvg/archlv ro\" /etc/default/grub",
+            ReplaceToken{
+                token: String::from("linux_boot"),
+                value: String::from("loglevel=3 quiet root=/dev/archvg/archlv ro"),
+                template: String::from("/etc/default/grub"),
+                output: String::from("/etc/default/grub"),
+            },
+        ),
+        (
+            "#replace-token \"linux boot\" \"loglevel=3 quiet root=/dev/archvg/archlv ro\" /some/template /etc/default/grub",
+            ReplaceToken{
+                token: String::from("linux boot"),
+                value: String::from("loglevel=3 quiet root=/dev/archvg/archlv ro"),
+                template: String::from("/some/template"),
+                output: String::from("/etc/default/grub"),
+            },
+        ),
+    ]);
+
+    for (cmd, expected) in tests {
+        let actual = parse_replace_token(cmd).unwrap();
+
+        assert_eq!(actual, expected);
     }
 }

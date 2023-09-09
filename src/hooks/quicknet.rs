@@ -20,8 +20,11 @@ pub(super) fn quicknet(cmd_string: &str, root_location: &str) -> Result<ActionHo
 
 /// #quicknet [dns <DNS_UPSTREAM>] <INTERFACE>
 /// Examples:
-/// #quicknet ens3 ==> Setup simple DHCP for ens3
-/// #quicknet dns 1.1.1.1 ens3 => Setup simple DHCP and DNS upstream 1.1.1.1 for ens3
+/// #quicknet ens3
+/// => Setup simple DHCP for ens3
+///
+/// #quicknet dns 1.1.1.1 ens3
+/// => Setup simple DHCP and DNS upstream 1.1.1.1 for ens3
 fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
     let parts: Vec<&str> = cmd.split_whitespace().collect();
     let l = parts.len();
