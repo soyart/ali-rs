@@ -1,6 +1,7 @@
 mod constants;
 mod quicknet;
 mod replace_token;
+mod uncomment;
 
 use serde::{Deserialize, Serialize};
 
@@ -13,6 +14,7 @@ use crate::errors::AliError;
 pub enum ActionHook {
     QuickNet(String),
     ReplaceToken(String),
+    Uncomment(String),
 }
 
 pub fn apply_hook(
@@ -32,8 +34,9 @@ pub fn apply_hook(
 
     let hook = hook.unwrap();
     match *hook {
-        "#quicknet" => quicknet::quicknet(hook_cmd, root_location),
-        "#replace-token" => replace_token::replace_token(hook_cmd),
+        "@quicknet" => quicknet::quicknet(hook_cmd, root_location),
+        "@replace-token" => replace_token::replace_token(hook_cmd),
+        "@uncomment" => uncomment::uncomment(hook_cmd),
         _ => Err(AliError::BadArgs(format!("bad hook cmd: {hook}"))),
     }
 }

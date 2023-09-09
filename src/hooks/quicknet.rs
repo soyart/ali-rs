@@ -18,12 +18,12 @@ pub(super) fn quicknet(cmd_string: &str, root_location: &str) -> Result<ActionHo
     apply_quicknet(qn, root_location)
 }
 
-/// #quicknet [dns <DNS_UPSTREAM>] <INTERFACE>
+/// @quicknet [dns <DNS_UPSTREAM>] <INTERFACE>
 /// Examples:
-/// #quicknet ens3
+/// @quicknet ens3
 /// => Setup simple DHCP for ens3
 ///
-/// #quicknet dns 1.1.1.1 ens3
+/// @quicknet dns 1.1.1.1 ens3
 /// => Setup simple DHCP and DNS upstream 1.1.1.1 for ens3
 fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
     let parts: Vec<&str> = cmd.split_whitespace().collect();
@@ -31,13 +31,13 @@ fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
 
     if l <= 1 {
         return Err(AliError::BadArgs(
-            "#quicknet: bad arguments: only 1 string is supplied".to_string(),
+            "@quicknet: bad arguments: only 1 string is supplied".to_string(),
         ));
     }
 
-    if parts[0] != "#quicknet" {
+    if parts[0] != "@quicknet" {
         return Err(AliError::BadArgs(
-            "#quicknet: bad arguments: first part is not \"#quicknet\"".to_string(),
+            "@quicknet: bad arguments: first part is not \"@quicknet\"".to_string(),
         ));
     }
 
@@ -46,7 +46,7 @@ fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
             let interface = parts[1];
             if interface == "dns" {
                 return Err(AliError::BadArgs(
-                    "#quicknet: got only keyword `dns`".to_string(),
+                    "@quicknet: got only keyword `dns`".to_string(),
                 ));
             }
 
@@ -68,7 +68,7 @@ fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
 
             if dns_keyword_idx.is_none() {
                 return Err(AliError::BadArgs(
-                    "#quicknet: missing argument keyword \"dns\"".to_string(),
+                    "@quicknet: missing argument keyword \"dns\"".to_string(),
                 ));
             }
             // #cmd dns upstream inf  1
@@ -81,7 +81,7 @@ fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
                     1
                 } else {
                     return Err(AliError::BadArgs(format!(
-                        "#quicknet: \"dns\" keyword in bad position: {dns_keyword_idx}"
+                        "@quicknet: \"dns\" keyword in bad position: {dns_keyword_idx}"
                     )));
                 }
             };
@@ -92,9 +92,7 @@ fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
             })
         }
 
-        _ => Err(AliError::BadArgs(format!(
-            "#quicknet: bad arguments length: {l}"
-        ))),
+        _ => Err(AliError::BadArgs(format!("@quicknet: bad cmd parts: {l}"))),
     }
 }
 
@@ -141,17 +139,17 @@ impl<'a> QuickNet<'a> {
 #[test]
 fn test_parse_quicknet() {
     let should_pass = vec![
-        "#quicknet eth0",
-        "#quicknet inf",
-        "#quicknet dns 1.1.1.1 eth0",
-        "#quicknet eth0 dns 1.1.1.1",
+        "@quicknet eth0",
+        "@quicknet inf",
+        "@quicknet dns 1.1.1.1 eth0",
+        "@quicknet eth0 dns 1.1.1.1",
     ];
 
     let should_err = vec![
         "eth0",
-        "#quicknet",
-        "#quicknet dns",
-        "#quicknet eth0 1.1.1.1 dns",
+        "@quicknet",
+        "@quicknet dns",
+        "@quicknet eth0 1.1.1.1 dns",
         "#quickmet eth0 dns",
     ];
 
@@ -176,8 +174,8 @@ fn test_quicknet_encode() {
 
     let tests = HashMap::from([
         (
-            "#quicknet eth0",
-            r#"# Installed by ali-rs hook #quicknet
+            "@quicknet eth0",
+            r#"# Installed by ali-rs hook @quicknet
 [Match]
 Name=eth0
 
@@ -186,28 +184,28 @@ DHCP=yes
 "#,
         ),
         (
-            "#quicknet eth0 dns 9.9.9.9",
-            r#"# Installed by ali-rs hook #quicknet
+            "@quicknet eth0 dns 9.9.9.9",
+            r#"# Installed by ali-rs hook @quicknet
 [Match]
 Name=eth0
 
 [Network]
 DHCP=yes
 
-# Installed by ali-rs hook #quicknet
+# Installed by ali-rs hook @quicknet
 DNS=9.9.9.9
 "#,
         ),
         (
-            "#quicknet dns 8.8.8.8 ens3",
-            r#"# Installed by ali-rs hook #quicknet
+            "@quicknet dns 8.8.8.8 ens3",
+            r#"# Installed by ali-rs hook @quicknet
 [Match]
 Name=ens3
 
 [Network]
 DHCP=yes
 
-# Installed by ali-rs hook #quicknet
+# Installed by ali-rs hook @quicknet
 DNS=8.8.8.8
 "#,
         ),
