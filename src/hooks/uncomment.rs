@@ -35,8 +35,6 @@ pub(super) fn uncomment(cmd: &str) -> Result<ActionHook, AliError> {
 /// Examples:
 /// @uncomment PubkeyAuthentication /etc/ssh/sshd_config
 /// => Uncomments key PubkeyAuthentication in /etc/ssh/sshd_config
-///
-/// @uncomment PubkeyAuthentication /etc/ssh/sshd_config
 fn parse_uncomment(cmd: &str) -> Result<Uncomment, AliError> {
     let parts = shlex::split(cmd);
     if parts.is_none() {
