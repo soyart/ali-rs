@@ -1,14 +1,18 @@
 mod constants;
 mod quicknet;
+mod replace_token;
 
 use serde::{Deserialize, Serialize};
 
 use crate::errors::AliError;
 
+/// All hook actions stores JSON string representation of the hook.
+/// The reason being we want to hide hook implementation from outside code.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 
 pub enum ActionHook {
     QuickNet(String),
+    ReplaceToken(String),
 }
 
 pub fn apply_hook(
@@ -27,8 +31,9 @@ pub fn apply_hook(
     }
 
     let hook = hook.unwrap();
-    match hook {
-        &"#quicknet" => quicknet::quicknet(hook_cmd, root_location),
-        _ => Err(AliError::NotImplemented(format!("hook {hook}"))),
+    match *hook {
+        "#quicknet" => quicknet::quicknet(hook_cmd, root_location),
+        "#replace-token" => replace_token::replace_token(hook_cmd),
+        _ => Err(AliError::BadArgs(format!("bad hook cmd: {hook}"))),
     }
 }

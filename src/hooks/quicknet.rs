@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde_json::json;
 
 use super::{
     constants::{QUICKNET_DHCP, QUICKNET_DNS, QUICKNET_FILENAME},
@@ -7,7 +7,6 @@ use super::{
 use crate::errors::AliError;
 use crate::utils::shell;
 
-#[derive(Serialize)]
 struct QuickNet<'a> {
     interface: &'a str,
     dns_upstream: Option<&'a str>,
@@ -19,10 +18,10 @@ pub(super) fn quicknet(cmd_string: &str, root_location: &str) -> Result<ActionHo
     apply_quicknet(qn, root_location)
 }
 
-// #quicknet [dns <DNS_UPSTREAM>] <INTERFACE>
-// Examples:
-// #quicknet ens3 ==> Setup simple DHCP for ens3
-// #quicknet dns 1.1.1.1 ens3 => Setup simple DHCP and DNS upstream 1.1.1.1 for ens3
+/// #quicknet [dns <DNS_UPSTREAM>] <INTERFACE>
+/// Examples:
+/// #quicknet ens3 ==> Setup simple DHCP for ens3
+/// #quicknet dns 1.1.1.1 ens3 => Setup simple DHCP and DNS upstream 1.1.1.1 for ens3
 fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
     let parts: Vec<&str> = cmd.split_whitespace().collect();
     let l = parts.len();
@@ -43,7 +42,9 @@ fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
         2 => {
             let interface = parts[1];
             if interface == "dns" {
-                return Err(AliError::BadArgs("got only keyword `dns`".to_string()));
+                return Err(AliError::BadArgs(
+                    "#quicknet: got only keyword `dns`".to_string(),
+                ));
             }
 
             Ok(QuickNet {
@@ -56,8 +57,8 @@ fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
             let mut dns_keyword_idx = None;
             for (i, word) in parts.iter().enumerate() {
                 if *word == "dns" {
-                    // We skipped 1 in iter
                     dns_keyword_idx = Some(i);
+
                     break;
                 }
             }
@@ -89,7 +90,7 @@ fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
         }
 
         _ => Err(AliError::BadArgs(format!(
-            "bad quicknet arguments length: {l}"
+            "#quicknet: bad arguments length: {l}"
         ))),
     }
 }
@@ -112,16 +113,20 @@ fn apply_quicknet(qn: QuickNet, root_location: &str) -> Result<ActionHook, AliEr
 
 impl<'a> ToString for QuickNet<'a> {
     fn to_string(&self) -> String {
-        serde_json::to_string(&self).expect("failed to serialize to JSON")
+        let j = json!({
+            "interface": self.interface,
+            "dns_upstream": self.dns_upstream,
+        });
+
+        j.to_string()
     }
 }
 
 impl<'a> QuickNet<'a> {
     fn encode_to_string(&self) -> String {
-        serde_json::to_string(&self).expect("failed to serialize to JSON");
-        let mut s = QUICKNET_DHCP.replace("{{inf}}", self.interface);
+        let mut s = QUICKNET_DHCP.replace("{{ inf }}", self.interface);
         if let Some(upstream) = self.dns_upstream {
-            let dns_conf = QUICKNET_DNS.replace("{{dns_upstream}}", upstream);
+            let dns_conf = QUICKNET_DNS.replace("{{ dns_upstream }}", upstream);
 
             s = format!("{s}\n{dns_conf}");
         }
