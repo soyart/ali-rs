@@ -3,6 +3,7 @@ mod cli;
 mod constants;
 mod entity;
 mod errors;
+mod hooks;
 mod linux;
 mod run;
 mod utils;

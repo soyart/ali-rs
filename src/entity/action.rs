@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use serde::{Deserialize, Serialize};
 
 use crate::ali;
+use crate::hooks;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -133,6 +134,9 @@ pub enum ActionChrootAli {
 pub enum ActionChrootUser {
     #[serde(rename = "userArchChrootCmd")]
     UserArchChrootCmd(String),
+
+    #[serde(rename = "aliRsHookChrootUser")]
+    Hook(hooks::ActionHook),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -140,6 +144,9 @@ pub enum ActionChrootUser {
 pub enum ActionPostInstallUser {
     #[serde(rename = "userPostInstallCmd")]
     UserPostInstallCmd(String),
+
+    #[serde(rename = "aliRsHookPostInstall")]
+    Hook(hooks::ActionHook),
 }
 
 #[ignore = "Ignored because just dummy print JSON"]

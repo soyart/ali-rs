@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use crate::ali::Manifest;
 use crate::entity::stage::StageActions;
 use crate::errors::AliError;
+use crate::hooks;
 use crate::utils::shell;
 
 /// Prepare mountpoints for the new system on live system
@@ -142,7 +143,7 @@ pub fn chroot_user(
 
 pub fn postinstall_user(
     manifest: &Manifest,
-    _install_location: &str,
+    install_location: &str,
     stages: &mut StageActions,
 ) -> Result<(), AliError> {
     use crate::entity::action::ActionPostInstallUser;
@@ -150,6 +151,15 @@ pub fn postinstall_user(
     // Apply manifest.postinstall with sh -c 'cmd'
     if let Some(ref cmds) = manifest.postinstall {
         for cmd in cmds {
+            if cmd.starts_with('#') {
+                let action_hook = hooks::apply_hook(cmd, false, install_location)?;
+                stages
+                    .postinstall_user
+                    .push(ActionPostInstallUser::Hook(action_hook));
+
+                continue;
+            }
+
             shell::sh_c(cmd)?;
 
             let action_postinstall_cmd = ActionPostInstallUser::UserPostInstallCmd(cmd.clone());
