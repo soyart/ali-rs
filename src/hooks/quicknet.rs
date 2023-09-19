@@ -1,9 +1,7 @@
 use serde_json::json;
 
-use super::{
-    constants::{QUICKNET_DHCP, QUICKNET_DNS, QUICKNET_FILENAME},
-    ActionHook,
-};
+use super::constants::quicknet::*;
+use super::ActionHook;
 use crate::errors::AliError;
 use crate::utils::shell;
 
@@ -103,7 +101,7 @@ fn apply_quicknet(qn: QuickNet, root_location: &str) -> Result<ActionHook, AliEr
     let root_location = format!("{root_location}/etc/systemd/network");
     shell::exec("mkdir", &["-p", &root_location])?;
 
-    let filename = QUICKNET_FILENAME.replace("{{inf}}", qn.interface);
+    let filename = FILENAME.replace(TOKEN_INTERFACE, qn.interface);
     let filename = format!("{root_location}/{filename}");
 
     std::fs::write(&filename, qn.encode_to_string())
@@ -124,9 +122,9 @@ impl<'a> ToString for QuickNet<'a> {
 
 impl<'a> QuickNet<'a> {
     fn encode_to_string(&self) -> String {
-        let mut s = QUICKNET_DHCP.replace("{{ inf }}", self.interface);
+        let mut s = NETWORKD_DHCP.replace(TOKEN_INTERFACE, self.interface);
         if let Some(upstream) = self.dns_upstream {
-            let dns_conf = QUICKNET_DNS.replace("{{ dns_upstream }}", upstream);
+            let dns_conf = NETWORKD_DNS.replace(TOKEN_DNS, upstream);
 
             s = format!("{s}\n{dns_conf}");
         }

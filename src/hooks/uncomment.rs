@@ -181,7 +181,6 @@ PubkeyAuthentication no"#;
 
         assert_ne!(expected, uncommented_port);
         assert_ne!(original, uncommented_all);
-
         assert_eq!(expected, uncommented_all);
     }
 }

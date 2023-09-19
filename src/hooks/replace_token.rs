@@ -4,7 +4,7 @@ use crate::errors::AliError;
 
 use super::ActionHook;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 struct ReplaceToken {
     token: String,
     value: String,
@@ -25,6 +25,7 @@ struct ReplaceToken {
 pub(super) fn replace_token(cmd: &str) -> Result<ActionHook, AliError> {
     let r = parse_replace_token(cmd)?;
 
+    // @TODO: Read from remote template, e.g. with https or ssh
     let template = std::fs::read_to_string(&r.template).map_err(|err| {
         AliError::FileError(err, format!("@replace-token: read template {}", r.template))
     })?;
@@ -91,7 +92,8 @@ impl ToString for ReplaceToken {
 
 impl ReplaceToken {
     fn replace(&self, s: &str) -> Result<String, AliError> {
-        let token = &format!("{{ {} }}", self.token);
+        let token = &format!("{} {} {}", "{{", self.token, "}}");
+
         if !s.contains(token) {
             return Err(AliError::BadArgs(format!(
                 "template {} does not contains token \"{token}\"",
@@ -169,6 +171,43 @@ fn test_parse_replace_token() {
 
     for (cmd, expected) in tests {
         let actual = parse_replace_token(cmd).unwrap();
+
+        assert_eq!(expected, actual);
+    }
+}
+
+#[test]
+fn test_uncomment() {
+    use std::collections::HashMap;
+
+    let tests = HashMap::from([
+        (
+            ReplaceToken {
+                token: String::from("PORT"),
+                value: String::from("3322"),
+                template: String::from("/etc/ssh/sshd"),
+                output: String::from("/etc/ssh/sshd"),
+            },
+            ("{{ PORT }} foo bar {{PORT}}", "3322 foo bar {{PORT}}"),
+        ),
+        (
+            ReplaceToken {
+                token: String::from("foo"),
+                value: String::from("bar"),
+                template: String::from("/etc/ssh/sshd"),
+                output: String::from("/etc/ssh/sshd"),
+            },
+            (
+                "{{ bar }} {{ foo }} {{ bar }} foo <{{ foo }}>",
+                "{{ bar }} bar {{ bar }} foo <bar>",
+            ),
+        ),
+    ]);
+
+    for (replace, (template, expected)) in tests {
+        let actual = replace
+            .replace(template)
+            .expect("failed to replace template {template}");
 
         assert_eq!(expected, actual);
     }
