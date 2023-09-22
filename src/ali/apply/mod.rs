@@ -19,7 +19,7 @@ use crate::errors::AliError;
 pub fn apply_manifest(
     manifest: &Manifest,
     install_location: &str,
-    skip: HashSet<&Stage>,
+    skip: HashSet<Stage>,
 ) -> Result<Box<StageActions>, AliError> {
     let mut progress = Box::default();
 

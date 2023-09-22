@@ -7,10 +7,34 @@ use crate::ali::{Dm, Manifest};
 use crate::cli;
 use crate::constants::{self, defaults};
 use crate::entity::report::Report;
+use crate::entity::stage;
 use crate::errors::AliError;
 
 pub(super) fn run(manifest_file: &str, args: cli::ArgsApply) -> Result<Report, AliError> {
     let start = std::time::Instant::now();
+
+    let mut skip_stages: HashSet<stage::Stage> = HashSet::from_iter(args.skip_stages);
+    if let Some(stages) = args.stages {
+        for explicit_stage in stages.iter() {
+            if skip_stages.contains(explicit_stage) {
+                return Err(AliError::BadArgs(format!(
+                    "stage {explicit_stage} is ambiguous"
+                )));
+            }
+        }
+
+        let mut all_stages: HashSet<stage::Stage> = HashSet::from(stage::STAGES);
+        for skip in skip_stages.iter() {
+            all_stages.remove(skip);
+        }
+        skip_stages = HashSet::new();
+
+        let explicit_stages: HashSet<stage::Stage> = HashSet::from_iter(stages.into_iter());
+        let diff: HashSet<_> = all_stages.difference(&explicit_stages).collect();
+        for d in diff {
+            skip_stages.insert(d.to_owned());
+        }
+    }
 
     let manifest_yaml = std::fs::read_to_string(manifest_file)
         .map_err(|err| AliError::NoSuchFile(err, manifest_file.to_string()))?;
@@ -28,15 +52,11 @@ pub(super) fn run(manifest_file: &str, args: cli::ArgsApply) -> Result<Report, A
 
     // Apply manifest to location
     let location = install_location();
-    let stages = apply::apply_manifest(
-        &manifest,
-        &location,
-        HashSet::from_iter(args.skip_stages.iter()),
-    )?;
+    let stages_applied = apply::apply_manifest(&manifest, &location, skip_stages)?;
 
     Ok(Report {
         location,
-        summary: stages,
+        summary: stages_applied,
         duration: start.elapsed(),
     })
 }
