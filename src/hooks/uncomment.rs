@@ -63,7 +63,7 @@ fn uncomment_text_once(original: &str, marker: &str, key: &str) -> Result<String
 
             if line.contains(&pattern) {
                 let line_uncommented = line.replacen(&pattern, key, 1);
-                return Ok(original.replacen(&line, &line_uncommented, 1));
+                return Ok(original.replacen(line, &line_uncommented, 1));
             }
         }
     }
