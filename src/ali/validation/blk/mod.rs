@@ -773,7 +773,7 @@ mod tests {
                     manifest: Manifest {
                         location: None,
                         disks: Some(vec![ManifestDisk {
-                            device: "./mock_devs/sda".into(),
+                            device: "./test_assets/mock_devs/sda".into(),
                             table: PartitionTable::Gpt,
                             partitions: vec![
                                 ManifestPartition {
@@ -789,10 +789,10 @@ mod tests {
                             ],
                         }]),
                         device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
-                            pvs: Some(vec!["./mock_devs/sda2".into()]),
+                            pvs: Some(vec!["./test_assets/mock_devs/sda2".into()]),
                             vgs: Some(vec![ManifestLvmVg {
                                 name: "myvg".into(),
-                                pvs: vec!["./mock_devs/sda2".into()],
+                                pvs: vec!["./test_assets/mock_devs/sda2".into()],
                             }]),
                             lvs: Some(vec![ManifestLvmLv {
                                 name: "mylv".into(),
@@ -831,7 +831,7 @@ mod tests {
                         location: None,
                         disks: Some(vec![
                             ManifestDisk {
-                                device: "./mock_devs/sda".into(),
+                                device: "./test_assets/mock_devs/sda".into(),
                                 table: PartitionTable::Gpt,
                                 partitions: vec![
                                     ManifestPartition {
@@ -849,13 +849,13 @@ mod tests {
                         ]),
                         device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                             pvs: Some(vec![
-                                "./mock_devs/sda2".into(),
+                                "./test_assets/mock_devs/sda2".into(),
                                 "/dev/nvme0n1p1".into(),
                             ]),
                             vgs: Some(vec![ManifestLvmVg {
                                 name: "myvg".into(),
                                 pvs: vec![
-                                    "./mock_devs/sda2".into(),
+                                    "./test_assets/mock_devs/sda2".into(),
                                     "/dev/nvme0n1p1".into(),
                                 ],
                             }]),
@@ -896,7 +896,7 @@ mod tests {
                         location: None,
                         disks: Some(vec![
                             ManifestDisk {
-                                device: "./mock_devs/sda".into(),
+                                device: "./test_assets/mock_devs/sda".into(),
                                 table: PartitionTable::Gpt,
                                 partitions: vec![
                                     ManifestPartition {
@@ -912,7 +912,7 @@ mod tests {
                                 ],
                             },
                             ManifestDisk {
-                                device: "./mock_devs/sdb".into(),
+                                device: "./test_assets/mock_devs/sdb".into(),
                                 table: PartitionTable::Mbr,
                                 partitions: vec![
                                     ManifestPartition {
@@ -925,15 +925,15 @@ mod tests {
                         ]),
                         device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                             pvs: Some(vec![
-                                "./mock_devs/sda2".into(),
-                                "./mock_devs/sdb1".into(),
+                                "./test_assets/mock_devs/sda2".into(),
+                                "./test_assets/mock_devs/sdb1".into(),
                                 "/dev/nvme0n1p2".into(),
                             ]),
                             vgs: Some(vec![ManifestLvmVg {
                                 name: "myvg".into(),
                                 pvs: vec![
-                                    "./mock_devs/sda2".into(),
-                                    "./mock_devs/sdb1".into(),
+                                    "./test_assets/mock_devs/sda2".into(),
+                                    "./test_assets/mock_devs/sdb1".into(),
                                     "/dev/nvme0n1p2".into(),
                                 ],
                             }]),
@@ -974,7 +974,7 @@ mod tests {
                         location: None,
                         disks: Some(vec![
                             ManifestDisk {
-                                device: "./mock_devs/sda".into(),
+                                device: "./test_assets/mock_devs/sda".into(),
                                 table: PartitionTable::Gpt,
                                 partitions: vec![
                                     ManifestPartition {
@@ -990,7 +990,7 @@ mod tests {
                                 ],
                             },
                             ManifestDisk {
-                                device: "./mock_devs/sdb".into(),
+                                device: "./test_assets/mock_devs/sdb".into(),
                                 table: PartitionTable::Mbr,
                                 partitions: vec![
                                     ManifestPartition {
@@ -1003,15 +1003,15 @@ mod tests {
                         ]),
                         device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                             pvs: Some(vec![
-                                "./mock_devs/sda2".into(),
-                                "./mock_devs/sdb1".into(),
+                                "./test_assets/mock_devs/sda2".into(),
+                                "./test_assets/mock_devs/sdb1".into(),
                                 "/dev/nvme0n1p2".into(),
                             ]),
                             vgs: Some(vec![ManifestLvmVg {
                                 name: "myvg".into(),
                                 pvs: vec![
-                                    "./mock_devs/sda2".into(),
-                                    "./mock_devs/sdb1".into(),
+                                    "./test_assets/mock_devs/sda2".into(),
+                                    "./test_assets/mock_devs/sdb1".into(),
                                     "/dev/nvme0n1p2".into(),
                                 ],
                             }]),
@@ -1065,7 +1065,7 @@ mod tests {
                         location: None,
                         disks: Some(vec![
                             ManifestDisk {
-                                device: "./mock_devs/sda".into(),
+                                device: "./test_assets/mock_devs/sda".into(),
                                 table: PartitionTable::Gpt,
                                 partitions: vec![
                                     ManifestPartition {
@@ -1081,7 +1081,7 @@ mod tests {
                                 ],
                             },
                             ManifestDisk {
-                                device: "./mock_devs/sdb".into(),
+                                device: "./test_assets/mock_devs/sdb".into(),
                                 table: PartitionTable::Mbr,
                                 partitions: vec![
                                     ManifestPartition {
@@ -1094,15 +1094,15 @@ mod tests {
                         ]),
                         device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                             pvs: Some(vec![
-                                "./mock_devs/sda2".into(),
-                                "./mock_devs/sdb1".into(),
+                                "./test_assets/mock_devs/sda2".into(),
+                                "./test_assets/mock_devs/sdb1".into(),
                                 "/dev/nvme0n1p2".into(),
                             ]),
                             vgs: Some(vec![ManifestLvmVg {
                                 name: "myvg".into(),
                                 pvs: vec![
-                                    "./mock_devs/sda2".into(),
-                                    "./mock_devs/sdb1".into(),
+                                    "./test_assets/mock_devs/sda2".into(),
+                                    "./test_assets/mock_devs/sdb1".into(),
                                     "/dev/nvme0n1p2".into(),
                                     "/dev/nvme0n2p7".into(),
                                 ],
@@ -1157,7 +1157,7 @@ mod tests {
                         location: None,
                         disks: Some(vec![
                             ManifestDisk {
-                                device: "./mock_devs/sda".into(),
+                                device: "./test_assets/mock_devs/sda".into(),
                                 table: PartitionTable::Gpt,
                                 partitions: vec![
                                     ManifestPartition {
@@ -1173,7 +1173,7 @@ mod tests {
                                 ],
                             },
                             ManifestDisk {
-                                device: "./mock_devs/sdb".into(),
+                                device: "./test_assets/mock_devs/sdb".into(),
                                 table: PartitionTable::Mbr,
                                 partitions: vec![ManifestPartition {
                                     label: "PART_PV2".into(),
@@ -1184,14 +1184,14 @@ mod tests {
                         ]),
                     device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                         pvs: Some(vec![
-                            "./mock_devs/sda2".into(),
-                            "./mock_devs/sdb1".into(),
+                            "./test_assets/mock_devs/sda2".into(),
+                            "./test_assets/mock_devs/sdb1".into(),
                             "/dev/nvme0n1p2".into(),
                         ]),
                         vgs: Some(vec![
                             ManifestLvmVg {
                                 name: "mysatavg".into(),
-                                pvs: vec!["./mock_devs/sda2".into(), "./mock_devs/sdb1".into()],
+                                pvs: vec!["./test_assets/mock_devs/sda2".into(), "./test_assets/mock_devs/sdb1".into()],
                             },
                             ManifestLvmVg {
                                 name: "mynvmevg".into(),
@@ -1434,7 +1434,7 @@ mod tests {
                     location: None,
                     disks: Some(vec![
                         ManifestDisk {
-                            device: "./mock_devs/sda".into(),
+                            device: "./test_assets/mock_devs/sda".into(),
                             table: PartitionTable::Gpt,
                             partitions: vec![
                                 ManifestPartition {
@@ -1451,11 +1451,11 @@ mod tests {
                     }]),
                     device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                         pvs: Some(vec![
-                            "./mock_devs/sda2".into(),
+                            "./test_assets/mock_devs/sda2".into(),
                         ]),
                         vgs: Some(vec![ManifestLvmVg {
                             name: "myvg".into(),
-                            pvs: vec!["./mock_devs/sda2".into()],
+                            pvs: vec!["./test_assets/mock_devs/sda2".into()],
                         }]),
                         lvs: None,
                     })]),
@@ -1490,7 +1490,7 @@ mod tests {
                     location: None,
                     disks: Some(vec![
                         ManifestDisk {
-                            device: "./mock_devs/sda".into(),
+                            device: "./test_assets/mock_devs/sda".into(),
                             table: PartitionTable::Gpt,
                             partitions: vec![
                                 ManifestPartition {
@@ -1507,11 +1507,11 @@ mod tests {
                     }]),
                     device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                         pvs: Some(vec![
-                            "./mock_devs/sda2".into(),
+                            "./test_assets/mock_devs/sda2".into(),
                         ]),
                         vgs: Some(vec![ManifestLvmVg {
                             name: "myvg".into(),
-                            pvs: vec!["./mock_devs/sda2".into()],
+                            pvs: vec!["./test_assets/mock_devs/sda2".into()],
                         }]),
                         lvs: Some(vec![
                             ManifestLvmLv {
@@ -1557,7 +1557,7 @@ mod tests {
                     location: None,
                     disks: Some(vec![
                         ManifestDisk {
-                            device: "./mock_devs/sda".into(),
+                            device: "./test_assets/mock_devs/sda".into(),
                             table: PartitionTable::Gpt,
                             partitions: vec![
                                 ManifestPartition {
@@ -1574,11 +1574,11 @@ mod tests {
                     }]),
                     device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                         pvs: Some(vec![
-                            "./mock_devs/sda2".into(),
+                            "./test_assets/mock_devs/sda2".into(),
                         ]),
                         vgs: Some(vec![ManifestLvmVg {
                             name: "myvg".into(),
-                            pvs: vec!["./mock_devs/sda2".into()],
+                            pvs: vec!["./test_assets/mock_devs/sda2".into()],
                         }]),
                         lvs: Some(vec![
                             ManifestLvmLv {
@@ -1624,7 +1624,7 @@ mod tests {
                     location: None,
                     disks: Some(vec![
                         ManifestDisk {
-                            device: "./mock_devs/sda".into(),
+                            device: "./test_assets/mock_devs/sda".into(),
                             table: PartitionTable::Gpt,
                             partitions: vec![
                                 ManifestPartition {
@@ -1641,11 +1641,11 @@ mod tests {
                     }]),
                     device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                         pvs: Some(vec![
-                            "./mock_devs/sda2".into(),
+                            "./test_assets/mock_devs/sda2".into(),
                         ]),
                         vgs: Some(vec![ManifestLvmVg {
                             name: "myvg".into(),
-                            pvs: vec!["./mock_devs/sda2".into()],
+                            pvs: vec!["./test_assets/mock_devs/sda2".into()],
                         }]),
                         lvs: Some(vec![
                             ManifestLvmLv {
@@ -1691,7 +1691,7 @@ mod tests {
                     location: None,
                     disks: Some(vec![
                         ManifestDisk {
-                            device: "./mock_devs/sda".into(),
+                            device: "./test_assets/mock_devs/sda".into(),
                             table: PartitionTable::Gpt,
                             partitions: vec![
                                 ManifestPartition {
@@ -1708,11 +1708,11 @@ mod tests {
                     }]),
                     device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                         pvs: Some(vec![
-                            "./mock_devs/sda2".into(),
+                            "./test_assets/mock_devs/sda2".into(),
                         ]),
                         vgs: Some(vec![ManifestLvmVg {
                             name: "myvg".into(),
-                            pvs: vec!["./mock_devs/sda2".into()],
+                            pvs: vec!["./test_assets/mock_devs/sda2".into()],
                         }]),
                         lvs: Some(vec![
                             ManifestLvmLv {
@@ -1758,7 +1758,7 @@ mod tests {
                     location: None,
                     disks: Some(vec![
                         ManifestDisk {
-                            device: "./mock_devs/sda".into(),
+                            device: "./test_assets/mock_devs/sda".into(),
                             table: PartitionTable::Gpt,
                             partitions: vec![
                                 ManifestPartition {
@@ -1775,11 +1775,11 @@ mod tests {
                     }]),
                     device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                         pvs: Some(vec![
-                            "./mock_devs/sda2".into(),
+                            "./test_assets/mock_devs/sda2".into(),
                         ]),
                         vgs: Some(vec![ManifestLvmVg {
                             name: "myvg".into(),
-                            pvs: vec!["./mock_devs/sda2".into()],
+                            pvs: vec!["./test_assets/mock_devs/sda2".into()],
                         }]),
                         lvs: Some(vec![
                             ManifestLvmLv {
@@ -1825,7 +1825,7 @@ mod tests {
                     location: None,
                     disks: Some(vec![
                         ManifestDisk {
-                            device: "./mock_devs/sda".into(),
+                            device: "./test_assets/mock_devs/sda".into(),
                             table: PartitionTable::Gpt,
                             partitions: vec![
                                 ManifestPartition {
@@ -1842,11 +1842,11 @@ mod tests {
                     }]),
                     device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                         pvs: Some(vec![
-                            "./mock_devs/sda2".into(),
+                            "./test_assets/mock_devs/sda2".into(),
                         ]),
                         vgs: Some(vec![ManifestLvmVg {
                             name: "myvg".into(),
-                            pvs: vec!["./mock_devs/sda2".into()],
+                            pvs: vec!["./test_assets/mock_devs/sda2".into()],
                         }]),
                         lvs: Some(vec![
                             ManifestLvmLv {
@@ -1892,7 +1892,7 @@ mod tests {
                     location: None,
                     disks: Some(vec![
                         ManifestDisk {
-                            device: "./mock_devs/sda".into(),
+                            device: "./test_assets/mock_devs/sda".into(),
                             table: PartitionTable::Gpt,
                             partitions: vec![
                                 ManifestPartition {
@@ -1908,15 +1908,15 @@ mod tests {
                             ],
                     }]),
                     device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
-                        pvs: Some(vec!["./mock_devs/sda2".into()]),
+                        pvs: Some(vec!["./test_assets/mock_devs/sda2".into()]),
                         vgs: Some(vec![
                             ManifestLvmVg {
                                 name: "myvg".into(),
-                                pvs: vec!["./mock_devs/sda2".into()],
+                                pvs: vec!["./test_assets/mock_devs/sda2".into()],
                             },
                             ManifestLvmVg {
                                 name: "somevg".into(),
-                                pvs: vec!["./mock_devs/sda2".into()],
+                                pvs: vec!["./test_assets/mock_devs/sda2".into()],
                             },
                         ]),
                         lvs: None,
@@ -1952,7 +1952,7 @@ mod tests {
                     location: None,
                     disks: Some(vec![
                         ManifestDisk {
-                            device: "./mock_devs/sda".into(),
+                            device: "./test_assets/mock_devs/sda".into(),
                             table: PartitionTable::Gpt,
                             partitions: vec![
                                 ManifestPartition {
@@ -1969,10 +1969,10 @@ mod tests {
                         },
                     ]),
                     device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
-                        pvs: Some(vec!["./mock_devs/sda2".into()]),
+                        pvs: Some(vec!["./test_assets/mock_devs/sda2".into()]),
                         vgs: Some(vec![ManifestLvmVg {
                             name: "myvg".into(),
-                            pvs: vec!["./mock_devs/sda2".into()],
+                            pvs: vec!["./test_assets/mock_devs/sda2".into()],
                         }]),
                         lvs: Some(vec![
                             ManifestLvmLv {
@@ -2020,7 +2020,7 @@ mod tests {
                     location: None,
                     disks: Some(vec![
                         ManifestDisk {
-                            device: "./mock_devs/sda".into(),
+                            device: "./test_assets/mock_devs/sda".into(),
                             table: PartitionTable::Gpt,
                             partitions: vec![
                                 ManifestPartition {
@@ -2036,7 +2036,7 @@ mod tests {
                             ],
                         },
                         ManifestDisk {
-                            device: "./mock_devs/sdb".into(),
+                            device: "./test_assets/mock_devs/sdb".into(),
                             table: PartitionTable::Mbr,
                             partitions: vec![
                                 ManifestPartition {
@@ -2048,15 +2048,15 @@ mod tests {
                         }]),
                     device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                         pvs: Some(vec![
-                            "./mock_devs/sda2".into(),
-                            "./mock_devs/sdb1".into(),
+                            "./test_assets/mock_devs/sda2".into(),
+                            "./test_assets/mock_devs/sdb1".into(),
                             "/dev/nvme0n1p2".into(),
                         ]),
                         vgs: Some(vec![ManifestLvmVg {
                             name: "myvg".into(),
                             pvs: vec![
-                                "./mock_devs/sda2".into(),
-                                "./mock_devs/sdb1".into(),
+                                "./test_assets/mock_devs/sda2".into(),
+                                "./test_assets/mock_devs/sdb1".into(),
                                 "/dev/nvme0n1p2".into(),
                             ],
                         }]),
@@ -2093,7 +2093,7 @@ mod tests {
                     location: None,
                     disks: Some(vec![
                         ManifestDisk {
-                            device: "./mock_devs/sda".into(),
+                            device: "./test_assets/mock_devs/sda".into(),
                             table: PartitionTable::Gpt,
                             partitions: vec![
                                 ManifestPartition {
@@ -2109,7 +2109,7 @@ mod tests {
                             ],
                         },
                         ManifestDisk {
-                            device: "./mock_devs/sdb".into(),
+                            device: "./test_assets/mock_devs/sdb".into(),
                             table: PartitionTable::Mbr,
                             partitions: vec![
                                 ManifestPartition {
@@ -2122,15 +2122,15 @@ mod tests {
                     ]),
                     device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                         pvs: Some(vec![
-                            "./mock_devs/sda2".into(),
-                            "./mock_devs/sdb1".into(),
+                            "./test_assets/mock_devs/sda2".into(),
+                            "./test_assets/mock_devs/sdb1".into(),
                             "/dev/nvme0n1p2".into(),
                         ]),
                         vgs: Some(vec![ManifestLvmVg {
                             name: "myvg".into(),
                             pvs: vec![
-                                "./mock_devs/sda2".into(),
-                                "./mock_devs/sdb1".into(),
+                                "./test_assets/mock_devs/sda2".into(),
+                                "./test_assets/mock_devs/sdb1".into(),
                                 "/dev/nvme0n1p2".into(),
                             ],
                         }]),
@@ -2173,7 +2173,7 @@ mod tests {
                     location: None,
                     disks: Some(vec![
                         ManifestDisk {
-                            device: "./mock_devs/sda".into(),
+                            device: "./test_assets/mock_devs/sda".into(),
                             table: PartitionTable::Gpt,
                             partitions: vec![
                                 ManifestPartition {
@@ -2189,7 +2189,7 @@ mod tests {
                             ],
                         },
                         ManifestDisk {
-                            device: "./mock_devs/sdb".into(),
+                            device: "./test_assets/mock_devs/sdb".into(),
                             table: PartitionTable::Mbr,
                             partitions: vec![
                                 ManifestPartition {
@@ -2202,15 +2202,15 @@ mod tests {
                     ]),
                     device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                         pvs: Some(vec![
-                            "./mock_devs/sda2".into(),
-                            "./mock_devs/sdb1".into(),
+                            "./test_assets/mock_devs/sda2".into(),
+                            "./test_assets/mock_devs/sdb1".into(),
                             "/dev/nvme0n1p2".into(),
                         ]),
                         vgs: Some(vec![ManifestLvmVg {
                             name: "myvg".into(),
                             pvs: vec![
-                                "./mock_devs/sda2".into(),
-                                "./mock_devs/sdb1".into(),
+                                "./test_assets/mock_devs/sda2".into(),
+                                "./test_assets/mock_devs/sdb1".into(),
                                 "/dev/nvme0n1p2".into(),
                                 "/dev/nvme0n2p7".into(),
                             ],
@@ -2267,7 +2267,7 @@ mod tests {
                     location: None,
                     disks: Some(vec![
                         ManifestDisk {
-                            device: "./mock_devs/sda".into(),
+                            device: "./test_assets/mock_devs/sda".into(),
                             table: PartitionTable::Gpt,
                             partitions: vec![
                                 ManifestPartition {
@@ -2283,7 +2283,7 @@ mod tests {
                             ],
                         },
                         ManifestDisk {
-                            device: "./mock_devs/sdb".into(),
+                            device: "./test_assets/mock_devs/sdb".into(),
                             table: PartitionTable::Mbr,
                             partitions: vec![
                                 ManifestPartition {
@@ -2296,15 +2296,15 @@ mod tests {
                     ]),
                     device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                         pvs: Some(vec![
-                            "./mock_devs/sda2".into(),
-                            "./mock_devs/sdb1".into(),
+                            "./test_assets/mock_devs/sda2".into(),
+                            "./test_assets/mock_devs/sdb1".into(),
                             "/dev/nvme0n1p2".into(),
                         ]),
                         vgs: Some(vec![ManifestLvmVg {
                             name: "myvg".into(),
                             pvs: vec![
-                                "./mock_devs/sda2".into(),
-                                "./mock_devs/sdb1".into(),
+                                "./test_assets/mock_devs/sda2".into(),
+                                "./test_assets/mock_devs/sdb1".into(),
                                 "/dev/nvme0n1p2".into(),
                                 "/dev/nvme0n2p7".into(),
                             ],

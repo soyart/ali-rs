@@ -241,7 +241,7 @@ fn test_trace_existing_fs_ready() {
     let mut expected_results = HashMap::new();
     expected_results.insert("/dev/vda2".to_string(), TYPE_UNKNOWN);
 
-    let output_blkid = run_blkid("./mock_cmd/blkid").expect("run_blkid failed");
+    let output_blkid = run_blkid("./test_assets/mock_cmd/blkid").expect("run_blkid failed");
     let traced = sys_fs_ready(&output_blkid);
     for (k, v) in traced.into_iter() {
         let expected = expected_results.get(&k);
@@ -253,7 +253,7 @@ fn test_trace_existing_fs_ready() {
 
 #[test]
 fn test_trace_existing_fs() {
-    // Hard-coded expected values from ./mock_cmd/blkid
+    // Hard-coded expected values from ./test_assets/mock_cmd/blkid
     let mut expected_results = HashMap::new();
     expected_results.insert(
         "/dev/mapper/archvg-swaplv".to_string(),
@@ -264,7 +264,7 @@ fn test_trace_existing_fs() {
         BlockDevType::Fs("btrfs".to_string()),
     );
 
-    let output_blkid = run_blkid("./mock_cmd/blkid").expect("run_blkid failed");
+    let output_blkid = run_blkid("./test_assets/mock_cmd/blkid").expect("run_blkid failed");
     let traced = sys_fs(&output_blkid);
     for (k, v) in traced.into_iter() {
         let expected = expected_results.get(&k);
@@ -276,8 +276,8 @@ fn test_trace_existing_fs() {
 
 #[test]
 fn test_trace_existing_lvms() {
-    // Hard-coded expected values from ./mock_cmd/{lvs,pvs}
-    let traced = sys_lvms("./mock_cmd/lvs", "./mock_cmd/pvs");
+    // Hard-coded expected values from ./test_assets/mock_cmd/{lvs,pvs}
+    let traced = sys_lvms("./test_assets/mock_cmd/lvs", "./test_assets/mock_cmd/pvs");
 
     // Hard-coded expected values
     let lists_vda1 = vec![
