@@ -79,7 +79,7 @@ fn uncomment_text_once(original: &str, marker: &str, key: &str) -> Result<String
         }
     }
 
-    Err(AliError::BadManifest(format!(
+    Err(AliError::HookError(format!(
         "@uncomment: no such comment pattern '{marker} {key}'"
     )))
 }
@@ -94,12 +94,14 @@ fn uncomment_text_once(original: &str, marker: &str, key: &str) -> Result<String
 fn parse_uncomment(hook_cmd: &str) -> Result<Uncomment, AliError> {
     let parts = shlex::split(hook_cmd);
     if parts.is_none() {
-        return Err(AliError::BadArgs(format!("@uncomment: bad cmd {hook_cmd}")));
+        return Err(AliError::BadHookCmd(format!(
+            "@uncomment: bad cmd {hook_cmd}"
+        )));
     }
 
     let parts = parts.unwrap();
     if parts.len() < 3 {
-        return Err(AliError::BadArgs(
+        return Err(AliError::BadHookCmd(
             "@uncomment: expect at least 3 arguments".to_string(),
         ));
     }
@@ -110,7 +112,7 @@ fn parse_uncomment(hook_cmd: &str) -> Result<Uncomment, AliError> {
         cmd.as_str(),
         "@uncomment" | "@uncomment-print" | "@uncomment-all" | "@uncomment-all-print"
     ) {
-        return Err(AliError::BadArgs(format!("@uncomment: bad cmd: {cmd}")));
+        return Err(AliError::BadHookCmd(format!("@uncomment: bad cmd: {cmd}")));
     }
 
     let print_only = matches!(cmd.as_str(), "@uncomment-print" | "@uncomment-all-print");
@@ -132,7 +134,7 @@ fn parse_uncomment(hook_cmd: &str) -> Result<Uncomment, AliError> {
         }),
         5 => {
             if parts[2] != "marker" {
-                return Err(AliError::BadArgs(format!(
+                return Err(AliError::BadHookCmd(format!(
                     "@uncomment: unexpected argument {}, expecting 2nd argument to be `marker`",
                     parts[2],
                 )));
@@ -146,7 +148,9 @@ fn parse_uncomment(hook_cmd: &str) -> Result<Uncomment, AliError> {
                 print_only,
             })
         }
-        _ => Err(AliError::BadArgs(format!("@uncomment: bad cmd parts: {l}"))),
+        _ => Err(AliError::BadHookCmd(format!(
+            "@uncomment: bad cmd parts: {l}"
+        ))),
     }
 }
 

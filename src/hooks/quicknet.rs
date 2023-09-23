@@ -29,14 +29,14 @@ fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
     let l = parts.len();
 
     if l <= 1 {
-        return Err(AliError::BadArgs(
+        return Err(AliError::BadHookCmd(
             "@quicknet: bad cmd: only 1 string is supplied".to_string(),
         ));
     }
 
     let cmd = parts.first().unwrap();
     if !matches!(*cmd, "@quicknet" | "@quicknet-print") {
-        return Err(AliError::BadArgs(
+        return Err(AliError::BadHookCmd(
             "@quicknet: bad cmd: 1st part does not start with \"@quicknet\"".to_string(),
         ));
     }
@@ -47,7 +47,7 @@ fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
         2 => {
             let interface = parts[1];
             if interface == "dns" {
-                return Err(AliError::BadArgs(
+                return Err(AliError::BadHookCmd(
                     "@quicknet: got only keyword `dns`".to_string(),
                 ));
             }
@@ -70,7 +70,7 @@ fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
             }
 
             if dns_keyword_idx.is_none() {
-                return Err(AliError::BadArgs(
+                return Err(AliError::BadHookCmd(
                     "@quicknet: missing argument keyword \"dns\"".to_string(),
                 ));
             }
@@ -83,7 +83,7 @@ fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
                 } else if dns_keyword_idx == 2 {
                     1
                 } else {
-                    return Err(AliError::BadArgs(format!(
+                    return Err(AliError::BadHookCmd(format!(
                         "@quicknet: \"dns\" keyword in bad position: {dns_keyword_idx}"
                     )));
                 }
@@ -96,7 +96,9 @@ fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
             })
         }
 
-        _ => Err(AliError::BadArgs(format!("@quicknet: bad cmd parts: {l}"))),
+        _ => Err(AliError::BadHookCmd(format!(
+            "@quicknet: unexpected cmd parts: {l}"
+        ))),
     }
 }
 

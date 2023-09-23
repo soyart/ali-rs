@@ -28,6 +28,8 @@ It is possible to skip validation with `--no-validate` flags,
 and it is possible to overwrite existing system devices with
 `-o` or `--overwrite` flags.
 
+ali-rs also provides [ali-rs hooks](./HOOKS.md) as an extension of ALI.
+
 ## ALI manifest application
 
 Once the validation step is done (or skipped), ali-rs applies

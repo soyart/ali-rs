@@ -28,7 +28,10 @@ pub(super) fn replace_token(cmd: &str) -> Result<ActionHook, AliError> {
 
     // @TODO: Read from remote template, e.g. with https or ssh
     let template = std::fs::read_to_string(&r.template).map_err(|err| {
-        AliError::FileError(err, format!("@replace-token: read template {}", r.template))
+        AliError::HookError(format!(
+            "@replace-token: read template {}: {err}",
+            r.template
+        ))
     })?;
 
     let result = r.replace(&template)?;
@@ -37,10 +40,10 @@ pub(super) fn replace_token(cmd: &str) -> Result<ActionHook, AliError> {
         println!("{}", result);
     } else {
         std::fs::write(&r.output, result).map_err(|err| {
-            AliError::FileError(
-                err,
-                format!("@replace-token: failed to write to output to {}", r.output),
-            )
+            AliError::HookError(format!(
+                "@replace-token: failed to write to output to {}: {err}",
+                r.output
+            ))
         })?;
     }
 
@@ -51,12 +54,14 @@ fn parse_replace_token(cmd: &str) -> Result<ReplaceToken, AliError> {
     // shlex will return empty array if 1st word starts with '#'
     let parts = shlex::split(cmd);
     if parts.is_none() {
-        return Err(AliError::BadArgs(format!("@replace-token: bad cmd: {cmd}")));
+        return Err(AliError::BadHookCmd(format!(
+            "@replace-token: bad cmd: {cmd}"
+        )));
     }
 
     let parts = parts.unwrap();
     if parts.len() < 3 {
-        return Err(AliError::BadArgs(
+        return Err(AliError::BadHookCmd(
             "@replace-token: expect at least 3 arguments".to_string(),
         ));
     }
@@ -64,13 +69,15 @@ fn parse_replace_token(cmd: &str) -> Result<ReplaceToken, AliError> {
     let cmd = parts.first().unwrap();
 
     if !matches!(cmd.as_str(), "@replace-token" | "@replace-token-print") {
-        return Err(AliError::BadArgs(format!("@replace-token: bad cmd: {cmd}")));
+        return Err(AliError::BadHookCmd(format!(
+            "@replace-token: bad cmd: {cmd}"
+        )));
     }
 
     let l = parts.len();
 
     if l != 4 && l != 5 {
-        return Err(AliError::BadArgs(format!(
+        return Err(AliError::BadHookCmd(format!(
             "@replace-token: bad cmd parts (expecting 3-4): {l}"
         )));
     }
@@ -111,7 +118,7 @@ impl ReplaceToken {
         let token = &format!("{} {} {}", "{{", self.token, "}}");
 
         if !s.contains(token) {
-            return Err(AliError::BadArgs(format!(
+            return Err(AliError::BadHookCmd(format!(
                 "template {} does not contains token \"{token}\"",
                 self.template
             )));
