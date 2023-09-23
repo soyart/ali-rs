@@ -5,7 +5,7 @@ Hooks are special commands starting with `@<HOOK_NAME>`.
 Users register hooks inside manifest keys [`chroot`](https://github.com/soyart/ali/blob/master/ALI.md#key-chroot)
 and [`postinstall`](https://github.com/soyart/ali/blob/master/ALI.md#key-chroot).
 
-They can also optionally call hooks via `hooks` subcommand:
+Hooks can also be invoked separately via ali-rs `hooks` subcommand:
 
 ```shell
 # Run 1 hook

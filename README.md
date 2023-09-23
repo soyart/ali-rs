@@ -31,6 +31,14 @@ and it is possible to overwrite existing system devices with
 
 ali-rs also provides [ali-rs hooks](./HOOKS.md) as an extension of ALI.
 
+## Usage
+
+Run `ali-rs -h` to get the list of all available subcommands,
+or `ali-rs <subcommand> -h` to get available subcommand options.
+
+Currently, if no subcommand is given, ali-rs defaults to manifest
+validation which is safe to run.
+
 ## ALI manifest application
 
 Once the validation step is done (or skipped), ali-rs applies
