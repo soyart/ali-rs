@@ -107,8 +107,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(target_os = "windows"))]
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "linux")]
     fn test_run_fdisk_cmd() {
         use crate::utils::shell::test_utils;
 

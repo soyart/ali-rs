@@ -11,7 +11,7 @@ use crate::errors::AliError;
 )]
 pub struct Cli {
     #[command(subcommand)]
-    pub commands: Commands,
+    pub commands: Option<Commands>,
 
     /// Path to manifest file
     #[arg(
@@ -26,11 +26,14 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Commands {
-    /// Applies manifest to create a new system
-    Apply(ArgsApply),
-
     /// Validates manifest
     Validate,
+
+    /// Applies all stages in the manifest to create a new system
+    Apply(ArgsApply),
+
+    /// Runs ali-rs hooks
+    Hooks(ArgsHooks),
 }
 
 #[derive(Debug, Args)]
@@ -45,14 +48,29 @@ pub struct ArgsApply {
     #[arg(short = 'o', long = "overwrite", default_value_t = false)]
     pub overwrite: bool,
 
+    /// Explicit stages to run
+    #[arg(short = 's', long = "stages", num_args(0..))]
+    pub stages: Option<Vec<stage::Stage>>,
+
     /// ALI stages to skip
-    #[arg(short = 's', long = "skip", num_args(0..))]
+    #[arg(long = "skip", num_args(0..))]
     pub skip_stages: Vec<stage::Stage>,
 
     /// Dry-run, ali-rs will not commit any changes to disks,
     /// and will just print steps to be performed
     #[arg(global = true, short = 'n', default_value_t = false)]
     pub dry_run: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct ArgsHooks {
+    /// ali-rs hooks to run
+    #[arg(num_args(0..))]
+    pub hooks: Vec<String>,
+
+    /// Mountpoints of new system (required in some hooks)
+    #[arg(short = 'm', long = "mountpoint")]
+    pub mountpoint: Option<String>,
 }
 
 fn validate_filename(name: &str) -> Result<String, AliError> {

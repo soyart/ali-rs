@@ -40,6 +40,15 @@ pub enum Stage {
     PostInstallUser,
 }
 
+pub const STAGES: [Stage; 6] = [
+    Stage::Mountpoints,
+    Stage::Bootstrap,
+    Stage::Routines,
+    Stage::ChrootAli,
+    Stage::ChrootUser,
+    Stage::PostInstallUser,
+];
+
 /// StageActions groups closely related actions together
 /// and can be used in error or success reports.
 #[derive(Debug, Default, Serialize, Deserialize)]

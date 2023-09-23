@@ -5,9 +5,32 @@ Hooks are special commands starting with `@<HOOK_NAME>`.
 Users register hooks inside manifest keys [`chroot`](https://github.com/soyart/ali/blob/master/ALI.md#key-chroot)
 and [`postinstall`](https://github.com/soyart/ali/blob/master/ALI.md#key-chroot).
 
-Available hooks are:
+Hooks can also be invoked separately via ali-rs `hooks` subcommand:
 
-## `@quicknet`
+```shell
+# Run 1 hook
+ali-rs hooks "@hook-1 foo bar"
+
+# Run 2 hooks
+ali-rs hooks "@hook-1 foo bar" "@hook-2 baz 'hello, world!'"
+
+# Run 1 hook, in chroot to mountpoint /mnt
+ali-rs hooks "@hook-1 foo bar" --mountpoint "/mnt"
+```
+
+## Print hooks
+
+All hooks, by default, modifies some files on the system.
+To avoid corrupting system files, ali-rs provide _print_ hooks,
+which is a stateless print-only version of each hook.
+
+For example, `@uncomment-all` hook has print-only version
+`@uncomment-all-print` which instead of writing to output files,
+simply prints `@uncomment-all` output to screen.
+
+## Hook manuals
+
+### `@quicknet`
 
   Quick network setup (DHCP and DNS), based on [`systemd-networkd`
   configuration template](./src/hooks/constants.rs)
@@ -34,7 +57,7 @@ Available hooks are:
       @quicknet dns 1.1.1.1 ens3
       ```
 
-## `@uncomment` and `@uncomment-all`
+### `@uncomment` and `@uncomment-all`
 
   Uncomments certain pattern
 
@@ -61,7 +84,7 @@ Available hooks are:
       ```
   
 
-## `@replace-token`
+### `@replace-token`
 
   Replaces tokens in text files
 
