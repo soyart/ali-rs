@@ -10,6 +10,7 @@ struct ReplaceToken {
     value: String,
     template: String,
     output: String,
+    print_only: bool,
 }
 
 /// @replace-token <TOKEN> <VALUE> <TEMPLATE> [OUTPUT]
@@ -32,12 +33,16 @@ pub(super) fn replace_token(cmd: &str) -> Result<ActionHook, AliError> {
 
     let result = r.replace(&template)?;
 
-    std::fs::write(&r.output, result).map_err(|err| {
-        AliError::FileError(
-            err,
-            format!("@replace-token: failed to write to output to {}", r.output),
-        )
-    })?;
+    if r.print_only {
+        println!("{}", result);
+    } else {
+        std::fs::write(&r.output, result).map_err(|err| {
+            AliError::FileError(
+                err,
+                format!("@replace-token: failed to write to output to {}", r.output),
+            )
+        })?;
+    }
 
     Ok(ActionHook::ReplaceToken(r.to_string()))
 }
@@ -50,10 +55,16 @@ fn parse_replace_token(cmd: &str) -> Result<ReplaceToken, AliError> {
     }
 
     let parts = parts.unwrap();
-    if parts[0] != "@replace-token" {
-        return Err(AliError::BadArgs(format!(
-            "@replace-token: bad cmd: 1st part does not start with \"@replace-token\": {cmd}"
-        )));
+    if parts.len() < 3 {
+        return Err(AliError::BadArgs(
+            "@replace-token: expect at least 3 arguments".to_string(),
+        ));
+    }
+
+    let cmd = parts.first().unwrap();
+
+    if !matches!(cmd.as_str(), "@replace-token" | "@replace-token-print") {
+        return Err(AliError::BadArgs(format!("@replace-token: bad cmd: {cmd}")));
     }
 
     let l = parts.len();
@@ -65,16 +76,21 @@ fn parse_replace_token(cmd: &str) -> Result<ReplaceToken, AliError> {
     }
 
     let (token, value, template) = (parts[1].clone(), parts[2].clone(), parts[3].clone());
+
+    // If not given, then use template as output
     let output = parts
         .last()
         .map(|s| s.to_owned())
         .unwrap_or(template.clone());
 
+    let print_only = parts[0].as_str() == "@replace-token-print";
+
     Ok(ReplaceToken {
         token,
         value,
         template,
-        output: output.clone(),
+        output,
+        print_only,
     })
 }
 
@@ -141,12 +157,13 @@ fn test_parse_replace_token() {
 
     let tests = HashMap::from([
         (
-            "@replace-token PORT 3322 /etc/ssh/sshd",
+            "@replace-token-print PORT 3322 /etc/ssh/sshd",
             ReplaceToken{
                 token: String::from("PORT"),
                 value: String::from("3322"),
                 template: String::from("/etc/ssh/sshd"),
-                output: String::from("/etc/ssh/sshd")
+                output: String::from("/etc/ssh/sshd"),
+                print_only: true,
             }
         ),
         (
@@ -156,15 +173,17 @@ fn test_parse_replace_token() {
                 value: String::from("loglevel=3 quiet root=/dev/archvg/archlv ro"),
                 template: String::from("/etc/default/grub"),
                 output: String::from("/etc/default/grub"),
+                print_only: false,
             },
         ),
         (
-            "@replace-token \"linux boot\" \"loglevel=3 quiet root=/dev/archvg/archlv ro\" /some/template /etc/default/grub",
+            "@replace-token-print \"linux boot\" \"loglevel=3 quiet root=/dev/archvg/archlv ro\" /some/template /etc/default/grub",
             ReplaceToken{
                 token: String::from("linux boot"),
                 value: String::from("loglevel=3 quiet root=/dev/archvg/archlv ro"),
                 template: String::from("/some/template"),
                 output: String::from("/etc/default/grub"),
+                print_only: true,
             },
         ),
     ]);
@@ -180,6 +199,7 @@ fn test_parse_replace_token() {
 fn test_uncomment() {
     use std::collections::HashMap;
 
+    let print_only = true;
     let tests = HashMap::from([
         (
             ReplaceToken {
@@ -187,6 +207,7 @@ fn test_uncomment() {
                 value: String::from("3322"),
                 template: String::from("/etc/ssh/sshd"),
                 output: String::from("/etc/ssh/sshd"),
+                print_only,
             },
             ("{{ PORT }} foo bar {{PORT}}", "3322 foo bar {{PORT}}"),
         ),
@@ -196,6 +217,7 @@ fn test_uncomment() {
                 value: String::from("bar"),
                 template: String::from("/etc/ssh/sshd"),
                 output: String::from("/etc/ssh/sshd"),
+                print_only,
             },
             (
                 "{{ bar }} {{ foo }} {{ bar }} foo <{{ foo }}>",

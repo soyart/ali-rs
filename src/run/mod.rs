@@ -1,4 +1,5 @@
 pub mod apply;
+pub mod hooks;
 pub mod validate;
 
 use crate::cli;
@@ -15,5 +16,6 @@ pub fn run(cli_args: cli::Cli) -> Result<(), AliError> {
                 Ok(report) => Ok(println!("{}", report.to_json_string())),
             }
         }
+        Some(cli::Commands::Hooks(args_hooks)) => hooks::run(args_hooks),
     }
 }

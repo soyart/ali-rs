@@ -8,6 +8,7 @@ use crate::utils::shell;
 struct QuickNet<'a> {
     interface: &'a str,
     dns_upstream: Option<&'a str>,
+    print_only: bool,
 }
 
 pub(super) fn quicknet(cmd_string: &str, root_location: &str) -> Result<ActionHook, AliError> {
@@ -33,11 +34,14 @@ fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
         ));
     }
 
-    if parts[0] != "@quicknet" {
+    let cmd = parts.first().unwrap();
+    if !matches!(*cmd, "@quicknet" | "@quicknet-print") {
         return Err(AliError::BadArgs(
             "@quicknet: bad cmd: 1st part does not start with \"@quicknet\"".to_string(),
         ));
     }
+
+    let print_only = *cmd == "@quicknet-print";
 
     match l {
         2 => {
@@ -51,6 +55,7 @@ fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
             Ok(QuickNet {
                 interface,
                 dns_upstream: None,
+                print_only,
             })
         }
 
@@ -87,6 +92,7 @@ fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
             Ok(QuickNet {
                 interface: parts[interface_idx],
                 dns_upstream: Some(parts[dns_keyword_idx + 1]),
+                print_only,
             })
         }
 
@@ -97,15 +103,24 @@ fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
 /// Creates directory "{root_location}/etc/systemd/network/"
 /// and write networkd quicknet config file for it
 fn apply_quicknet(qn: QuickNet, root_location: &str) -> Result<ActionHook, AliError> {
-    // Extends to include systemd path
-    let root_location = format!("{root_location}/etc/systemd/network");
-    shell::exec("mkdir", &["-p", &root_location])?;
-
+    // Formats filename and string output
     let filename = FILENAME.replace(TOKEN_INTERFACE, qn.interface);
     let filename = format!("{root_location}/{filename}");
+    let result = qn.encode_to_string();
 
-    std::fs::write(&filename, qn.encode_to_string())
-        .map_err(|err| AliError::FileError(err, format!("writing file {filename}")))?;
+    match qn.print_only {
+        true => {
+            println!("{}", result);
+        }
+        false => {
+            // Extends to include systemd path
+            let root_location = format!("{root_location}/etc/systemd/network");
+            shell::exec("mkdir", &["-p", &root_location])?;
+
+            std::fs::write(&filename, result)
+                .map_err(|err| AliError::FileError(err, format!("writing file {filename}")))?;
+        }
+    }
 
     Ok(ActionHook::QuickNet(qn.to_string()))
 }

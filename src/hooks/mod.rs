@@ -24,6 +24,7 @@ pub fn apply_hook(
 ) -> Result<ActionHook, AliError> {
     let hook_parts = hook_cmd.split_whitespace().collect::<Vec<_>>();
     let hook = hook_parts.first();
+
     if hook.is_none() {
         return Err(AliError::BadManifest("empty hook".to_string()));
     };
@@ -33,11 +34,13 @@ pub fn apply_hook(
     }
 
     let hook = hook.unwrap();
+
     match *hook {
-        "@quicknet" => quicknet::quicknet(hook_cmd, root_location),
-        "@replace-token" => replace_token::replace_token(hook_cmd),
-        "@uncomment" => uncomment::uncomment(hook_cmd, uncomment::Mode::Once),
-        "@uncomment-all" => uncomment::uncomment(hook_cmd, uncomment::Mode::All),
-        _ => Err(AliError::BadArgs(format!("bad hook cmd: {hook}"))),
+        "@quicknet" | "@quicknet-print" => quicknet::quicknet(hook_cmd, root_location),
+        "@replace-token" | "@replace-token-print" => replace_token::replace_token(hook_cmd),
+        "@uncomment" | "@uncomment-print" | "@uncomment-all" | "@uncomment-all-print" => {
+            uncomment::uncomment(hook_cmd)
+        }
+        _ => Err(AliError::BadArgs(format!("unknown hook cmd: {hook}"))),
     }
 }

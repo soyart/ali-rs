@@ -26,11 +26,14 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Commands {
+    /// Validates manifest
+    Validate,
+
     /// Applies all stages in the manifest to create a new system
     Apply(ArgsApply),
 
-    /// Validates manifest
-    Validate,
+    /// Runs ali-rs hooks
+    Hooks(ArgsHooks),
 }
 
 #[derive(Debug, Args)]
@@ -57,6 +60,17 @@ pub struct ArgsApply {
     /// and will just print steps to be performed
     #[arg(global = true, short = 'n', default_value_t = false)]
     pub dry_run: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct ArgsHooks {
+    /// ali-rs hooks to run
+    #[arg(long = "hooks", num_args(0..))]
+    pub hooks: Vec<String>,
+
+    /// Mountpoints of new system (required in some hooks)
+    #[arg(short = 'm', long = "mountpoint")]
+    pub mountpoint: Option<String>,
 }
 
 fn validate_filename(name: &str) -> Result<String, AliError> {

@@ -22,7 +22,6 @@ pub fn apply_manifest(
     install_location: &str,
     skip: HashSet<Stage>,
 ) -> Result<Box<StageActions>, AliError> {
-
     let mut progress = Box::default();
 
     for stage in stage::STAGES {
@@ -63,7 +62,6 @@ pub fn apply_manifest(
             })
         }
     }
-
 
     Ok(progress)
 }

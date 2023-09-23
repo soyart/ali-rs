@@ -12,10 +12,14 @@ struct Uncomment {
     marker: String,
     pattern: String,
     file: String,
+    mode: Mode,
+    print_only: bool,
 }
 
-pub(super) fn uncomment(cmd: &str, mode: Mode) -> Result<ActionHook, AliError> {
+pub(super) fn uncomment(cmd: &str) -> Result<ActionHook, AliError> {
     let uc = parse_uncomment(cmd)?;
+
+    // @TODO: Read from remote template
     let original = std::fs::read_to_string(&uc.file).map_err(|err| {
         AliError::FileError(
             err,
@@ -23,14 +27,21 @@ pub(super) fn uncomment(cmd: &str, mode: Mode) -> Result<ActionHook, AliError> {
         )
     })?;
 
-    let uncommented = match mode {
+    let uncommented = match uc.mode {
         Mode::All => uncomment_text_all(&original, &uc.marker, &uc.pattern),
         Mode::Once => uncomment_text_once(&original, &uc.marker, &uc.pattern),
     }?;
 
-    std::fs::write(&uc.file, uncommented).map_err(|err| {
-        AliError::FileError(err, format!("@uncomment: write uncommented to {}", uc.file))
-    })?;
+    match uc.print_only {
+        true => {
+            println!("{}", uncommented);
+        }
+        false => {
+            std::fs::write(&uc.file, uncommented).map_err(|err| {
+                AliError::FileError(err, format!("@uncomment: write uncommented to {}", uc.file))
+            })?;
+        }
+    }
 
     Ok(ActionHook::Uncomment(uc.to_string()))
 }
@@ -80,18 +91,35 @@ fn uncomment_text_once(original: &str, marker: &str, key: &str) -> Result<String
 /// Examples:
 /// @uncomment PubkeyAuthentication /etc/ssh/sshd_config
 /// => Uncomments key PubkeyAuthentication in /etc/ssh/sshd_config
-fn parse_uncomment(cmd: &str) -> Result<Uncomment, AliError> {
-    let parts = shlex::split(cmd);
+fn parse_uncomment(hook_cmd: &str) -> Result<Uncomment, AliError> {
+    let parts = shlex::split(hook_cmd);
     if parts.is_none() {
-        return Err(AliError::BadArgs(format!("@uncomment: bad cmd {cmd}")));
+        return Err(AliError::BadArgs(format!("@uncomment: bad cmd {hook_cmd}")));
     }
 
     let parts = parts.unwrap();
-    if parts[0] != "@uncomment" {
-        return Err(AliError::BadArgs(format!(
-            "@uncomment: bad cmd: 1st part does not start with \"@uncomment\": {cmd}"
-        )));
+    if parts.len() < 3 {
+        return Err(AliError::BadArgs(
+            "@uncomment: expect at least 3 arguments".to_string(),
+        ));
     }
+
+    let cmd = parts.first().unwrap();
+
+    if !matches!(
+        cmd.as_str(),
+        "@uncomment" | "@uncomment-print" | "@uncomment-all" | "@uncomment-all-print"
+    ) {
+        return Err(AliError::BadArgs(format!("@uncomment: bad cmd: {cmd}")));
+    }
+
+    let print_only = matches!(cmd.as_str(), "@uncomment-print" | "@uncomment-all-print");
+
+    let mode = match cmd.as_str() {
+        "@uncomment" | "@uncomment-print" => Mode::Once,
+        "@uncomment-all" | "@uncomment-all-print" => Mode::All,
+        _ => return Err(AliError::AliRsBug(format!("got bad hook cmd: {cmd}"))),
+    };
 
     let l = parts.len();
     match l {
@@ -99,6 +127,8 @@ fn parse_uncomment(cmd: &str) -> Result<Uncomment, AliError> {
             marker: "#".to_string(),
             pattern: parts[1].to_string(),
             file: parts[2].to_string(),
+            mode,
+            print_only,
         }),
         5 => {
             if parts[2] != "marker" {
@@ -112,6 +142,8 @@ fn parse_uncomment(cmd: &str) -> Result<Uncomment, AliError> {
                 pattern: parts[1].clone(),
                 marker: parts[3].clone(),
                 file: parts.last().unwrap().clone(),
+                mode,
+                print_only,
             })
         }
         _ => Err(AliError::BadArgs(format!("@uncomment: bad cmd parts: {l}"))),
