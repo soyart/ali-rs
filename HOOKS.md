@@ -9,13 +9,13 @@ Hooks can also be invoked separately via ali-rs `hooks` subcommand:
 
 ```shell
 # Run 1 hook
-ali-rs hooks --hooks "@hook-1 foo bar"
+ali-rs hooks "@hook-1 foo bar"
 
 # Run 2 hooks
-ali-rs hooks --hooks "@hook-1 foo bar" "@hook-2 baz 'hello, world!'"
+ali-rs hooks "@hook-1 foo bar" "@hook-2 baz 'hello, world!'"
 
 # Run 1 hook, in chroot to mountpoint /mnt
-ali-rs hooks --hooks "@hook-1 foo bar" --mountpoint "/mnt"
+ali-rs hooks "@hook-1 foo bar" --mountpoint "/mnt"
 ```
 
 ## Print hooks

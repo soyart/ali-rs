@@ -65,7 +65,7 @@ pub struct ArgsApply {
 #[derive(Debug, Args)]
 pub struct ArgsHooks {
     /// ali-rs hooks to run
-    #[arg(long = "hooks", num_args(0..))]
+    #[arg(num_args(0..))]
     pub hooks: Vec<String>,
 
     /// Mountpoints of new system (required in some hooks)
