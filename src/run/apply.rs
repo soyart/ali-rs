@@ -29,7 +29,7 @@ pub(super) fn run(manifest_file: &str, args: cli::ArgsApply) -> Result<Report, A
         }
         skip_stages = HashSet::new();
 
-        let explicit_stages: HashSet<stage::Stage> = HashSet::from_iter(stages.into_iter());
+        let explicit_stages: HashSet<stage::Stage> = HashSet::from_iter(stages);
         let diff: HashSet<_> = all_stages.difference(&explicit_stages).collect();
         for d in diff {
             skip_stages.insert(d.to_owned());
