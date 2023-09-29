@@ -5,7 +5,7 @@ on:
     tags: ["**"]
     
 jobs:
-  test:
+  clippy-release:
     name: Find clippy warnings in release
     runs-on: ubuntu-latest
     steps:
