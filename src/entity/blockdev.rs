@@ -56,7 +56,7 @@ pub type BlockDevPath = LinkedList<BlockDev>;
 // then the paths will look like this:
 //
 // 1. [/dev/sda -> /dev/sda1 -> /dev/sda1(pv) -> /dev/myvg -> /dev/myvg/foolv]
-// 3. [/dev/sdb -> /dev/sdb2 -> /dev/sda1(pv) -> /dev/myvg -> /dev/myvg/foolv]
+// 3. [/dev/sdb -> /dev/sdb2 -> /dev/sdb2(pv) -> /dev/myvg -> /dev/myvg/foolv]
 // 2. [/dev/sda -> /dev/sda1 -> /dev/sda1(pv) -> /dev/myvg -> /dev/myvg/barlv]
-// 4. [/dev/sdb -> /dev/sdb2 -> /dev/sda1(pv) -> /dev/myvg -> /dev/myvg/barlv]
+// 4. [/dev/sdb -> /dev/sdb2 -> /dev/sdb2(pv) -> /dev/myvg -> /dev/myvg/barlv]
 pub type BlockDevPaths = Vec<BlockDevPath>;
