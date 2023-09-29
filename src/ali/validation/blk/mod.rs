@@ -98,7 +98,7 @@ fn validate_blk(
 
             // Find if this disk has any used partitions
             // A GPT table can hold a maximum of 128 partitions
-            for i in 1_u8..128 {
+            for i in 1_u8..=128 {
                 let partition_name = format!("{partition_prefix}{i}");
                 if sys_fs_devs.contains_key(&partition_name) {
                     let fs = sys_fs_devs.get(&partition_name).unwrap();
