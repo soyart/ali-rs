@@ -1,9 +1,9 @@
-name: Test code
+name: rustfmt
 
 on: [push]
 
 jobs:
-  test:
+  rustfmt:
     name: Format with rustfmt
     runs-on: ubuntu-latest
     steps:

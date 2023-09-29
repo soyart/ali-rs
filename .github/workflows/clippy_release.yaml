@@ -1,11 +1,11 @@
-name: Release clippy warnings
+name: clippy-release
 
 on:
   push:
     tags: ["**"]
     
 jobs:
-  test:
+  clippy-release:
     name: Find clippy warnings in release
     runs-on: ubuntu-latest
     steps:

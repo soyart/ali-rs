@@ -1,9 +1,9 @@
-name: Lint code with clippy
+name: clippy
 
 on: [push]
     
 jobs:
-  test:
+  clippy:
     name: Lint Rust code
     runs-on: ubuntu-latest
     steps:

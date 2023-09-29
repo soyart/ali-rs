@@ -1,3 +1,4 @@
+pub mod apply;
 pub mod validation;
 
 use std::collections::HashSet;
@@ -8,6 +9,9 @@ use crate::errors::AliError;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Manifest {
+    #[serde(alias = "location", alias = "install_location")]
+    pub location: Option<String>,
+
     #[serde(alias = "name", alias = "host")]
     pub hostname: Option<String>,
 
@@ -35,6 +39,14 @@ pub struct Manifest {
     )]
     pub pacstraps: Option<HashSet<String>>,
 
+    #[serde(
+        alias = "password",
+        alias = "passwd",
+        alias = "root-password",
+        alias = "root-passwd"
+    )]
+    pub rootpasswd: Option<String>,
+
     #[serde(alias = "arch-chroot")]
     pub chroot: Option<Vec<String>>,
 
@@ -49,7 +61,7 @@ impl Manifest {
     }
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum PartitionTable {
     #[serde(rename = "gpt")]
     Gpt,
@@ -65,7 +77,7 @@ pub struct ManifestDisk {
     pub partitions: Vec<ManifestPartition>,
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct ManifestPartition {
     pub label: String,
     pub size: Option<String>, // e.g. 200M
@@ -74,20 +86,20 @@ pub struct ManifestPartition {
     pub part_type: String,
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct ManifestFs {
     pub device: String,
 
-    #[serde(alias = "mount_point")]
-    pub mnt: String,
-
-    #[serde(alias = "fstype")]
+    #[serde(alias = "fstype", alias = "filesystem")]
     pub fs_type: String,
 
-    #[serde(alias = "fsopts")]
+    #[serde(alias = "mount", alias = "mount_point", alias = "location")]
+    pub mnt: Option<String>,
+
+    #[serde(alias = "fsopts", alias = "filesystem_options")]
     pub fs_opts: Option<String>,
 
-    #[serde(alias = "mntopts")]
+    #[serde(alias = "mntopts", alias = "mount_options")]
     pub mnt_opts: Option<String>,
 }
 

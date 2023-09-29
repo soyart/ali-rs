@@ -3,9 +3,9 @@ mod trace_blk;
 
 use std::collections::{HashMap, HashSet, LinkedList};
 
+use crate::ali::{Dm, Manifest};
 use crate::entity::{blockdev::*, parse_human_bytes};
 use crate::errors::AliError;
-use crate::manifest::{Dm, Manifest};
 use crate::utils::fs::file_exists;
 
 pub fn validate(manifest: &Manifest, overwrite: bool) -> Result<BlockDevPaths, AliError> {
@@ -13,11 +13,11 @@ pub fn validate(manifest: &Manifest, overwrite: bool) -> Result<BlockDevPaths, A
     if let Some(ref filesystems) = manifest.filesystems {
         let mut known_mountpoints = HashSet::new();
         for fs in filesystems {
-            if fs.mnt.is_empty() {
+            if fs.mnt.is_none() {
                 continue;
             }
 
-            let mnt = fs.mnt.clone();
+            let mnt = fs.mnt.clone().unwrap();
             if mnt.as_str() == "/" {
                 return Err(AliError::BadManifest(format!(
                     "bad mountpoint / for non-rootfs {}",
@@ -38,7 +38,7 @@ pub fn validate(manifest: &Manifest, overwrite: bool) -> Result<BlockDevPaths, A
             // Overwrite disk devices - we don't need to trace any existing devices,
             // as all devices required must already be in the manifest
             validate_blk(
-                &manifest,
+                manifest,
                 &HashMap::<String, BlockDevType>::new(),
                 HashMap::<String, BlockDevType>::new(),
                 HashMap::<String, BlockDevPaths>::new(),
@@ -61,7 +61,7 @@ pub fn validate(manifest: &Manifest, overwrite: bool) -> Result<BlockDevPaths, A
             // Unknown disks are not tracked - only LVM devices and their bases.
             let sys_lvms = trace_blk::sys_lvms("lvs", "pvs");
 
-            validate_blk(&manifest, &sys_fs_devs, sys_fs_ready_devs, sys_lvms)?
+            validate_blk(manifest, &sys_fs_devs, sys_fs_ready_devs, sys_lvms)?
         }
     };
 
@@ -124,12 +124,10 @@ fn validate_blk(
 
                 // If multiple partitions are to be created on this disk,
                 // only the last partition could be unsized
-                if i != l - 1 && l != 1 {
-                    if part.size.is_none() {
-                        return Err(AliError::BadManifest(format!(
-                            "unsized partition {partition_name} must be the last partition"
-                        )));
-                    }
+                if i != l - 1 && l != 1 && part.size.is_none() {
+                    return Err(AliError::BadManifest(format!(
+                        "unsized partition {partition_name} must be the last partition"
+                    )));
                 }
 
                 if sys_fs_ready_devs.get(&partition_name).is_some() {
@@ -299,14 +297,14 @@ fn validate_blk(
 }
 
 fn is_fs_base(dev_type: &BlockDevType) -> bool {
-    match dev_type {
-        BlockDevType::Disk => true,
-        BlockDevType::Partition => true,
-        BlockDevType::UnknownBlock => true,
-        BlockDevType::Dm(DmType::Luks) => true,
-        BlockDevType::Dm(DmType::LvmLv) => true,
-        _ => false,
-    }
+    matches!(
+        dev_type,
+        BlockDevType::Disk
+            | BlockDevType::Partition
+            | BlockDevType::UnknownBlock
+            | BlockDevType::Dm(DmType::Luks)
+            | BlockDevType::Dm(DmType::LvmLv)
+    )
 }
 
 impl std::fmt::Display for DmType {
@@ -335,7 +333,7 @@ impl std::fmt::Display for BlockDevType {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::manifest::*;
+    use crate::ali::*;
 
     #[derive(Debug)]
     struct Test {
@@ -361,11 +359,12 @@ mod tests {
                 sys_lvms: None,
 
                 manifest: Manifest {
+                    location: None,
                     disks: None,
                     device_mappers: None,
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/sda1".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -377,6 +376,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -407,11 +407,12 @@ mod tests {
                 )])),
 
                 manifest: Manifest {
+                    location: None,
                     disks: None,
                     device_mappers: None,
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -423,6 +424,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -453,6 +455,7 @@ mod tests {
                 )])),
 
                 manifest: Manifest {
+                    location: None,
                     disks: None,
                     device_mappers: Some(vec![
                         Dm::Luks(ManifestLuks {
@@ -462,7 +465,7 @@ mod tests {
                     ]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/mapper/cryptroot".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -474,6 +477,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -520,6 +524,7 @@ mod tests {
                 )])),
 
                 manifest: Manifest {
+                    location: None,
                     disks: None,
                     device_mappers: Some(vec![
                         Dm::Luks(ManifestLuks {
@@ -533,7 +538,7 @@ mod tests {
                     ]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/mapper/cryptroot".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -545,6 +550,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -573,6 +579,7 @@ mod tests {
                 )])),
 
                 manifest: Manifest {
+                    location: None,
                     disks: None,
                     device_mappers: Some(vec![
                         Dm::Lvm(ManifestLvm {
@@ -603,7 +610,7 @@ mod tests {
                     ]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/mapper/cryptroot".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -615,6 +622,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -645,11 +653,12 @@ mod tests {
                 )])),
 
                 manifest: Manifest {
+                    location: None,
                     disks: None,
                     device_mappers: None,
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -661,6 +670,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -687,6 +697,7 @@ mod tests {
                 )])),
 
                 manifest: Manifest {
+                    location: None,
                     disks: None,
                     device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                         pvs: None,
@@ -699,7 +710,7 @@ mod tests {
                     })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -711,6 +722,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -725,6 +737,7 @@ mod tests {
                     sys_lvms: None,
 
                     manifest: Manifest {
+                        location: None,
                         disks: None,
                         device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                             pvs: Some(vec!["/dev/sda1".into()]),
@@ -740,7 +753,7 @@ mod tests {
                         })]),
                         rootfs: ManifestRootFs(ManifestFs {
                             device: "/dev/myvg/mylv".into(),
-                            mnt: "/".into(),
+                            mnt: None,
                             fs_type: "btrfs".into(),
                             fs_opts: None,
                             mnt_opts: None,
@@ -752,6 +765,7 @@ mod tests {
                         postinstall: None,
                         hostname: None,
                         timezone: None,
+                        rootpasswd: None,
                     },
                 },
 
@@ -765,8 +779,9 @@ mod tests {
                     sys_lvms: None,
 
                     manifest: Manifest {
+                        location: None,
                         disks: Some(vec![ManifestDisk {
-                            device: "./mock_devs/sda".into(),
+                            device: "./test_assets/mock_devs/sda".into(),
                             table: PartitionTable::Gpt,
                             partitions: vec![
                                 ManifestPartition {
@@ -782,10 +797,10 @@ mod tests {
                             ],
                         }]),
                         device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
-                            pvs: Some(vec!["./mock_devs/sda2".into()]),
+                            pvs: Some(vec!["./test_assets/mock_devs/sda2".into()]),
                             vgs: Some(vec![ManifestLvmVg {
                                 name: "myvg".into(),
-                                pvs: vec!["./mock_devs/sda2".into()],
+                                pvs: vec!["./test_assets/mock_devs/sda2".into()],
                             }]),
                             lvs: Some(vec![ManifestLvmLv {
                                 name: "mylv".into(),
@@ -795,7 +810,7 @@ mod tests {
                         })]),
                         rootfs: ManifestRootFs(ManifestFs {
                             device: "/dev/myvg/mylv".into(),
-                            mnt: "/".into(),
+                            mnt: None,
                             fs_type: "btrfs".into(),
                             fs_opts: None,
                             mnt_opts: None,
@@ -807,6 +822,7 @@ mod tests {
                         postinstall: None,
                         hostname: None,
                         timezone: None,
+                        rootpasswd: None,
                     },
                 },
 
@@ -821,9 +837,10 @@ mod tests {
                     sys_lvms: None,
 
                     manifest: Manifest {
+                        location: None,
                         disks: Some(vec![
                             ManifestDisk {
-                                device: "./mock_devs/sda".into(),
+                                device: "./test_assets/mock_devs/sda".into(),
                                 table: PartitionTable::Gpt,
                                 partitions: vec![
                                     ManifestPartition {
@@ -841,13 +858,13 @@ mod tests {
                         ]),
                         device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                             pvs: Some(vec![
-                                "./mock_devs/sda2".into(),
+                                "./test_assets/mock_devs/sda2".into(),
                                 "/dev/nvme0n1p1".into(),
                             ]),
                             vgs: Some(vec![ManifestLvmVg {
                                 name: "myvg".into(),
                                 pvs: vec![
-                                    "./mock_devs/sda2".into(),
+                                    "./test_assets/mock_devs/sda2".into(),
                                     "/dev/nvme0n1p1".into(),
                                 ],
                             }]),
@@ -859,7 +876,7 @@ mod tests {
                         })]),
                         rootfs: ManifestRootFs(ManifestFs {
                             device: "/dev/myvg/mylv".into(),
-                            mnt: "/".into(),
+                            mnt: None,
                             fs_type: "btrfs".into(),
                             fs_opts: None,
                             mnt_opts:None,
@@ -871,6 +888,7 @@ mod tests {
                         postinstall: None,
                         hostname: None,
                         timezone: None,
+                        rootpasswd: None,
                     },
                 },
 
@@ -885,9 +903,10 @@ mod tests {
                     sys_lvms: None,
 
                     manifest: Manifest {
+                        location: None,
                         disks: Some(vec![
                             ManifestDisk {
-                                device: "./mock_devs/sda".into(),
+                                device: "./test_assets/mock_devs/sda".into(),
                                 table: PartitionTable::Gpt,
                                 partitions: vec![
                                     ManifestPartition {
@@ -903,7 +922,7 @@ mod tests {
                                 ],
                             },
                             ManifestDisk {
-                                device: "./mock_devs/sdb".into(),
+                                device: "./test_assets/mock_devs/sdb".into(),
                                 table: PartitionTable::Mbr,
                                 partitions: vec![
                                     ManifestPartition {
@@ -916,15 +935,15 @@ mod tests {
                         ]),
                         device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                             pvs: Some(vec![
-                                "./mock_devs/sda2".into(),
-                                "./mock_devs/sdb1".into(),
+                                "./test_assets/mock_devs/sda2".into(),
+                                "./test_assets/mock_devs/sdb1".into(),
                                 "/dev/nvme0n1p2".into(),
                             ]),
                             vgs: Some(vec![ManifestLvmVg {
                                 name: "myvg".into(),
                                 pvs: vec![
-                                    "./mock_devs/sda2".into(),
-                                    "./mock_devs/sdb1".into(),
+                                    "./test_assets/mock_devs/sda2".into(),
+                                    "./test_assets/mock_devs/sdb1".into(),
                                     "/dev/nvme0n1p2".into(),
                                 ],
                             }]),
@@ -936,7 +955,7 @@ mod tests {
                         })]),
                         rootfs: ManifestRootFs(ManifestFs {
                             device: "/dev/myvg/mylv".into(),
-                            mnt: "/".into(),
+                            mnt: None,
                             fs_type: "btrfs".into(),
                             fs_opts: None,
                             mnt_opts: None,
@@ -948,6 +967,7 @@ mod tests {
                         postinstall: None,
                         hostname: None,
                         timezone: None,
+                        rootpasswd: None,
                     },
                 },
 
@@ -962,9 +982,10 @@ mod tests {
                     sys_lvms: None,
 
                     manifest: Manifest {
+                        location: None,
                         disks: Some(vec![
                             ManifestDisk {
-                                device: "./mock_devs/sda".into(),
+                                device: "./test_assets/mock_devs/sda".into(),
                                 table: PartitionTable::Gpt,
                                 partitions: vec![
                                     ManifestPartition {
@@ -980,7 +1001,7 @@ mod tests {
                                 ],
                             },
                             ManifestDisk {
-                                device: "./mock_devs/sdb".into(),
+                                device: "./test_assets/mock_devs/sdb".into(),
                                 table: PartitionTable::Mbr,
                                 partitions: vec![
                                     ManifestPartition {
@@ -993,15 +1014,15 @@ mod tests {
                         ]),
                         device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                             pvs: Some(vec![
-                                "./mock_devs/sda2".into(),
-                                "./mock_devs/sdb1".into(),
+                                "./test_assets/mock_devs/sda2".into(),
+                                "./test_assets/mock_devs/sdb1".into(),
                                 "/dev/nvme0n1p2".into(),
                             ]),
                             vgs: Some(vec![ManifestLvmVg {
                                 name: "myvg".into(),
                                 pvs: vec![
-                                    "./mock_devs/sda2".into(),
-                                    "./mock_devs/sdb1".into(),
+                                    "./test_assets/mock_devs/sda2".into(),
+                                    "./test_assets/mock_devs/sdb1".into(),
                                     "/dev/nvme0n1p2".into(),
                                 ],
                             }]),
@@ -1020,7 +1041,7 @@ mod tests {
                         })]),
                         rootfs: ManifestRootFs(ManifestFs {
                             device: "/dev/myvg/mylv".into(),
-                            mnt: "/".into(),
+                            mnt: None,
                             fs_type: "btrfs".into(),
                             fs_opts: None,
                             mnt_opts: None,
@@ -1032,6 +1053,7 @@ mod tests {
                         postinstall: None,
                         hostname: None,
                         timezone: None,
+                        rootpasswd: None,
                     },
                 },
 
@@ -1052,9 +1074,10 @@ mod tests {
                     ])),
 
                     manifest: Manifest {
+                        location: None,
                         disks: Some(vec![
                             ManifestDisk {
-                                device: "./mock_devs/sda".into(),
+                                device: "./test_assets/mock_devs/sda".into(),
                                 table: PartitionTable::Gpt,
                                 partitions: vec![
                                     ManifestPartition {
@@ -1070,7 +1093,7 @@ mod tests {
                                 ],
                             },
                             ManifestDisk {
-                                device: "./mock_devs/sdb".into(),
+                                device: "./test_assets/mock_devs/sdb".into(),
                                 table: PartitionTable::Mbr,
                                 partitions: vec![
                                     ManifestPartition {
@@ -1083,15 +1106,15 @@ mod tests {
                         ]),
                         device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                             pvs: Some(vec![
-                                "./mock_devs/sda2".into(),
-                                "./mock_devs/sdb1".into(),
+                                "./test_assets/mock_devs/sda2".into(),
+                                "./test_assets/mock_devs/sdb1".into(),
                                 "/dev/nvme0n1p2".into(),
                             ]),
                             vgs: Some(vec![ManifestLvmVg {
                                 name: "myvg".into(),
                                 pvs: vec![
-                                    "./mock_devs/sda2".into(),
-                                    "./mock_devs/sdb1".into(),
+                                    "./test_assets/mock_devs/sda2".into(),
+                                    "./test_assets/mock_devs/sdb1".into(),
                                     "/dev/nvme0n1p2".into(),
                                     "/dev/nvme0n2p7".into(),
                                 ],
@@ -1111,7 +1134,7 @@ mod tests {
                         })]),
                         rootfs: ManifestRootFs(ManifestFs {
                             device: "/dev/myvg/mylv".into(),
-                            mnt: "/".into(),
+                            mnt: None,
                             fs_type: "btrfs".into(),
                             fs_opts: None,
                             mnt_opts: None,
@@ -1123,6 +1146,7 @@ mod tests {
                         postinstall: None,
                         hostname: None,
                         timezone: None,
+                        rootpasswd: None,
                     },
                 },
 
@@ -1143,9 +1167,10 @@ mod tests {
                     )])),
 
                     manifest: Manifest {
+                        location: None,
                         disks: Some(vec![
                             ManifestDisk {
-                                device: "./mock_devs/sda".into(),
+                                device: "./test_assets/mock_devs/sda".into(),
                                 table: PartitionTable::Gpt,
                                 partitions: vec![
                                     ManifestPartition {
@@ -1161,7 +1186,7 @@ mod tests {
                                 ],
                             },
                             ManifestDisk {
-                                device: "./mock_devs/sdb".into(),
+                                device: "./test_assets/mock_devs/sdb".into(),
                                 table: PartitionTable::Mbr,
                                 partitions: vec![ManifestPartition {
                                     label: "PART_PV2".into(),
@@ -1172,14 +1197,14 @@ mod tests {
                         ]),
                     device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                         pvs: Some(vec![
-                            "./mock_devs/sda2".into(),
-                            "./mock_devs/sdb1".into(),
+                            "./test_assets/mock_devs/sda2".into(),
+                            "./test_assets/mock_devs/sdb1".into(),
                             "/dev/nvme0n1p2".into(),
                         ]),
                         vgs: Some(vec![
                             ManifestLvmVg {
                                 name: "mysatavg".into(),
-                                pvs: vec!["./mock_devs/sda2".into(), "./mock_devs/sdb1".into()],
+                                pvs: vec!["./test_assets/mock_devs/sda2".into(), "./test_assets/mock_devs/sdb1".into()],
                             },
                             ManifestLvmVg {
                                 name: "mynvmevg".into(),
@@ -1206,14 +1231,14 @@ mod tests {
                     })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/mysatavg/rootlv".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
                     }),
                     filesystems: Some(vec![ManifestFs {
                         device: "/dev/mysatavg/datalv".into(),
-                        mnt: "/opt/data".into(),
+                        mnt: Some("/opt/data".into()),
                         fs_type: "xfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -1224,6 +1249,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
         ];
@@ -1237,11 +1263,12 @@ mod tests {
                 sys_lvms: None,
 
                 manifest: Manifest {
+                    location: None,
                     disks: None,
                     device_mappers: None,
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/sda1".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -1253,6 +1280,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -1267,11 +1295,12 @@ mod tests {
                 sys_lvms: None,
 
                 manifest: Manifest {
+                    location: None,
                     disks: None,
                     device_mappers: None,
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/sda1".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -1283,6 +1312,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -1313,6 +1343,7 @@ mod tests {
                 )])),
 
                 manifest: Manifest {
+                    location: None,
                     disks: None,
                     device_mappers: Some(vec![
                         Dm::Luks(ManifestLuks {
@@ -1322,7 +1353,7 @@ mod tests {
                     ]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/mapper/cryptroot".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -1334,6 +1365,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -1380,6 +1412,7 @@ mod tests {
                 )])),
 
                 manifest: Manifest {
+                    location: None,
                     disks: None,
                     device_mappers: Some(vec![
                         Dm::Luks(ManifestLuks {
@@ -1389,7 +1422,7 @@ mod tests {
                     ]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/mapper/cryptroot".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -1401,6 +1434,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -1415,9 +1449,10 @@ mod tests {
                 sys_lvms: None,
 
                 manifest: Manifest {
+                    location: None,
                     disks: Some(vec![
                         ManifestDisk {
-                            device: "./mock_devs/sda".into(),
+                            device: "./test_assets/mock_devs/sda".into(),
                             table: PartitionTable::Gpt,
                             partitions: vec![
                                 ManifestPartition {
@@ -1434,17 +1469,17 @@ mod tests {
                     }]),
                     device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                         pvs: Some(vec![
-                            "./mock_devs/sda2".into(),
+                            "./test_assets/mock_devs/sda2".into(),
                         ]),
                         vgs: Some(vec![ManifestLvmVg {
                             name: "myvg".into(),
-                            pvs: vec!["./mock_devs/sda2".into()],
+                            pvs: vec!["./test_assets/mock_devs/sda2".into()],
                         }]),
                         lvs: None,
                     })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -1456,6 +1491,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -1470,9 +1506,10 @@ mod tests {
                 sys_lvms: None,
 
                 manifest: Manifest {
+                    location: None,
                     disks: Some(vec![
                         ManifestDisk {
-                            device: "./mock_devs/sda".into(),
+                            device: "./test_assets/mock_devs/sda".into(),
                             table: PartitionTable::Gpt,
                             partitions: vec![
                                 ManifestPartition {
@@ -1489,11 +1526,11 @@ mod tests {
                     }]),
                     device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                         pvs: Some(vec![
-                            "./mock_devs/sda2".into(),
+                            "./test_assets/mock_devs/sda2".into(),
                         ]),
                         vgs: Some(vec![ManifestLvmVg {
                             name: "myvg".into(),
-                            pvs: vec!["./mock_devs/sda2".into()],
+                            pvs: vec!["./test_assets/mock_devs/sda2".into()],
                         }]),
                         lvs: Some(vec![
                             ManifestLvmLv {
@@ -1510,7 +1547,7 @@ mod tests {
                     })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -1522,6 +1559,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -1536,9 +1574,10 @@ mod tests {
                 sys_lvms: None,
 
                 manifest: Manifest {
+                    location: None,
                     disks: Some(vec![
                         ManifestDisk {
-                            device: "./mock_devs/sda".into(),
+                            device: "./test_assets/mock_devs/sda".into(),
                             table: PartitionTable::Gpt,
                             partitions: vec![
                                 ManifestPartition {
@@ -1555,11 +1594,11 @@ mod tests {
                     }]),
                     device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                         pvs: Some(vec![
-                            "./mock_devs/sda2".into(),
+                            "./test_assets/mock_devs/sda2".into(),
                         ]),
                         vgs: Some(vec![ManifestLvmVg {
                             name: "myvg".into(),
-                            pvs: vec!["./mock_devs/sda2".into()],
+                            pvs: vec!["./test_assets/mock_devs/sda2".into()],
                         }]),
                         lvs: Some(vec![
                             ManifestLvmLv {
@@ -1576,7 +1615,7 @@ mod tests {
                     })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -1588,6 +1627,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -1602,9 +1642,10 @@ mod tests {
                 sys_lvms: None,
 
                 manifest: Manifest {
+                    location: None,
                     disks: Some(vec![
                         ManifestDisk {
-                            device: "./mock_devs/sda".into(),
+                            device: "./test_assets/mock_devs/sda".into(),
                             table: PartitionTable::Gpt,
                             partitions: vec![
                                 ManifestPartition {
@@ -1621,11 +1662,11 @@ mod tests {
                     }]),
                     device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                         pvs: Some(vec![
-                            "./mock_devs/sda2".into(),
+                            "./test_assets/mock_devs/sda2".into(),
                         ]),
                         vgs: Some(vec![ManifestLvmVg {
                             name: "myvg".into(),
-                            pvs: vec!["./mock_devs/sda2".into()],
+                            pvs: vec!["./test_assets/mock_devs/sda2".into()],
                         }]),
                         lvs: Some(vec![
                             ManifestLvmLv {
@@ -1642,7 +1683,7 @@ mod tests {
                     })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -1654,6 +1695,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -1668,9 +1710,10 @@ mod tests {
                 sys_lvms: None,
 
                 manifest: Manifest {
+                    location: None,
                     disks: Some(vec![
                         ManifestDisk {
-                            device: "./mock_devs/sda".into(),
+                            device: "./test_assets/mock_devs/sda".into(),
                             table: PartitionTable::Gpt,
                             partitions: vec![
                                 ManifestPartition {
@@ -1687,11 +1730,11 @@ mod tests {
                     }]),
                     device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                         pvs: Some(vec![
-                            "./mock_devs/sda2".into(),
+                            "./test_assets/mock_devs/sda2".into(),
                         ]),
                         vgs: Some(vec![ManifestLvmVg {
                             name: "myvg".into(),
-                            pvs: vec!["./mock_devs/sda2".into()],
+                            pvs: vec!["./test_assets/mock_devs/sda2".into()],
                         }]),
                         lvs: Some(vec![
                             ManifestLvmLv {
@@ -1708,7 +1751,7 @@ mod tests {
                     })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -1720,6 +1763,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -1734,9 +1778,10 @@ mod tests {
                 sys_lvms: None,
 
                 manifest: Manifest {
+                    location: None,
                     disks: Some(vec![
                         ManifestDisk {
-                            device: "./mock_devs/sda".into(),
+                            device: "./test_assets/mock_devs/sda".into(),
                             table: PartitionTable::Gpt,
                             partitions: vec![
                                 ManifestPartition {
@@ -1753,11 +1798,11 @@ mod tests {
                     }]),
                     device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                         pvs: Some(vec![
-                            "./mock_devs/sda2".into(),
+                            "./test_assets/mock_devs/sda2".into(),
                         ]),
                         vgs: Some(vec![ManifestLvmVg {
                             name: "myvg".into(),
-                            pvs: vec!["./mock_devs/sda2".into()],
+                            pvs: vec!["./test_assets/mock_devs/sda2".into()],
                         }]),
                         lvs: Some(vec![
                             ManifestLvmLv {
@@ -1774,7 +1819,7 @@ mod tests {
                     })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -1786,6 +1831,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -1800,9 +1846,10 @@ mod tests {
                 sys_lvms: None,
 
                 manifest: Manifest {
+                    location: None,
                     disks: Some(vec![
                         ManifestDisk {
-                            device: "./mock_devs/sda".into(),
+                            device: "./test_assets/mock_devs/sda".into(),
                             table: PartitionTable::Gpt,
                             partitions: vec![
                                 ManifestPartition {
@@ -1819,11 +1866,11 @@ mod tests {
                     }]),
                     device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                         pvs: Some(vec![
-                            "./mock_devs/sda2".into(),
+                            "./test_assets/mock_devs/sda2".into(),
                         ]),
                         vgs: Some(vec![ManifestLvmVg {
                             name: "myvg".into(),
-                            pvs: vec!["./mock_devs/sda2".into()],
+                            pvs: vec!["./test_assets/mock_devs/sda2".into()],
                         }]),
                         lvs: Some(vec![
                             ManifestLvmLv {
@@ -1840,7 +1887,7 @@ mod tests {
                     })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -1852,6 +1899,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -1866,9 +1914,10 @@ mod tests {
                 sys_lvms: None,
 
                 manifest: Manifest {
+                    location: None,
                     disks: Some(vec![
                         ManifestDisk {
-                            device: "./mock_devs/sda".into(),
+                            device: "./test_assets/mock_devs/sda".into(),
                             table: PartitionTable::Gpt,
                             partitions: vec![
                                 ManifestPartition {
@@ -1884,22 +1933,22 @@ mod tests {
                             ],
                     }]),
                     device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
-                        pvs: Some(vec!["./mock_devs/sda2".into()]),
+                        pvs: Some(vec!["./test_assets/mock_devs/sda2".into()]),
                         vgs: Some(vec![
                             ManifestLvmVg {
                                 name: "myvg".into(),
-                                pvs: vec!["./mock_devs/sda2".into()],
+                                pvs: vec!["./test_assets/mock_devs/sda2".into()],
                             },
                             ManifestLvmVg {
                                 name: "somevg".into(),
-                                pvs: vec!["./mock_devs/sda2".into()],
+                                pvs: vec!["./test_assets/mock_devs/sda2".into()],
                             },
                         ]),
                         lvs: None,
                     })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -1911,6 +1960,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -1925,9 +1975,10 @@ mod tests {
                 sys_lvms: None,
 
                 manifest: Manifest {
+                    location: None,
                     disks: Some(vec![
                         ManifestDisk {
-                            device: "./mock_devs/sda".into(),
+                            device: "./test_assets/mock_devs/sda".into(),
                             table: PartitionTable::Gpt,
                             partitions: vec![
                                 ManifestPartition {
@@ -1944,10 +1995,10 @@ mod tests {
                         },
                     ]),
                     device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
-                        pvs: Some(vec!["./mock_devs/sda2".into()]),
+                        pvs: Some(vec!["./test_assets/mock_devs/sda2".into()]),
                         vgs: Some(vec![ManifestLvmVg {
                             name: "myvg".into(),
-                            pvs: vec!["./mock_devs/sda2".into()],
+                            pvs: vec!["./test_assets/mock_devs/sda2".into()],
                         }]),
                         lvs: Some(vec![
                             ManifestLvmLv {
@@ -1959,7 +2010,7 @@ mod tests {
                     })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -1967,7 +2018,7 @@ mod tests {
                     filesystems: Some(vec![
                         ManifestFs {
                             device: "/dev/myvg.mylv".into(),
-                            mnt: "/data".into(),
+                            mnt: Some("/data".into()),
                             fs_type: "btrfs".into(),
                             fs_opts: None,
                             mnt_opts: None,
@@ -1979,6 +2030,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -1992,9 +2044,10 @@ mod tests {
                 sys_lvms: None,
 
                 manifest: Manifest {
+                    location: None,
                     disks: Some(vec![
                         ManifestDisk {
-                            device: "./mock_devs/sda".into(),
+                            device: "./test_assets/mock_devs/sda".into(),
                             table: PartitionTable::Gpt,
                             partitions: vec![
                                 ManifestPartition {
@@ -2010,7 +2063,7 @@ mod tests {
                             ],
                         },
                         ManifestDisk {
-                            device: "./mock_devs/sdb".into(),
+                            device: "./test_assets/mock_devs/sdb".into(),
                             table: PartitionTable::Mbr,
                             partitions: vec![
                                 ManifestPartition {
@@ -2022,15 +2075,15 @@ mod tests {
                         }]),
                     device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                         pvs: Some(vec![
-                            "./mock_devs/sda2".into(),
-                            "./mock_devs/sdb1".into(),
+                            "./test_assets/mock_devs/sda2".into(),
+                            "./test_assets/mock_devs/sdb1".into(),
                             "/dev/nvme0n1p2".into(),
                         ]),
                         vgs: Some(vec![ManifestLvmVg {
                             name: "myvg".into(),
                             pvs: vec![
-                                "./mock_devs/sda2".into(),
-                                "./mock_devs/sdb1".into(),
+                                "./test_assets/mock_devs/sda2".into(),
+                                "./test_assets/mock_devs/sdb1".into(),
                                 "/dev/nvme0n1p2".into(),
                             ],
                         }]),
@@ -2042,7 +2095,7 @@ mod tests {
                     })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -2054,6 +2107,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -2064,9 +2118,10 @@ mod tests {
                 sys_fs_devs: None,
                 sys_lvms: None,
                 manifest: Manifest {
+                    location: None,
                     disks: Some(vec![
                         ManifestDisk {
-                            device: "./mock_devs/sda".into(),
+                            device: "./test_assets/mock_devs/sda".into(),
                             table: PartitionTable::Gpt,
                             partitions: vec![
                                 ManifestPartition {
@@ -2082,7 +2137,7 @@ mod tests {
                             ],
                         },
                         ManifestDisk {
-                            device: "./mock_devs/sdb".into(),
+                            device: "./test_assets/mock_devs/sdb".into(),
                             table: PartitionTable::Mbr,
                             partitions: vec![
                                 ManifestPartition {
@@ -2095,15 +2150,15 @@ mod tests {
                     ]),
                     device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                         pvs: Some(vec![
-                            "./mock_devs/sda2".into(),
-                            "./mock_devs/sdb1".into(),
+                            "./test_assets/mock_devs/sda2".into(),
+                            "./test_assets/mock_devs/sdb1".into(),
                             "/dev/nvme0n1p2".into(),
                         ]),
                         vgs: Some(vec![ManifestLvmVg {
                             name: "myvg".into(),
                             pvs: vec![
-                                "./mock_devs/sda2".into(),
-                                "./mock_devs/sdb1".into(),
+                                "./test_assets/mock_devs/sda2".into(),
+                                "./test_assets/mock_devs/sdb1".into(),
                                 "/dev/nvme0n1p2".into(),
                             ],
                         }]),
@@ -2115,7 +2170,7 @@ mod tests {
                     })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -2127,6 +2182,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -2143,9 +2199,10 @@ mod tests {
                 sys_lvms: None,
 
                 manifest: Manifest {
+                    location: None,
                     disks: Some(vec![
                         ManifestDisk {
-                            device: "./mock_devs/sda".into(),
+                            device: "./test_assets/mock_devs/sda".into(),
                             table: PartitionTable::Gpt,
                             partitions: vec![
                                 ManifestPartition {
@@ -2161,7 +2218,7 @@ mod tests {
                             ],
                         },
                         ManifestDisk {
-                            device: "./mock_devs/sdb".into(),
+                            device: "./test_assets/mock_devs/sdb".into(),
                             table: PartitionTable::Mbr,
                             partitions: vec![
                                 ManifestPartition {
@@ -2174,15 +2231,15 @@ mod tests {
                     ]),
                     device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                         pvs: Some(vec![
-                            "./mock_devs/sda2".into(),
-                            "./mock_devs/sdb1".into(),
+                            "./test_assets/mock_devs/sda2".into(),
+                            "./test_assets/mock_devs/sdb1".into(),
                             "/dev/nvme0n1p2".into(),
                         ]),
                         vgs: Some(vec![ManifestLvmVg {
                             name: "myvg".into(),
                             pvs: vec![
-                                "./mock_devs/sda2".into(),
-                                "./mock_devs/sdb1".into(),
+                                "./test_assets/mock_devs/sda2".into(),
+                                "./test_assets/mock_devs/sdb1".into(),
                                 "/dev/nvme0n1p2".into(),
                                 "/dev/nvme0n2p7".into(),
                             ],
@@ -2201,7 +2258,7 @@ mod tests {
                     })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -2213,6 +2270,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -2236,9 +2294,10 @@ mod tests {
                 ])),
 
                 manifest: Manifest {
+                    location: None,
                     disks: Some(vec![
                         ManifestDisk {
-                            device: "./mock_devs/sda".into(),
+                            device: "./test_assets/mock_devs/sda".into(),
                             table: PartitionTable::Gpt,
                             partitions: vec![
                                 ManifestPartition {
@@ -2254,7 +2313,7 @@ mod tests {
                             ],
                         },
                         ManifestDisk {
-                            device: "./mock_devs/sdb".into(),
+                            device: "./test_assets/mock_devs/sdb".into(),
                             table: PartitionTable::Mbr,
                             partitions: vec![
                                 ManifestPartition {
@@ -2267,15 +2326,15 @@ mod tests {
                     ]),
                     device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
                         pvs: Some(vec![
-                            "./mock_devs/sda2".into(),
-                            "./mock_devs/sdb1".into(),
+                            "./test_assets/mock_devs/sda2".into(),
+                            "./test_assets/mock_devs/sdb1".into(),
                             "/dev/nvme0n1p2".into(),
                         ]),
                         vgs: Some(vec![ManifestLvmVg {
                             name: "myvg".into(),
                             pvs: vec![
-                                "./mock_devs/sda2".into(),
-                                "./mock_devs/sdb1".into(),
+                                "./test_assets/mock_devs/sda2".into(),
+                                "./test_assets/mock_devs/sdb1".into(),
                                 "/dev/nvme0n1p2".into(),
                                 "/dev/nvme0n2p7".into(),
                             ],
@@ -2294,7 +2353,7 @@ mod tests {
                     })]),
                     rootfs: ManifestRootFs(ManifestFs {
                         device: "/dev/myvg/mylv".into(),
-                        mnt: "/".into(),
+                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
@@ -2306,6 +2365,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
         ];

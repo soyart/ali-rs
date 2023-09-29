@@ -1,6 +1,6 @@
+use crate::ali::validation;
+use crate::ali::Manifest;
 use crate::errors::AliError;
-use crate::manifest::validation;
-use crate::manifest::Manifest;
 
 pub(super) fn run(manifest_file: &str) -> Result<(), AliError> {
     let start = std::time::Instant::now();

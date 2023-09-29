@@ -1,15 +1,21 @@
 mod blk; // Block device validation
 
-use crate::defaults;
-use crate::entity::ValidationReport;
+use crate::ali::Manifest;
+use crate::constants::{self, defaults};
+use crate::entity::report::ValidationReport;
 use crate::errors::AliError;
-use crate::manifest::Manifest;
 use crate::utils::fs::file_exists;
 use crate::utils::shell;
 
-// @TODO: return validation report
 pub fn validate(manifest: &Manifest, overwrite: bool) -> Result<ValidationReport, AliError> {
     let block_devs = blk::validate(manifest, overwrite)?;
+
+    // Check all commands used by ALI before ch-root
+    for cmd in constants::REQUIRED_COMMANDS {
+        if !shell::in_path(cmd) {
+            return Err(AliError::Validation(format!("command {cmd} not in path")));
+        }
+    }
 
     // Check mkfs for rootfs
     let mkfs_rootfs = &format!("mkfs.{}", manifest.rootfs.fs_type);
@@ -19,7 +25,7 @@ pub fn validate(manifest: &Manifest, overwrite: bool) -> Result<ValidationReport
         )));
     }
 
-    // Check mkfs for other FS
+    // Check mkfs.{fs} for other FS
     if let Some(filesystems) = &manifest.filesystems {
         for fs in filesystems {
             let mkfs_cmd = &format!("mkfs.{}", fs.fs_type);
@@ -39,15 +45,8 @@ pub fn validate(manifest: &Manifest, overwrite: bool) -> Result<ValidationReport
         manifest
             .timezone
             .clone()
-            .unwrap_or(defaults::DEFAULT_TIMEZONE.into())
+            .unwrap_or(defaults::TIMEZONE.into())
     );
-
-    // Check all commands used by ALI before ch-root
-    for cmd in defaults::REQUIRED_COMMANDS {
-        if !shell::in_path(cmd) {
-            return Err(AliError::Validation(format!("command {cmd} not in path")));
-        }
-    }
 
     if !file_exists(&zone_info) {
         return Err(AliError::BadManifest(format!(

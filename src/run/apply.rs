@@ -1,34 +1,40 @@
 use std::collections::HashSet;
-use std::time::Duration;
+use std::env;
 
-use serde::{Deserialize, Serialize};
-use serde_json::json;
-
+use crate::ali::apply;
+use crate::ali::validation;
+use crate::ali::{Dm, Manifest};
 use crate::cli;
+use crate::constants::{self, defaults};
+use crate::entity::report::Report;
+use crate::entity::stage;
 use crate::errors::AliError;
-use crate::manifest::{self, validation, Dm, Manifest};
-
-#[derive(Debug)]
-pub(super) struct Report {
-    pub actions: Vec<Action>,
-    pub duration: Duration,
-}
-
-impl Report {
-    pub(super) fn to_json(&self) -> serde_json::Value {
-        json!({
-            "actions": self.actions,
-            "elaspedTime": self.duration,
-        })
-    }
-
-    pub(super) fn to_json_string(&self) -> String {
-        self.to_json().to_string()
-    }
-}
 
 pub(super) fn run(manifest_file: &str, args: cli::ArgsApply) -> Result<Report, AliError> {
     let start = std::time::Instant::now();
+
+    let mut skip_stages: HashSet<stage::Stage> = HashSet::from_iter(args.skip_stages);
+    if let Some(stages) = args.stages {
+        for explicit_stage in stages.iter() {
+            if skip_stages.contains(explicit_stage) {
+                return Err(AliError::BadArgs(format!(
+                    "stage {explicit_stage} is ambiguous"
+                )));
+            }
+        }
+
+        let mut all_stages: HashSet<stage::Stage> = HashSet::from(stage::STAGES);
+        for skip in skip_stages.iter() {
+            all_stages.remove(skip);
+        }
+        skip_stages = HashSet::new();
+
+        let explicit_stages: HashSet<stage::Stage> = HashSet::from_iter(stages);
+        let diff: HashSet<_> = all_stages.difference(&explicit_stages).collect();
+        for d in diff {
+            skip_stages.insert(d.to_owned());
+        }
+    }
 
     let manifest_yaml = std::fs::read_to_string(manifest_file)
         .map_err(|err| AliError::NoSuchFile(err, manifest_file.to_string()))?;
@@ -41,15 +47,22 @@ pub(super) fn run(manifest_file: &str, args: cli::ArgsApply) -> Result<Report, A
         validation::validate(&manifest, args.overwrite)?;
     }
 
+    // Update manifest in some cases
     update_manifest(&mut manifest);
 
-    // TODO: ali-rs just prints valid manifest to stdout
-    println!("{:?}", manifest);
+    // Apply manifest to location
+    let location = install_location();
+    let stages_applied = apply::apply_manifest(&manifest, &location, skip_stages)?;
 
     Ok(Report {
-        actions: vec![],
+        location,
+        summary: stages_applied,
         duration: start.elapsed(),
     })
+}
+
+fn install_location() -> String {
+    env::var(constants::ENV_ALI_LOC).unwrap_or(defaults::INSTALL_LOCATION.to_string())
 }
 
 // Update manifest to suit the manifest
@@ -68,16 +81,14 @@ fn update_manifest(manifest: &mut Manifest) {
     }
 
     // See if other FS is Btrfs
-    match (has_btrfs, &manifest.filesystems) {
-        (false, Some(filesystems)) => {
-            for fs in filesystems {
-                if fs.fs_type.as_str() == btrfs {
-                    has_btrfs = true;
-                    break;
-                }
+    if let (false, Some(filesystems)) = (has_btrfs, &manifest.filesystems) {
+        for fs in filesystems {
+            if fs.fs_type.as_str() == btrfs {
+                has_btrfs = true;
+
+                break;
             }
         }
-        _ => {}
     }
 
     // Update manifest.pacstraps if any of the filesystems is Btrfs
@@ -97,6 +108,7 @@ fn update_manifest(manifest: &mut Manifest) {
             match dm {
                 Dm::Lvm(_) => {
                     has_lvm = true;
+
                     break;
                 }
                 _ => continue,
@@ -109,84 +121,10 @@ fn update_manifest(manifest: &mut Manifest) {
         (true, Some(ref mut pacstraps)) => {
             pacstraps.insert(lvm2.clone());
         }
+
         (true, None) => {
             manifest.pacstraps = Some(HashSet::from([lvm2.clone()]));
         }
         _ => {}
     }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub(super) enum Action {
-    #[serde(rename = "createPartitionTable")]
-    CreatePartitionTable {
-        device: String,
-        table: manifest::PartitionTable,
-    },
-
-    #[serde(rename = "createPartition")]
-    CreatePartition {
-        device: String,
-        number: usize,
-        size: String,
-    },
-
-    #[serde(rename = "createDmLuks")]
-    CreateDmLuks { device: String },
-
-    #[serde(rename = "createLvmPv")]
-    CreateDmLvmPv(String),
-
-    #[serde(rename = "createLvmVg")]
-    CreateDmLvmVg { pv: String, vg: String },
-
-    #[serde(rename = "createLvmLv")]
-    CreateDmLvmLv { vg: String, lv: String },
-
-    #[serde(rename = "createFilesystem")]
-    CreateFs {
-        device: String,
-        fs_type: String,
-        mountpoint: String,
-    },
-
-    #[serde(rename = "installPackages")]
-    InstallPackages { packages: Vec<String> },
-
-    #[serde(rename = "commandsChroot")]
-    RunCommandsChroot { commands: Vec<String> },
-
-    #[serde(rename = "commandsPostInstall")]
-    RunCommandsPostInstall { commands: Vec<String> },
-}
-
-#[ignore = "Ignored because just dummy print JSON"]
-#[test]
-// Dummy function to see JSON result
-fn test_json_actions() {
-    use manifest::PartitionTable;
-
-    let actions = vec![
-        Action::CreatePartitionTable {
-            device: "/dev/sda".into(),
-            table: PartitionTable::Gpt,
-        },
-        Action::CreatePartition {
-            device: "/dev/sda1".into(),
-            number: 1,
-            size: "8G".into(),
-        },
-        Action::CreateFs {
-            device: "/dev/sda1".into(),
-            fs_type: "btrfs".into(),
-            mountpoint: "/".into(),
-        },
-    ];
-
-    let report = Report {
-        actions,
-        duration: Duration::from_secs(20),
-    };
-
-    println!("{}", report.to_json_string());
 }

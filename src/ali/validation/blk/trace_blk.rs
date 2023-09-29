@@ -4,6 +4,8 @@ use std::process::Command;
 use serde::{Deserialize, Serialize};
 use toml;
 
+use crate::utils::shell::CmdError;
+
 use super::*;
 
 // For parsing Linux blkid output
@@ -23,15 +25,15 @@ struct EntryBlkid {
 }
 
 pub(super) fn run_blkid(cmd_blkid: &str) -> Result<String, AliError> {
-    let cmd_blkid = Command::new(cmd_blkid)
+    let cmd = Command::new(cmd_blkid)
         .output()
         .map_err(|err| AliError::CmdFailed {
-            error: Some(err),
+            error: CmdError::ErrSpawn { error: err },
             context: "blkid command failed".to_string(),
         })?;
 
-    String::from_utf8(cmd_blkid.stdout)
-        .map_err(|err| AliError::AliRsBug(format!("blkid output not string: {}", err.to_string())))
+    String::from_utf8(cmd.stdout)
+        .map_err(|err| AliError::AliRsBug(format!("blkid output not string: {err}")))
 }
 
 pub(super) fn sys_fs_ready(output_blkid: &str) -> HashMap<String, BlockDevType> {
@@ -39,7 +41,7 @@ pub(super) fn sys_fs_ready(output_blkid: &str) -> HashMap<String, BlockDevType> 
 
     let mut fs_ready = HashMap::new();
     for line in lines_blkid {
-        if line.len() == 0 {
+        if line.is_empty() {
             continue;
         }
 
@@ -77,7 +79,7 @@ pub(super) fn sys_fs(output_blkid: &str) -> HashMap<String, BlockDevType> {
 
     let mut fs = HashMap::new();
     for line in lines_blkid {
-        if line.len() == 0 {
+        if line.is_empty() {
             continue;
         }
 
@@ -113,40 +115,49 @@ pub(super) fn sys_fs(output_blkid: &str) -> HashMap<String, BlockDevType> {
 // and we construct VGs based on LVs and PVs
 //
 // Note: Takes in `lvs_cmd` and `pvs_cmd` to allow tests.
-// TODO: New trace output schema
 pub(super) fn sys_lvms(lvs_cmd: &str, pvs_cmd: &str) -> HashMap<String, BlockDevPaths> {
     let cmd_lvs = Command::new(lvs_cmd).output().expect("failed to run `lvs`");
     let output_lvs = String::from_utf8(cmd_lvs.stdout).expect("output is not utf-8");
     let lines_lvs: Vec<&str> = output_lvs.lines().skip(1).collect();
 
-    let mut lv_paths = Vec::<BlockDevPath>::new();
+    // # Collect VG leading to LV
+    // For example, if we have 2 VGs - vg1 and vg2
+    // and vg1 has 2 LVs: vg1/lv1 and vg1/lv2
+    // while vg2 has 1 LV: vg2/lv3
+    //
+    // Then the collected result would be:
+    // [{vg1 -> lv1}, {vg1 -> lv2}, {vg2 -> lv3}]
+    let mut lv_paths = BlockDevPaths::new();
 
     for line in lines_lvs {
-        if line.len() == 0 {
+        if line.is_empty() {
             continue;
         }
 
-        let line = line.split_whitespace().collect::<Vec<&str>>();
+        let line: Vec<&str> = line.split_whitespace().collect();
 
         if line.len() < 2 {
             continue;
         }
 
-        if line[0] == "LV" {
+        let first_col = line.first().unwrap();
+        if first_col != &"LV" {
             continue;
         }
 
-        let lv_name = line.get(0).expect("missing 1st string on output");
-        let vg_name = line.get(1).expect("missing 2nd string on output");
+        let lv_name = *first_col;
+        let vg_name = *line
+            .get(1)
+            .expect("missing 2nd string on command `lvs` output");
 
-        lv_paths.push(LinkedList::<BlockDev>::from([
+        lv_paths.push(BlockDevPath::from([
             BlockDev {
                 device: format!("/dev/{vg_name}"),
-                device_type: BlockDevType::Dm(DmType::LvmVg),
+                device_type: TYPE_VG,
             },
             BlockDev {
                 device: format!("{vg_name}/{lv_name}"),
-                device_type: BlockDevType::Dm(DmType::LvmLv),
+                device_type: TYPE_LV,
             },
         ]));
     }
@@ -158,8 +169,10 @@ pub(super) fn sys_lvms(lvs_cmd: &str, pvs_cmd: &str) -> HashMap<String, BlockDev
 
     let mut lvms = HashMap::new();
 
+    // Collect all PVs leading to VG.
+    // One PV can only be mapped to one VG.
     for line in lines_pvs {
-        if line.len() == 0 {
+        if line.is_empty() {
             continue;
         }
 
@@ -174,45 +187,50 @@ pub(super) fn sys_lvms(lvs_cmd: &str, pvs_cmd: &str) -> HashMap<String, BlockDev
         }
 
         let pv_name = line
-            .get(0)
+            .first()
             .expect("missing 1st string on pvs output")
             .to_string();
 
+        // Construct VG based on info from output of command `pvs`
         let vg_name = line.get(1).expect("missing 2nd string on pvs output");
         let vg_name = format!("/dev/{vg_name}");
-
-        let pv_base = BlockDev {
-            device: pv_name.clone(),
-            device_type: TYPE_UNKNOWN,
-        };
-
-        let pv = BlockDev {
-            device: pv_name.clone(),
-            device_type: TYPE_PV,
-        };
-
         let vg = BlockDev {
             device: vg_name.to_string(),
             device_type: TYPE_VG,
         };
 
-        let mut lists = Vec::new();
+        // Create a template from this PV leading up to its VG,
+        // to be appended with its LVs from `lv_paths.
+        let pv_template = BlockDevPath::from([
+            BlockDev {
+                device: pv_name.clone(),
+                device_type: TYPE_UNKNOWN,
+            },
+            BlockDev {
+                device: pv_name.clone(),
+                device_type: TYPE_PV,
+            },
+            vg.clone(),
+        ]);
+
+        // `paths` collects all paths from this PV -1-> VG -many-> LVs
+        // So we would have to iterate lv_paths and copy all paths for this PV
+        let mut paths = Vec::new();
         for lv_path in &mut lv_paths.clone() {
-            let vg_tmp = lv_path.pop_back().expect("None vg_tmp");
+            let vg_tmp = lv_path.pop_front().expect("None vg_tmp");
+
             if vg_tmp == vg {
-                let mut list = LinkedList::new();
+                let mut path = LinkedList::new();
                 let lv_tmp = lv_path.pop_back().expect("None lv_tmp");
 
-                list.push_back(pv_base.clone());
-                list.push_back(pv.clone());
-                list.push_back(vg_tmp);
-                list.push_back(lv_tmp);
+                path.extend(pv_template.clone());
+                path.push_back(lv_tmp);
 
-                lists.push(list);
+                paths.push(path);
             }
         }
 
-        lvms.insert(pv_name.clone(), lists);
+        lvms.insert(pv_name.clone(), paths);
     }
 
     lvms
@@ -221,9 +239,9 @@ pub(super) fn sys_lvms(lvs_cmd: &str, pvs_cmd: &str) -> HashMap<String, BlockDev
 #[test]
 fn test_trace_existing_fs_ready() {
     let mut expected_results = HashMap::new();
-    expected_results.insert("/dev/vda2".to_string(), BlockDevType::UnknownBlock);
+    expected_results.insert("/dev/vda2".to_string(), TYPE_UNKNOWN);
 
-    let output_blkid = run_blkid("./mock_cmd/blkid").expect("run_blkid failed");
+    let output_blkid = run_blkid("./test_assets/mock_cmd/blkid").expect("run_blkid failed");
     let traced = sys_fs_ready(&output_blkid);
     for (k, v) in traced.into_iter() {
         let expected = expected_results.get(&k);
@@ -235,7 +253,7 @@ fn test_trace_existing_fs_ready() {
 
 #[test]
 fn test_trace_existing_fs() {
-    // Hard-coded expected values from ./mock_cmd/blkid
+    // Hard-coded expected values from ./test_assets/mock_cmd/blkid
     let mut expected_results = HashMap::new();
     expected_results.insert(
         "/dev/mapper/archvg-swaplv".to_string(),
@@ -246,7 +264,7 @@ fn test_trace_existing_fs() {
         BlockDevType::Fs("btrfs".to_string()),
     );
 
-    let output_blkid = run_blkid("./mock_cmd/blkid").expect("run_blkid failed");
+    let output_blkid = run_blkid("./test_assets/mock_cmd/blkid").expect("run_blkid failed");
     let traced = sys_fs(&output_blkid);
     for (k, v) in traced.into_iter() {
         let expected = expected_results.get(&k);
@@ -258,8 +276,8 @@ fn test_trace_existing_fs() {
 
 #[test]
 fn test_trace_existing_lvms() {
-    // Hard-coded expected values from ./mock_cmd/{lvs,pvs}
-    let traced = sys_lvms("./mock_cmd/lvs", "./mock_cmd/pvs");
+    // Hard-coded expected values from ./test_assets/mock_cmd/{lvs,pvs}
+    let traced = sys_lvms("./test_assets/mock_cmd/lvs", "./test_assets/mock_cmd/pvs");
 
     // Hard-coded expected values
     let lists_vda1 = vec![

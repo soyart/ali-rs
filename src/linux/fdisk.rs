@@ -1,10 +1,12 @@
-use std::process::{Command, Stdio};
-
+/// This modules formats block devices by simply piping printf output to fdisk binary
+/// @TODO: Consider fdisk sys https://github.com/IBM/fdisk-sys
+///
+use crate::ali::{ManifestPartition, PartitionTable};
 use crate::errors::AliError;
-use crate::manifest::{ManifestPartition, PartitionTable};
+use crate::utils::shell;
 
 /// Returns fdisk cmd string for creating gpt/msdos partition table
-pub fn create_table_cmd(device: &str, table: &PartitionTable) -> String {
+pub fn create_table_cmd(table: &PartitionTable) -> String {
     match table {
         PartitionTable::Gpt => "g\nw\n".to_string(),
         PartitionTable::Mbr => "o\nw\n".to_string(),
@@ -49,34 +51,10 @@ pub fn set_partition_type_cmd(part_num: usize, part: &ManifestPartition) -> Stri
 /// printf $cmd | fdisk $device
 /// ```
 pub fn run_fdisk_cmd(device: &str, cmd: &str) -> Result<(), AliError> {
-    let printf_cmd = Command::new("printf")
-        .arg(cmd)
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("failed to spawn printf");
+    let printf_cmd: (&str, &[&str]) = ("printf", &[cmd]);
+    let fdisk_cmd: (&str, &[&str]) = ("fdisk", &[device]);
 
-    let mut fdisk_cmd = Command::new("fdisk")
-        .arg(device)
-        .stdin(printf_cmd.stdout.unwrap())
-        .spawn()
-        .expect("failed to spawn fdisk");
-
-    match fdisk_cmd.wait() {
-        Ok(result) => match result.success() {
-            false => Err(AliError::CmdFailed {
-                error: None,
-                context: format!(
-                    "fdisk command exited with bad status: {}",
-                    result.code().expect("failed to get exit code"),
-                ),
-            }),
-            _ => Ok(()),
-        },
-        Err(err) => Err(AliError::CmdFailed {
-            error: None,
-            context: format!("fdisk command failed to run: {}", err.to_string()),
-        }),
-    }
+    shell::pipe(printf_cmd, fdisk_cmd)
 }
 
 fn assemble_and_w(slice: &[&str]) -> String {
@@ -129,19 +107,19 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(target_os = "windows"))]
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "linux")]
     fn test_run_fdisk_cmd() {
-        use crate::utils::shell::exec;
+        use crate::utils::shell::test_utils;
 
-        let fname = "fake-disk.img";
-        exec(
-            "dd",
-            &["if=/dev/zero", &format!("of={fname}"), "bs=100M", "count=5"],
-        )
-        .expect("failed to create blank disk");
+        // Create a zeroed 500M file as fake block device
+        let fname = "./fake-disk.img";
+        if let Err(err) = test_utils::dd("/dev/zero", fname, "100M", 5) {
+            panic!(
+                "dd command failed to create zeroed dummy device {fname} with size 100Mx5: {err}"
+            );
+        }
 
-        let create_gpt_table = create_table_cmd(fname, &PartitionTable::Gpt);
+        let create_gpt_table = create_table_cmd(&PartitionTable::Gpt);
         run_fdisk_cmd(fname, &create_gpt_table).expect("failed to create gpt table");
 
         let manifest_p1 = ManifestPartition {
