@@ -59,7 +59,7 @@ pub fn apply_manifest(
             return Err(AliError::InstallError {
                 error: Box::new(err),
                 stages_performed: progress,
-            })
+            });
         }
     }
 
