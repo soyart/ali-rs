@@ -3,7 +3,7 @@ name: Lint code with clippy
 on: [push]
     
 jobs:
-  test:
+  clippy:
     name: Lint Rust code
     runs-on: ubuntu-latest
     steps:

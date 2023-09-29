@@ -18,5 +18,5 @@ shlex = ">=1.2"
 pwhash = "1"
 
 [badges]
-github = { repository = "soyart/ali-rs", workflow = "cargo_test" }
+github = { repository = "soyart/ali-rs", workflow = "cargo-test" }
 maintenance = { status = "actively-developed" }

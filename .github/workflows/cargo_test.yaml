@@ -5,8 +5,8 @@ on:
   pull_request:
 
 jobs:
-  test:
-    name: Test
+  cargo-test:
+    name: Test with `cargo test`
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -14,22 +14,22 @@ jobs:
           - stable
           - nightly
     steps:
-      - name: Checkout sources
+      - name: Checkout sources (${{ matrix.toolchain }})
         uses: actions/checkout@v2
 
-      - name: Install Rust toolchain
+      - name: Install Rust toolchain ${{ matrix.toolchain }}
         uses: actions-rs/toolchain@v1
         with:
           toolchain: ${{ matrix.toolchain }}
           profile: minimal
           override: true # Make cargo workflows uses nightly
 
-      - name: Check with `cargo check`
+      - name: Check with `cargo check` on toolchain ${{ matrix.toolchain }}
         uses: actions-rs/cargo@v1
         with:
           command: check
 
-      - name: Test with `cargo test`
+      - name: Test with `cargo test` on toolchain ${{ matrix.toolchain }}
         uses: actions-rs/cargo@v1
         with:
           command: test

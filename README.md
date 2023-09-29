@@ -1,6 +1,6 @@
 # ali-rs
 
-[![Workflow Status](https://github.com/soyart/ali-rs/workflows/cargo%5Ftest/badge.svg)](https://github.com/soyart/ali-rs/actions?query=workflow%3A%22cargo%5Ftest%22)
+[![Workflow Status](https://github.com/soyart/ali-rs/workflows/cargo%2Dtest/badge.svg)](https://github.com/soyart/ali-rs/actions?query=workflow%3A%22cargo%2Dtest%22)
 ![Maintenance](https://img.shields.io/badge/maintenance-activly--developed-brightgreen.svg)
 
 ```text
