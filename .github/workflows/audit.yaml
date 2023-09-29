@@ -1,4 +1,4 @@
-name: Scheduled security audit
+name: audit-scheduled
 
 on:
   schedule:

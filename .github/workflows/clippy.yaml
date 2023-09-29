@@ -1,4 +1,4 @@
-name: Lint code with clippy
+name: clippy
 
 on: [push]
     

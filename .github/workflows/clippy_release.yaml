@@ -1,4 +1,4 @@
-name: Release clippy warnings
+name: clippy-release
 
 on:
   push:
