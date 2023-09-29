@@ -12,6 +12,12 @@ pub fn ali_routines(
 ) -> Result<Vec<ActionRoutine>, AliError> {
     let mut actions = Vec::new();
 
+    let action_rootpasswd = ActionRoutine::RootPasswd;
+    if let Err(err) = root_password(&manifest.rootpasswd, install_location) {
+        return Err(map_err_routine(err, action_rootpasswd, actions));
+    }
+    actions.push(action_rootpasswd);
+
     let action_genfstab = ActionRoutine::GenFstab;
     if let Err(err) = genfstab_uuid(install_location) {
         return Err(map_err_routine(err, action_genfstab, actions));
@@ -52,6 +58,19 @@ fn locale_conf(install_location: &str) -> Result<(), AliError> {
 
     std::fs::write(&dst, defaults::LOCALE_CONF)
         .map_err(|err| AliError::FileError(err, format!("failed to create new locale.conf {dst}")))
+}
+
+fn root_password(
+    hashed_root_passwd: &Option<String>,
+    install_location: &str,
+) -> Result<(), AliError> {
+    let password = hashed_root_passwd
+        .clone()
+        .unwrap_or(defaults::hashed_password());
+
+    let cmd = format!("echo 'username:{password}' | chpasswd -e");
+
+    shell::arch_chroot(install_location, &cmd)
 }
 
 #[inline(always)]

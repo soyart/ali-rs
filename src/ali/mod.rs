@@ -39,6 +39,14 @@ pub struct Manifest {
     )]
     pub pacstraps: Option<HashSet<String>>,
 
+    #[serde(
+        alias = "password",
+        alias = "passwd",
+        alias = "root-password",
+        alias = "root-passwd"
+    )]
+    pub rootpasswd: Option<String>,
+
     #[serde(alias = "arch-chroot")]
     pub chroot: Option<Vec<String>>,
 

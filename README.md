@@ -4,11 +4,9 @@
 ![Maintenance](https://img.shields.io/badge/maintenance-activly--developed-brightgreen.svg)
 
 ```text
-       _ _
-  __ _| (_)      _ __ ___
- / _` | | |_____| '__/ __|
-| (_| | | |_____| |  \__ \
- \__,_|_|_|     |_|  |___/
+┏━┓╻  ╻   ┏━┓┏━┓
+┣━┫┃  ┃╺━╸┣┳┛┗━┓
+╹ ╹┗━╸╹   ╹┗╸┗━┛
 ```
 
 Rust implementation of [ALI](https://github.com/soyart/ali),
@@ -48,7 +46,22 @@ Each stage groups closely related _actions_ together,
 and they are applied in a particular order. If any of the stages
 failed, ali-rs exits.
 
-### Manifest application stages
+## Root password in ali-rs
+
+User `root` password (hashed) is defined in manifest key
+[`rootpasswd`](https://github.com/soyart/ali/blob/master/ALI.md#key-rootpasswd).
+
+If not given, ali-rs will use the default password as defined in
+[`constants.rs`](./src/constants.rs), currently `archalirs`.
+
+Note that users can always do a manual `chroot` to change root password
+any time after the installer exits.
+
+> ALI spec does not specify what an installer should do in case it is not given.
+
+### ALI manifest application stages in ali-rs
+
+ali-rs follows ALI steps in this strict order:
 
 1. `stage-mountpoints`
 

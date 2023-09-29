@@ -376,6 +376,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -423,6 +424,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -475,6 +477,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -547,6 +550,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -618,6 +622,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -665,6 +670,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -716,6 +722,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -758,6 +765,7 @@ mod tests {
                         postinstall: None,
                         hostname: None,
                         timezone: None,
+                        rootpasswd: None,
                     },
                 },
 
@@ -814,6 +822,7 @@ mod tests {
                         postinstall: None,
                         hostname: None,
                         timezone: None,
+                        rootpasswd: None,
                     },
                 },
 
@@ -879,6 +888,7 @@ mod tests {
                         postinstall: None,
                         hostname: None,
                         timezone: None,
+                        rootpasswd: None,
                     },
                 },
 
@@ -957,6 +967,7 @@ mod tests {
                         postinstall: None,
                         hostname: None,
                         timezone: None,
+                        rootpasswd: None,
                     },
                 },
 
@@ -1042,6 +1053,7 @@ mod tests {
                         postinstall: None,
                         hostname: None,
                         timezone: None,
+                        rootpasswd: None,
                     },
                 },
 
@@ -1134,6 +1146,7 @@ mod tests {
                         postinstall: None,
                         hostname: None,
                         timezone: None,
+                        rootpasswd: None,
                     },
                 },
 
@@ -1236,6 +1249,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
         ];
@@ -1266,6 +1280,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -1297,6 +1312,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -1349,6 +1365,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -1417,6 +1434,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -1473,6 +1491,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -1540,6 +1559,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -1607,6 +1627,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -1674,6 +1695,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -1741,6 +1763,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -1808,6 +1831,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -1875,6 +1899,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -1935,6 +1960,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -2004,6 +2030,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -2080,6 +2107,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -2154,6 +2182,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -2241,6 +2270,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
 
@@ -2335,6 +2365,7 @@ mod tests {
                     postinstall: None,
                     hostname: None,
                     timezone: None,
+                    rootpasswd: None,
                 },
             },
         ];

@@ -117,6 +117,9 @@ pub enum ActionRoutine {
 
     #[serde(rename = "localeConf")]
     LocaleConf,
+
+    #[serde(rename = "rootPasswd")]
+    RootPasswd,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
