@@ -1,4 +1,5 @@
 mod constants;
+mod mkinitcpio;
 mod quicknet;
 mod replace_token;
 mod uncomment;
@@ -6,6 +7,8 @@ mod uncomment;
 use serde::{Deserialize, Serialize};
 
 use crate::errors::AliError;
+
+use self::constants::mkinitcpio;
 
 /// All hook actions stores JSON string representation of the hook.
 /// The reason being we want to hide hook implementation from outside code.
@@ -15,6 +18,7 @@ pub enum ActionHook {
     QuickNet(String),
     ReplaceToken(String),
     Uncomment(String),
+    Mkinitcpio(String),
 }
 
 pub fn apply_hook(
@@ -41,6 +45,7 @@ pub fn apply_hook(
         "@uncomment" | "@uncomment-print" | "@uncomment-all" | "@uncomment-all-print" => {
             uncomment::uncomment(hook_cmd)
         }
+        "@mkinitcpio" | "@mkinitcpio-print" => mkinitcpio::mkinitcpio(hook_cmd),
         _ => Err(AliError::BadArgs(format!("unknown hook cmd: {hook}"))),
     }
 }
