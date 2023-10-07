@@ -8,8 +8,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::errors::AliError;
 
-use self::constants::mkinitcpio;
-
 /// All hook actions stores JSON string representation of the hook.
 /// The reason being we want to hide hook implementation from outside code.
 #[derive(Debug, Clone, Serialize, Deserialize)]
