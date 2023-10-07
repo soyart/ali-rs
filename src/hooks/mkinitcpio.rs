@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use serde_json;
 
 use super::constants::mkinitcpio::*;
 use super::ActionHook;
@@ -7,7 +6,7 @@ use crate::errors::AliError;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 struct Mkinitcpio {
-    pub boot_hook: Option<BootHooks>,
+    pub boot_hook: Option<BootHooksRoot>,
     pub binaries: Option<Vec<String>>,
     pub hooks: Option<Vec<String>>,
     pub print_only: bool,
@@ -52,37 +51,37 @@ pub fn mkinitcpio(cmd: &str) -> Result<ActionHook, AliError> {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-enum BootHooks {
-    RootOnLvm,
-    RootOnLuks,
-    RootOnLvmOnLuks,
-    RootOnLuksOnLvm,
+enum BootHooksRoot {
+    Lvm,
+    Luks,
+    LvmOnLuks,
+    LuksOnLvm,
 }
 
-fn hardcode_boot_hooks(t: BootHooks) -> String {
+fn hardcode_boot_hooks(t: BootHooksRoot) -> String {
     match t {
-        BootHooks::RootOnLvm => MKINITCPIO_HOOKS_LVM_ROOT.to_string(),
-        BootHooks::RootOnLuks => MKINITCPIO_HOOKS_LUKS_ROOT.to_string(),
-        BootHooks::RootOnLvmOnLuks => MKINITCPIO_HOOKS_LVM_ON_LUKS_ROOT.to_string(),
-        BootHooks::RootOnLuksOnLvm => MKINITCPIO_HOOKS_LUKS_ON_LVM_ROOT.to_string(),
+        BootHooksRoot::Lvm => MKINITCPIO_HOOKS_LVM_ROOT.to_string(),
+        BootHooksRoot::Luks => MKINITCPIO_HOOKS_LUKS_ROOT.to_string(),
+        BootHooksRoot::LvmOnLuks => MKINITCPIO_HOOKS_LVM_ON_LUKS_ROOT.to_string(),
+        BootHooksRoot::LuksOnLvm => MKINITCPIO_HOOKS_LUKS_ON_LVM_ROOT.to_string(),
     }
 }
 
-fn decide_boot_hooks(v: &str) -> Result<BootHooks, AliError> {
+fn decide_boot_hooks(v: &str) -> Result<BootHooksRoot, AliError> {
     if ALIASES_ROOT_LVM.contains(&v) {
-        return Ok(BootHooks::RootOnLvm);
+        return Ok(BootHooksRoot::Lvm);
     }
 
     if ALIASES_ROOT_LUKS.contains(&v) {
-        return Ok(BootHooks::RootOnLuks);
+        return Ok(BootHooksRoot::Luks);
     }
 
     if ALIASES_ROOT_LVM_ON_LUKS.contains(&v) {
-        return Ok(BootHooks::RootOnLvmOnLuks);
+        return Ok(BootHooksRoot::LvmOnLuks);
     }
 
     if ALIASES_ROOT_LUKS_ON_LVM.contains(&v) {
-        return Ok(BootHooks::RootOnLuksOnLvm);
+        return Ok(BootHooksRoot::LuksOnLvm);
     }
 
     Err(AliError::BadHookCmd(format!(
@@ -96,7 +95,7 @@ fn parse(s: &str) -> Result<Mkinitcpio, AliError> {
     let args = &parts[1..];
     let keys_vals = args
         .iter()
-        .filter_map(|arg| arg.split_once("="))
+        .filter_map(|arg| arg.split_once('='))
         .collect::<Vec<_>>();
 
     let mut mkinitcpio = Mkinitcpio::default();
@@ -115,7 +114,7 @@ fn parse(s: &str) -> Result<Mkinitcpio, AliError> {
         }
     }
 
-    for (k, ref v) in keys_vals {
+    for (k, v) in keys_vals {
         let duplicate_key = !dups.insert(k);
         if duplicate_key {
             return Err(AliError::BadHookCmd(format!(
@@ -167,12 +166,12 @@ fn fmt_shell_array(arr_name: &str, arr_elems: Vec<String>) -> String {
 
 impl std::default::Default for Mkinitcpio {
     fn default() -> Self {
-        return Self {
+        Self {
             boot_hook: None,
             binaries: None,
             hooks: None,
             print_only: true,
-        };
+        }
     }
 }
 

@@ -51,7 +51,6 @@ fn uncomment_text_all(original: &str, marker: &str, key: &str) -> Result<String,
     let uncommented = loop {
         let whitespace = " ".repeat(c);
         let pattern = format!("{}{whitespace}{}", marker, key);
-        if c > 4 {}
 
         let uncommented = original.replace(&pattern, key);
 
