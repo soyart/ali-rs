@@ -117,3 +117,46 @@ simply prints `@uncomment-all` output to screen.
       ```
       @replace-token "linux_boot" "loglevel=3 quiet root=/dev/archvg/archlv ro" /some/template /etc/default/grub
       ```
+
+### `@mkinitcpio`
+
+  Formats `/etc/mkinitcpio.conf` entries `BINARIES` and `HOOKS`.
+
+  Some presets are available for `HOOKS`, e.g. `lvm-on-luks`,
+  which will produces `HOOKS` string suitable for booting a root on LVM-on-LUKS.
+
+  Synopsis:
+
+  ```
+  @mkinitcpio [boot_hook=<BOOT_HOOK>] [binaries='bin2 bin2'] [hooks='hook1 hook2']
+  ```
+
+  Note: `hooks` and `boot_hook` are mutually exclusive.
+
+  Examples:
+
+  - Uses preset `lvm` for `HOOKS`, and add `btrfs` to `BINARIES`
+
+    ```
+    @mkinitcpio 'boot_hook=lvm' 'binaries=btrfs'
+    ```
+      
+    Output:
+
+    ```
+    HOOKS=(base udev autodetect modconf kms keyboard keymap consolefont block lvm2 filesystems fsck)
+    BINARIES=(btrfs)
+    ```
+
+  - Uses preset `lvm` for `HOOKS`, and add `btrfs` and `foo` to `BINARIES`, only printing output
+
+    ```
+    @mkinitcpio-print 'boot_hook=lvm' 'binaries=btrfs foo'
+    ```
+      
+    Output:
+
+    ```
+    HOOKS=(base udev autodetect modconf kms keyboard keymap consolefont block lvm2 filesystems fsck)
+    BINARIES=(btrfs foo)
+    ```
