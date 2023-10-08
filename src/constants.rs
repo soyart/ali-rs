@@ -13,7 +13,9 @@ pub mod defaults {
             .expect("failed to generate default bcrypt hashed password");
 
         if !pwhash::unix::verify(ROOT_PASSWD, &h) {
-            panic!("ali-rs bug: failed to verify default bcrypt hashed password")
+            panic!(
+                "ali-rs bug: failed to verify default bcrypt hashed password"
+            )
         }
 
         h

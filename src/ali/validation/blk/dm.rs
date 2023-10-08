@@ -1,8 +1,17 @@
-use std::collections::{HashMap, LinkedList};
+use std::collections::{
+    HashMap,
+    LinkedList,
+};
 
-use crate::ali::{self, validation::*};
-use crate::ali::{ManifestLuks, ManifestLvmLv, ManifestLvmVg};
-use crate::entity::{blockdev::*, parse_human_bytes};
+use crate::ali::validation::*;
+use crate::ali::{
+    self,
+    ManifestLuks,
+    ManifestLvmLv,
+    ManifestLvmVg,
+};
+use crate::entity::blockdev::*;
+use crate::entity::parse_human_bytes;
 use crate::errors::AliError;
 
 #[inline(always)]
@@ -105,7 +114,8 @@ pub(super) fn collect_valid_luks(
     sys_lvms: &mut HashMap<String, BlockDevPaths>,
     valids: &mut BlockDevPaths,
 ) -> Result<(), AliError> {
-    let (luks_base_path, luks_path) = (&luks.device, format!("/dev/mapper/{}", luks.name));
+    let (luks_base_path, luks_path) =
+        (&luks.device, format!("/dev/mapper/{}", luks.name));
 
     let msg = "dm luks validation failed";
     if file_exists(&luks_path) {

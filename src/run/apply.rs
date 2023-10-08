@@ -1,19 +1,29 @@
 use std::collections::HashSet;
 use std::env;
 
-use crate::ali::apply;
-use crate::ali::validation;
-use crate::ali::{Dm, Manifest};
+use crate::ali::{
+    apply,
+    validation,
+    Dm,
+    Manifest,
+};
 use crate::cli;
-use crate::constants::{self, defaults};
+use crate::constants::{
+    self,
+    defaults,
+};
 use crate::entity::report::Report;
 use crate::entity::stage;
 use crate::errors::AliError;
 
-pub(super) fn run(manifest_file: &str, args: cli::ArgsApply) -> Result<Report, AliError> {
+pub(super) fn run(
+    manifest_file: &str,
+    args: cli::ArgsApply,
+) -> Result<Report, AliError> {
     let start = std::time::Instant::now();
 
-    let mut skip_stages: HashSet<stage::Stage> = HashSet::from_iter(args.skip_stages);
+    let mut skip_stages: HashSet<stage::Stage> =
+        HashSet::from_iter(args.skip_stages);
     if let Some(stages) = args.stages {
         for explicit_stage in stages.iter() {
             if skip_stages.contains(explicit_stage) {
@@ -23,14 +33,16 @@ pub(super) fn run(manifest_file: &str, args: cli::ArgsApply) -> Result<Report, A
             }
         }
 
-        let mut all_stages: HashSet<stage::Stage> = HashSet::from(stage::STAGES);
+        let mut all_stages: HashSet<stage::Stage> =
+            HashSet::from(stage::STAGES);
         for skip in skip_stages.iter() {
             all_stages.remove(skip);
         }
         skip_stages = HashSet::new();
 
         let explicit_stages: HashSet<stage::Stage> = HashSet::from_iter(stages);
-        let diff: HashSet<_> = all_stages.difference(&explicit_stages).collect();
+        let diff: HashSet<_> =
+            all_stages.difference(&explicit_stages).collect();
         for d in diff {
             skip_stages.insert(d.to_owned());
         }
@@ -52,7 +64,8 @@ pub(super) fn run(manifest_file: &str, args: cli::ArgsApply) -> Result<Report, A
 
     // Apply manifest to location
     let location = install_location();
-    let stages_applied = apply::apply_manifest(&manifest, &location, skip_stages)?;
+    let stages_applied =
+        apply::apply_manifest(&manifest, &location, skip_stages)?;
 
     Ok(Report {
         location,
@@ -62,7 +75,8 @@ pub(super) fn run(manifest_file: &str, args: cli::ArgsApply) -> Result<Report, A
 }
 
 fn install_location() -> String {
-    env::var(constants::ENV_ALI_LOC).unwrap_or(defaults::INSTALL_LOCATION.to_string())
+    env::var(constants::ENV_ALI_LOC)
+        .unwrap_or(defaults::INSTALL_LOCATION.to_string())
 }
 
 // Update manifest to suit the manifest

@@ -1,7 +1,15 @@
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 
 use super::constants::mkinitcpio::*;
-use super::ActionHook;
+use super::{
+    ActionHook,
+    Caller,
+    MKINITCPIO,
+    MKINITCPIO_PRINT,
+};
 use crate::errors::AliError;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -12,29 +20,35 @@ struct Mkinitcpio {
     pub print_only: bool,
 }
 
-pub fn mkinitcpio(cmd: &str) -> Result<ActionHook, AliError> {
+pub fn mkinitcpio(
+    cmd: &str,
+    caller: Caller,
+    root_location: &str,
+) -> Result<ActionHook, AliError> {
     let mut m = parse(cmd)?;
 
     if m.boot_hook.is_some() {
-        let hooks = hardcode_boot_hooks(m.boot_hook.clone().unwrap());
+        let hooks = preset(m.boot_hook.clone().unwrap());
         let hooks = split_whitespace_to_strings(&hooks);
 
         m.hooks = Some(hooks);
     }
 
     let (mut hooks_mkinitcpio, mut binaries_mkinitcpio) = (None, None);
+
+    if let Some(binaries) = &m.binaries {
+        binaries_mkinitcpio =
+            Some(fmt_shell_array("BINARIES", binaries.clone()));
+    }
     if let Some(hooks) = &m.hooks {
         hooks_mkinitcpio = Some(fmt_shell_array("HOOKS", hooks.clone()));
     }
-    if let Some(binaries) = &m.binaries {
-        binaries_mkinitcpio = Some(fmt_shell_array("BINARIES", binaries.clone()));
-    }
 
     if m.print_only {
-        if let Some(s) = hooks_mkinitcpio {
+        if let Some(s) = binaries_mkinitcpio {
             println!("{s}");
         }
-        if let Some(s) = binaries_mkinitcpio {
+        if let Some(s) = hooks_mkinitcpio {
             println!("{s}");
         }
 
@@ -43,11 +57,11 @@ pub fn mkinitcpio(cmd: &str) -> Result<ActionHook, AliError> {
         return Ok(ActionHook::Mkinitcpio(s));
     }
 
-    // @TODO: Write
+    super::warn_if_no_mountpoint(MKINITCPIO, caller, root_location)?;
 
-    Err(AliError::NotImplemented(
-        "@mkinitcpio: write files".to_string(),
-    ))
+    Err(AliError::NotImplemented(format!(
+        "{MKINITCPIO}: write files",
+    )))
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -58,12 +72,21 @@ enum BootHooksRoot {
     LuksOnLvm,
 }
 
-fn hardcode_boot_hooks(t: BootHooksRoot) -> String {
+#[rustfmt::skip]
+fn preset(t: BootHooksRoot) -> String {
     match t {
-        BootHooksRoot::Lvm => MKINITCPIO_HOOKS_LVM_ROOT.to_string(),
-        BootHooksRoot::Luks => MKINITCPIO_HOOKS_LUKS_ROOT.to_string(),
-        BootHooksRoot::LvmOnLuks => MKINITCPIO_HOOKS_LVM_ON_LUKS_ROOT.to_string(),
-        BootHooksRoot::LuksOnLvm => MKINITCPIO_HOOKS_LUKS_ON_LVM_ROOT.to_string(),
+        BootHooksRoot::Lvm => {
+            MKINITCPIO_PRESET_LVM_ROOT.to_string()
+        }
+        BootHooksRoot::Luks => {
+            MKINITCPIO_PRESET_LUKS_ROOT.to_string()
+        }
+        BootHooksRoot::LvmOnLuks => {
+            MKINITCPIO_PRESET_LVM_ON_LUKS_ROOT.to_string()
+        }
+        BootHooksRoot::LuksOnLvm => {
+            MKINITCPIO_PRESET_LUKS_ON_LVM_ROOT.to_string()
+        }
     }
 }
 
@@ -85,13 +108,18 @@ fn decide_boot_hooks(v: &str) -> Result<BootHooksRoot, AliError> {
     }
 
     Err(AliError::BadHookCmd(format!(
-        "@mkinitcpio: no such boot_hook: {v}"
+        "{MKINITCPIO}: no such boot_hook preset: {v}"
     )))
 }
 
 fn parse(s: &str) -> Result<Mkinitcpio, AliError> {
     let parts = shlex::split(s).unwrap();
-    // println!("parts {:?}", &parts[1..]);
+    if parts.len() < 2 {
+        return Err(AliError::BadHookCmd(format!(
+            "{MKINITCPIO}: need at least 1 argument"
+        )));
+    }
+
     let args = &parts[1..];
     let keys_vals = args
         .iter()
@@ -101,15 +129,15 @@ fn parse(s: &str) -> Result<Mkinitcpio, AliError> {
     let mut mkinitcpio = Mkinitcpio::default();
     let mut dups = std::collections::HashSet::new();
 
-    let cmd = parts[0].as_str();
-    match cmd {
-        "@mkinitcpio-print" => {}
-        "@mkinitcpio" => {
+    let cmd = parts.first().unwrap();
+    match cmd.as_str() {
+        MKINITCPIO_PRINT => {}
+        MKINITCPIO => {
             mkinitcpio.print_only = false;
         }
         _ => {
             return Err(AliError::BadHookCmd(format!(
-                "@mkinitcpio: unknown hook command {cmd}"
+                "{MKINITCPIO}: unknown hook command {cmd}"
             )))
         }
     }
@@ -118,7 +146,7 @@ fn parse(s: &str) -> Result<Mkinitcpio, AliError> {
         let duplicate_key = !dups.insert(k);
         if duplicate_key {
             return Err(AliError::BadHookCmd(format!(
-                "@mkinitcpio: duplicate key {k}"
+                "{MKINITCPIO}: duplicate key {k}"
             )));
         }
 
@@ -143,10 +171,10 @@ fn parse(s: &str) -> Result<Mkinitcpio, AliError> {
         }
     }
 
-    if let (Some(_), Some(_)) = (&mkinitcpio.boot_hook, &mkinitcpio.hooks) {
-        return Err(AliError::BadHookCmd(
-            "@mkinitcpio: boot_hook and hooks are mutually exclusive, but found both".to_string(),
-        ));
+    if mkinitcpio.boot_hook.is_some() && mkinitcpio.hooks.is_some() {
+        return Err(AliError::BadHookCmd(format!(
+            "{cmd}: boot_hook and hooks are mutually exclusive, but found both"
+        )));
     }
 
     Ok(mkinitcpio)

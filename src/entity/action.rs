@@ -1,9 +1,14 @@
 use std::collections::HashSet;
 
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 
-use crate::ali;
-use crate::hooks;
+use crate::{
+    ali,
+    hooks,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -181,11 +186,16 @@ fn test_json_stages() {
     let actions_bootstrap = vec![
         ActionBootstrap::InstallBase,
         ActionBootstrap::InstallPackages {
-            packages: HashSet::from(["git".to_string(), "rustup".to_string(), "curl".to_string()]),
+            packages: HashSet::from([
+                "git".to_string(),
+                "rustup".to_string(),
+                "curl".to_string(),
+            ]),
         },
     ];
 
-    let actions_routines = vec![ActionRoutine::GenFstab, ActionRoutine::LocaleConf];
+    let actions_routines =
+        vec![ActionRoutine::GenFstab, ActionRoutine::LocaleConf];
 
     let actions_chroot_ali = vec![
         ActionChrootAli::LinkTimezone("Asia/Bangkok".to_string()),
@@ -193,12 +203,15 @@ fn test_json_stages() {
     ];
 
     let actions_chroot_user = vec![ActionChrootUser::UserArchChrootCmd(
-        "curl https://foo.bar/loader_conf.conf > /boot/loader/entries/default.conf ".to_string(),
+        "curl https://foo.bar/loader_conf.conf > /boot/loader/entries/default.conf "
+            .to_string(),
     )];
 
-    let actions_postinstall_user = vec![ActionPostInstallUser::UserPostInstallCmd(
-        "grep vultr /alitarget/boot/loader/entries/default.conf".to_string(),
-    )];
+    let actions_postinstall_user =
+        vec![ActionPostInstallUser::UserPostInstallCmd(
+            "grep vultr /alitarget/boot/loader/entries/default.conf"
+                .to_string(),
+        )];
 
     let stages = StageActions {
         mountpoints: actions_mountpoints.clone(),

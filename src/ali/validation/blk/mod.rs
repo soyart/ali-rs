@@ -1,14 +1,25 @@
 mod dm;
 mod trace_blk;
 
-use std::collections::{HashMap, HashSet, LinkedList};
+use std::collections::{
+    HashMap,
+    HashSet,
+    LinkedList,
+};
 
-use crate::ali::{Dm, Manifest};
-use crate::entity::{blockdev::*, parse_human_bytes};
+use crate::ali::{
+    Dm,
+    Manifest,
+};
+use crate::entity::blockdev::*;
+use crate::entity::parse_human_bytes;
 use crate::errors::AliError;
 use crate::utils::fs::file_exists;
 
-pub fn validate(manifest: &Manifest, overwrite: bool) -> Result<BlockDevPaths, AliError> {
+pub fn validate(
+    manifest: &Manifest,
+    overwrite: bool,
+) -> Result<BlockDevPaths, AliError> {
     // Validate no duplicate mountpoints
     if let Some(ref filesystems) = manifest.filesystems {
         let mut known_mountpoints = HashSet::new();
@@ -73,9 +84,9 @@ pub fn validate(manifest: &Manifest, overwrite: bool) -> Result<BlockDevPaths, A
 // and are made mutable because we need to remove used up elements.
 fn validate_blk(
     manifest: &Manifest,
-    sys_fs_devs: &HashMap<String, BlockDevType>, // Maps fs devs to their FS type (e.g. Btrfs)
-    mut sys_fs_ready_devs: HashMap<String, BlockDevType>, // Maps fs-ready devs to their types (e.g. partition)
-    mut sys_lvms: HashMap<String, BlockDevPaths>,         // Maps pv path to all possible LV paths
+    sys_fs_devs: &HashMap<String, BlockDevType>, /* Maps fs devs to their FS type (e.g. Btrfs) */
+    mut sys_fs_ready_devs: HashMap<String, BlockDevType>, /* Maps fs-ready devs to their types (e.g. partition) */
+    mut sys_lvms: HashMap<String, BlockDevPaths>, /* Maps pv path to all possible LV paths */
 ) -> Result<BlockDevPaths, AliError> {
     // valids collects all valid known devices to be created in the manifest
     let mut valids = BlockDevPaths::new();
@@ -89,7 +100,9 @@ fn validate_blk(
                 )));
             }
             let partition_prefix: String = {
-                if disk.device.contains("nvme") || disk.device.contains("mmcblk") {
+                if disk.device.contains("nvme")
+                    || disk.device.contains("mmcblk")
+                {
                     format!("{}p", disk.device)
                 } else {
                     disk.device.clone()
@@ -200,14 +213,24 @@ fn validate_blk(
                     if let Some(vgs) = &lvm.vgs {
                         for vg in vgs {
                             // Appends VG to paths in valids, if OK
-                            dm::collect_valid_vg(vg, sys_fs_devs, &mut sys_lvms, &mut valids)?;
+                            dm::collect_valid_vg(
+                                vg,
+                                sys_fs_devs,
+                                &mut sys_lvms,
+                                &mut valids,
+                            )?;
                         }
                     }
 
                     if let Some(lvs) = &lvm.lvs {
                         for lv in lvs {
                             // Appends LV to paths in valids, if OK
-                            dm::collect_valid_lv(lv, sys_fs_devs, &mut sys_lvms, &mut valids)?;
+                            dm::collect_valid_lv(
+                                lv,
+                                sys_fs_devs,
+                                &mut sys_lvms,
+                                &mut valids,
+                            )?;
                         }
                     }
                 }
@@ -2379,7 +2402,11 @@ mod tests {
             );
 
             if let Err(ref err) = result {
-                eprintln!("Unexpected error from test case {}: {}", i + 1, test.case);
+                eprintln!(
+                    "Unexpected error from test case {}: {}",
+                    i + 1,
+                    test.case
+                );
 
                 if let Some(ref ctx) = test.context {
                     eprintln!("\nCONTEXT: {ctx}\n");

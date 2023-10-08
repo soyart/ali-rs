@@ -1,7 +1,10 @@
 use serde_json::json;
 use thiserror::Error;
 
-use crate::entity::{action, stage};
+use crate::entity::{
+    action,
+    stage,
+};
 use crate::utils::shell;
 
 /// App-wide ali-rs error
@@ -45,7 +48,9 @@ pub enum AliError {
     #[error("validation error: {0}")]
     Validation(String),
 
-    #[error("shell command (context: \"{context}\"), embeddedError: {error:?}")]
+    #[error(
+        "shell command (context: \"{context}\"), embeddedError: {error:?}"
+    )]
     CmdFailed {
         error: shell::CmdError,
         context: String,
@@ -143,7 +148,8 @@ fn test_json_error() {
         Action::Mountpoints(ActionMountpoints::ApplyFilesystems),
     ];
 
-    let actions_bootstrap = vec![Action::Bootstrap(ActionBootstrap::InstallBase)];
+    let actions_bootstrap =
+        vec![Action::Bootstrap(ActionBootstrap::InstallBase)];
 
     // Failed during bootstrap user packages
     let err_pkg = AliError::ApplyError {
@@ -153,9 +159,11 @@ fn test_json_error() {
             },
             context: "no such command foobar".to_string(),
         }),
-        action_failed: Box::new(Action::Bootstrap(ActionBootstrap::InstallPackages {
-            packages: HashSet::from(["badpkg".to_string()]),
-        })),
+        action_failed: Box::new(Action::Bootstrap(
+            ActionBootstrap::InstallPackages {
+                packages: HashSet::from(["badpkg".to_string()]),
+            },
+        )),
         actions_performed: actions_bootstrap,
     };
 

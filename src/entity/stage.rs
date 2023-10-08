@@ -1,5 +1,8 @@
 use clap::ValueEnum;
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 
 use super::action::*;
 
@@ -91,6 +94,7 @@ impl std::fmt::Display for Stage {
     }
 }
 
+#[rustfmt::skip]
 impl From<Vec<Action>> for StageActions {
     fn from(value: Vec<Action>) -> Self {
         let mut s = Self::default();

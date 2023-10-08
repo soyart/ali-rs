@@ -28,6 +28,38 @@ For example, `@uncomment-all` hook has print-only version
 `@uncomment-all-print` which instead of writing to output files,
 simply prints `@uncomment-all` output to screen.
 
+## Hooks in ALI manifest, execution stage, and output file locations
+
+> See also: [ALI stages](https://github.com/soyart/ali/blob/master/ALI.md#ali-stages)
+
+ALI provides 2 place where users can put arbitary command strings:
+(1) under [manifest key `chroot`](https://github.com/soyart/ali/blob/master/ALI.md#key-chroot)
+and (2) under [key `postinstall`](https://github.com/soyart/ali/blob/master/ALI.md#key-postinstall).
+
+ali-rs leverages this existing infrastructure, and allows users
+to put their ali-rs hooks in ALI manifests under these 2 keys.
+
+Hooks defined under manifest key `chroot` will be executed with the
+absolute root path changed from the root of the live system to the
+mountpoint of the new system being installed. Hooks defined here will
+be executed in `stage-chroot_user`.
+
+Hooks defined under manifest key `postinstall` will instead be executed
+in the running live as-is. Hooks defined here will be executed in
+`stage-chroot_ali`.
+
+> These running environments can also be specified when executing hooks
+> with ali-rs subcommands `ali-rs hooks "@foo-hook bar baz"` via the
+> flag `--mountpoint`.
+
+Some hooks, e.g. `@quicknet` and `@mkinitcpio`, are to be only run
+inside `chroot` due to their nature.
+
+These `chroot`-only hooks can still be defined under key `postinstall`,
+and the hook will be executed in `stage-postinstall` after `stage-chroot`,
+although ali-rs will automatically passes to them the mountpoints so that
+files are written to the correct path under the mountpoint.
+
 ## Hook manuals
 
 ### `@quicknet`
@@ -120,18 +152,19 @@ simply prints `@uncomment-all` output to screen.
 
 ### `@mkinitcpio`
 
-  Formats `/etc/mkinitcpio.conf` entries `BINARIES` and `HOOKS`.
+  Formats [`/etc/mkinitcpio.conf`](https://man.archlinux.org/man/mkinitcpio.8)
+  entries `BINARIES` and `HOOKS`.
 
-  Some presets are available for `HOOKS`, e.g. `lvm-on-luks`,
+  Some presets are available for `HOOKS`, e.g. `lvm-on-luks` via key `boot_hook`,
   which will produces `HOOKS` string suitable for booting a root on LVM-on-LUKS.
+
+  > Note: `hooks` and `boot_hook` are mutually exclusive.
 
   Synopsis:
 
   ```
   @mkinitcpio [boot_hook=<BOOT_HOOK>] [binaries='bin2 bin2'] [hooks='hook1 hook2']
   ```
-
-  Note: `hooks` and `boot_hook` are mutually exclusive.
 
   Examples:
 
@@ -148,7 +181,8 @@ simply prints `@uncomment-all` output to screen.
     BINARIES=(btrfs)
     ```
 
-  - Uses preset `lvm` for `HOOKS`, and add `btrfs` and `foo` to `BINARIES`, only printing output
+  - Uses preset preset `lvm` for `HOOKS`, and add `btrfs`,
+    and `foo` to `BINARIES`, only printing output
 
     ```
     @mkinitcpio-print 'boot_hook=lvm' 'binaries=btrfs foo'
@@ -160,3 +194,13 @@ simply prints `@uncomment-all` output to screen.
     HOOKS=(base udev autodetect modconf kms keyboard keymap consolefont block lvm2 filesystems fsck)
     BINARIES=(btrfs foo)
     ```
+
+    Available `boot_hook` presets:
+
+    - `lvm` for booting to rootfs on LVM
+
+    - `luks` for booting to rootfs on LUKS
+
+    - `lvm-on-luks` for booting to rootfs on LVM-on-LUKS
+
+    - `luks-on-lvm` for booting to rootfs on LUKS-on-LVM

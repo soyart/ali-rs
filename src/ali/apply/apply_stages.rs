@@ -12,7 +12,11 @@ pub fn mountpoints(
     mnt_location: &str,
     stages: &mut StageActions,
 ) -> Result<(), AliError> {
-    use super::{disks, dm, fs};
+    use super::{
+        disks,
+        dm,
+        fs,
+    };
     use crate::entity::action::ActionMountpoints;
 
     // Format and partition disks
@@ -42,7 +46,8 @@ pub fn mountpoints(
     stages.mountpoints.push(ActionMountpoints::MkdirRootFs);
 
     // Mount rootfs
-    let action_mnt_rootfs = fs::mount_filesystem(&manifest.rootfs, mnt_location)?;
+    let action_mnt_rootfs =
+        fs::mount_filesystem(&manifest.rootfs, mnt_location)?;
     stages.mountpoints.push(action_mnt_rootfs);
 
     // Mount other filesystems to /{DEFAULT_CHROOT_LOC}
@@ -120,7 +125,9 @@ pub fn chroot_ali(
     use super::archchroot;
 
     // Apply ALI routine installation in arch-chroot
-    let actions_archchroot = archchroot::chroot_ali(manifest, install_location)?;
+    let actions_archchroot =
+        archchroot::chroot_ali(manifest, install_location)?;
+
     stages.chroot_ali.extend(actions_archchroot);
 
     Ok(())
@@ -134,7 +141,9 @@ pub fn chroot_user(
     use super::archchroot;
 
     if let Some(ref cmds) = manifest.chroot {
-        let actions_user_cmds = archchroot::chroot_user(cmds.iter(), install_location)?;
+        let actions_user_cmds =
+            archchroot::chroot_user(cmds.iter(), install_location)?;
+
         stages.chroot_user.extend(actions_user_cmds);
     }
 
@@ -152,7 +161,12 @@ pub fn postinstall_user(
     if let Some(ref cmds) = manifest.postinstall {
         for cmd in cmds {
             if cmd.starts_with('#') {
-                let action_hook = hooks::apply_hook(cmd, false, install_location)?;
+                let action_hook = hooks::apply_hook(
+                    cmd,
+                    hooks::Caller::ManifestPostInstall,
+                    install_location,
+                )?;
+
                 stages
                     .postinstall_user
                     .push(ActionPostInstallUser::Hook(action_hook));
@@ -162,7 +176,9 @@ pub fn postinstall_user(
 
             shell::sh_c(cmd)?;
 
-            let action_postinstall_cmd = ActionPostInstallUser::UserPostInstallCmd(cmd.clone());
+            let action_postinstall_cmd =
+                ActionPostInstallUser::UserPostInstallCmd(cmd.clone());
+
             stages.postinstall_user.push(action_postinstall_cmd);
         }
     }
