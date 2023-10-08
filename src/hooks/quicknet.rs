@@ -1,12 +1,7 @@
 use serde_json::json;
 
 use super::constants::quicknet::*;
-use super::{
-    ActionHook,
-    Caller,
-    QUICKNET,
-    QUICKNET_PRINT,
-};
+use super::{ActionHook, Caller, QUICKNET, QUICKNET_PRINT};
 use crate::errors::AliError;
 use crate::utils::shell;
 
@@ -105,11 +100,9 @@ fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
             })
         }
 
-        _ => {
-            Err(AliError::BadHookCmd(format!(
-                "{QUICKNET}: unexpected cmd parts: {l}"
-            )))
-        }
+        _ => Err(AliError::BadHookCmd(format!(
+            "{QUICKNET}: unexpected cmd parts: {l}"
+        ))),
     }
 }
 

@@ -1,15 +1,7 @@
-use serde::{
-    Deserialize,
-    Serialize,
-};
+use serde::{Deserialize, Serialize};
 
 use super::constants::mkinitcpio::*;
-use super::{
-    ActionHook,
-    Caller,
-    MKINITCPIO,
-    MKINITCPIO_PRINT,
-};
+use super::{ActionHook, Caller, MKINITCPIO, MKINITCPIO_PRINT};
 use crate::errors::AliError;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]

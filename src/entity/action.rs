@@ -1,14 +1,8 @@
 use std::collections::HashSet;
 
-use serde::{
-    Deserialize,
-    Serialize,
-};
+use serde::{Deserialize, Serialize};
 
-use crate::{
-    ali,
-    hooks,
-};
+use crate::{ali, hooks};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]

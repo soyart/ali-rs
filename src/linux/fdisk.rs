@@ -1,9 +1,6 @@
 /// This modules formats block devices by simply piping printf output to fdisk binary
 /// @TODO: Consider fdisk sys https://github.com/IBM/fdisk-sys
-use crate::ali::{
-    ManifestPartition,
-    PartitionTable,
-};
+use crate::ali::{ManifestPartition, PartitionTable};
 use crate::errors::AliError;
 use crate::utils::shell;
 

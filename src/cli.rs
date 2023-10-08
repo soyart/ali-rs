@@ -1,8 +1,4 @@
-use clap::{
-    Args,
-    Parser,
-    Subcommand,
-};
+use clap::{Args, Parser, Subcommand};
 
 use crate::entity::stage;
 use crate::errors::AliError;

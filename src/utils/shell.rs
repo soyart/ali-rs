@@ -1,11 +1,5 @@
-use std::process::{
-    Command,
-    Stdio,
-};
-use std::{
-    env,
-    fs,
-};
+use std::process::{Command, Stdio};
+use std::{env, fs};
 
 use crate::errors::AliError;
 
@@ -29,51 +23,39 @@ pub fn exec(cmd: &str, args: &[&str]) -> Result<(), AliError> {
         Ok(mut result) => {
             match result.wait() {
                 // Spawned but may still fail
-                Ok(r) => {
-                    match r.code() {
-                        Some(0) => Ok(()),
-                        Some(code) => {
-                            Err(AliError::CmdFailed {
-                                error: CmdError::ErrRun {
-                                    code: Some(code),
-                                    stdout: None,
-                                    stderr: None,
-                                },
-                                context: format!(
-                        "command {cmd} exited with non-zero status {code}"
-                    ),
-                            })
-                        }
-                        None => {
-                            Err(AliError::CmdFailed {
-                                error: CmdError::ErrRun {
-                                    code: None,
-                                    stdout: None,
-                                    stderr: None,
-                                },
-                                context: format!(
-                                    "command {cmd} terminated by signal"
-                                ),
-                            })
-                        }
-                    }
-                }
-                Err(error) => {
-                    Err(AliError::CmdFailed {
-                        error: CmdError::ErrSpawn { error },
-                        context: format!("command ${cmd} failed to run"),
-                    })
-                }
+                Ok(r) => match r.code() {
+                    Some(0) => Ok(()),
+                    Some(code) => Err(AliError::CmdFailed {
+                        error: CmdError::ErrRun {
+                            code: Some(code),
+                            stdout: None,
+                            stderr: None,
+                        },
+                        context: format!(
+                            "command {cmd} exited with non-zero status {code}"
+                        ),
+                    }),
+                    None => Err(AliError::CmdFailed {
+                        error: CmdError::ErrRun {
+                            code: None,
+                            stdout: None,
+                            stderr: None,
+                        },
+                        context: format!("command {cmd} terminated by signal"),
+                    }),
+                },
+                Err(error) => Err(AliError::CmdFailed {
+                    error: CmdError::ErrSpawn { error },
+                    context: format!("command ${cmd} failed to run"),
+                }),
             }
         }
 
         // Failed to spawn
-        Err(error) => {
-            Err(AliError::CmdFailed {
-                error: CmdError::ErrSpawn { error },
-                context: format!("command {cmd} failed to spawn"),
-            })
-        }
+        Err(error) => Err(AliError::CmdFailed {
+            error: CmdError::ErrSpawn { error },
+            context: format!("command {cmd} failed to spawn"),
+        }),
     }
 }
 
@@ -148,41 +130,32 @@ pub fn pipe(
         });
 
     match consumer.wait_with_output() {
-        Ok(result) => {
-            match result.status.success() {
-                false => {
-                    Err(AliError::CmdFailed {
-                        error: CmdError::ErrRun {
-                            code: result.status.code(),
-                            stdout: None,
-                            stderr: Some(result.stderr),
-                        },
-                        context: format!(
-                            "consumer {} command exited with bad status: {}",
-                            consumer_cmd.0,
-                            result
-                                .status
-                                .code()
-                                .expect("failed to get exit code"),
-                        ),
-                    })
-                }
-                _ => Ok(()),
-            }
-        }
-        Err(error) => {
-            Err(AliError::CmdFailed {
+        Ok(result) => match result.status.success() {
+            false => Err(AliError::CmdFailed {
                 error: CmdError::ErrRun {
-                    code: None,
+                    code: result.status.code(),
                     stdout: None,
-                    stderr: None,
+                    stderr: Some(result.stderr),
                 },
                 context: format!(
-                    "consumer {} command failed to run: {error}",
-                    consumer_cmd.0
+                    "consumer {} command exited with bad status: {}",
+                    consumer_cmd.0,
+                    result.status.code().expect("failed to get exit code"),
                 ),
-            })
-        }
+            }),
+            _ => Ok(()),
+        },
+        Err(error) => Err(AliError::CmdFailed {
+            error: CmdError::ErrRun {
+                code: None,
+                stdout: None,
+                stderr: None,
+            },
+            context: format!(
+                "consumer {} command failed to run: {error}",
+                consumer_cmd.0
+            ),
+        }),
     }
 }
 
@@ -232,10 +205,8 @@ impl std::fmt::Debug for CmdError {
                 };
 
                 let stdout = match stdout {
-                    Some(ref bytes) => {
-                        String::from_utf8(bytes.clone())
-                            .unwrap_or("binary output".to_string())
-                    }
+                    Some(ref bytes) => String::from_utf8(bytes.clone())
+                        .unwrap_or("binary output".to_string()),
                     None => "ali-rs discarded stdout output".to_string(),
                 };
 

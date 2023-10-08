@@ -1,10 +1,7 @@
 use serde_json::json;
 use thiserror::Error;
 
-use crate::entity::{
-    action,
-    stage,
-};
+use crate::entity::{action, stage};
 use crate::utils::shell;
 
 /// App-wide ali-rs error

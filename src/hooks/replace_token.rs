@@ -2,11 +2,7 @@ use serde_json::json;
 
 use crate::errors::AliError;
 
-use super::{
-    ActionHook,
-    REPLACE_TOKEN,
-    REPLACE_TOKEN_PRINT,
-};
+use super::{ActionHook, REPLACE_TOKEN, REPLACE_TOKEN_PRINT};
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 struct ReplaceToken {

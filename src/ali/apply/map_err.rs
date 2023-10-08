@@ -1,9 +1,5 @@
 use crate::entity::action::{
-    Action,
-    ActionChrootAli,
-    ActionChrootUser,
-    ActionMountpoints,
-    ActionRoutine,
+    Action, ActionChrootAli, ActionChrootUser, ActionMountpoints, ActionRoutine,
 };
 use crate::errors::AliError;
 

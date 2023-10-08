@@ -5,10 +5,7 @@ mod replace_token;
 mod uncomment;
 
 use colored::Colorize;
-use serde::{
-    Deserialize,
-    Serialize,
-};
+use serde::{Deserialize, Serialize};
 
 use crate::errors::AliError;
 

@@ -1,17 +1,9 @@
 use std::collections::HashSet;
 use std::env;
 
-use crate::ali::{
-    apply,
-    validation,
-    Dm,
-    Manifest,
-};
+use crate::ali::{apply, validation, Dm, Manifest};
 use crate::cli;
-use crate::constants::{
-    self,
-    defaults,
-};
+use crate::constants::{self, defaults};
 use crate::entity::report::Report;
 use crate::entity::stage;
 use crate::errors::AliError;

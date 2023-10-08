@@ -1,16 +1,9 @@
 mod dm;
 mod trace_blk;
 
-use std::collections::{
-    HashMap,
-    HashSet,
-    LinkedList,
-};
+use std::collections::{HashMap, HashSet, LinkedList};
 
-use crate::ali::{
-    Dm,
-    Manifest,
-};
+use crate::ali::{Dm, Manifest};
 use crate::entity::blockdev::*;
 use crate::entity::parse_human_bytes;
 use crate::errors::AliError;

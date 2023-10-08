@@ -1,15 +1,7 @@
-use std::collections::{
-    HashMap,
-    LinkedList,
-};
+use std::collections::{HashMap, LinkedList};
 
 use crate::ali::validation::*;
-use crate::ali::{
-    self,
-    ManifestLuks,
-    ManifestLvmLv,
-    ManifestLvmVg,
-};
+use crate::ali::{self, ManifestLuks, ManifestLvmLv, ManifestLvmVg};
 use crate::entity::blockdev::*;
 use crate::entity::parse_human_bytes;
 use crate::errors::AliError;

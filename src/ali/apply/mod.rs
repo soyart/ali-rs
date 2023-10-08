@@ -10,11 +10,7 @@ mod routines;
 use std::collections::HashSet;
 
 use crate::ali::Manifest;
-use crate::entity::stage::{
-    self,
-    Stage,
-    StageActions,
-};
+use crate::entity::stage::{self, Stage, StageActions};
 use crate::errors::AliError;
 
 type ApplyFn = fn(&Manifest, &str, &mut StageActions) -> Result<(), AliError>;
