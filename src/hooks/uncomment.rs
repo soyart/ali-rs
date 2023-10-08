@@ -1,7 +1,11 @@
 use serde_json::json;
 
 use super::{
-    ActionHook, Caller, UNCOMMENT, UNCOMMENT_ALL, UNCOMMENT_ALL_PRINT,
+    ActionHook,
+    Caller,
+    UNCOMMENT,
+    UNCOMMENT_ALL,
+    UNCOMMENT_ALL_PRINT,
     UNCOMMENT_PRINT,
 };
 use crate::errors::AliError;
@@ -154,13 +158,15 @@ fn parse_uncomment(hook_cmd: &str) -> Result<Uncomment, AliError> {
 
     let l = parts.len();
     match l {
-        3 => Ok(Uncomment {
-            marker: "#".to_string(),
-            pattern: parts[1].to_string(),
-            file: parts[2].to_string(),
-            mode,
-            print_only,
-        }),
+        3 => {
+            Ok(Uncomment {
+                marker: "#".to_string(),
+                pattern: parts[1].to_string(),
+                file: parts[2].to_string(),
+                mode,
+                print_only,
+            })
+        }
         5 => {
             if parts[2] != "marker" {
                 return Err(AliError::BadHookCmd(format!(
@@ -177,9 +183,11 @@ fn parse_uncomment(hook_cmd: &str) -> Result<Uncomment, AliError> {
                 print_only,
             })
         }
-        _ => Err(AliError::BadHookCmd(format!(
-            "{UNCOMMENT}: bad cmd parts: {l}"
-        ))),
+        _ => {
+            Err(AliError::BadHookCmd(format!(
+                "{UNCOMMENT}: bad cmd parts: {l}"
+            )))
+        }
     }
 }
 

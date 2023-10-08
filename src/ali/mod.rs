@@ -3,7 +3,10 @@ pub mod validation;
 
 use std::collections::HashSet;
 
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 
 use crate::errors::AliError;
 

@@ -1,7 +1,13 @@
-use std::collections::{HashMap, LinkedList};
+use std::collections::{
+    HashMap,
+    LinkedList,
+};
 use std::process::Command;
 
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 use toml;
 
 use crate::utils::shell::CmdError;
@@ -104,10 +110,12 @@ pub(super) fn sys_fs(output_blkid: &str) -> HashMap<String, BlockDevType> {
                 "iso9660" | "LVM2_member" | "crypto_LUKS" | "squashfs" => {
                     continue
                 }
-                _ => fs.insert(
-                    dev_name.to_string(),
-                    BlockDevType::Fs(dev_type.to_string()),
-                ),
+                _ => {
+                    fs.insert(
+                        dev_name.to_string(),
+                        BlockDevType::Fs(dev_type.to_string()),
+                    )
+                }
             };
         }
     }

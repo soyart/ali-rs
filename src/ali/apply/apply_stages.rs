@@ -12,7 +12,11 @@ pub fn mountpoints(
     mnt_location: &str,
     stages: &mut StageActions,
 ) -> Result<(), AliError> {
-    use super::{disks, dm, fs};
+    use super::{
+        disks,
+        dm,
+        fs,
+    };
     use crate::entity::action::ActionMountpoints;
 
     // Format and partition disks

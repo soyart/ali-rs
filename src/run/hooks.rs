@@ -1,5 +1,8 @@
 use crate::errors::AliError;
-use crate::{cli, hooks};
+use crate::{
+    cli,
+    hooks,
+};
 
 pub fn run(cli_args: cli::ArgsHooks) -> Result<(), AliError> {
     let mountpoint = cli_args.mountpoint.unwrap_or(String::from("/"));

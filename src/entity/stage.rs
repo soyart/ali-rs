@@ -1,5 +1,8 @@
 use clap::ValueEnum;
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 
 use super::action::*;
 
