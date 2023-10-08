@@ -15,6 +15,7 @@ jobs:
         with:
           toolchain: nightly
           profile: minimal
+          components: rustfmt
           override: true # Make cargo workflows uses nightly
 
       - name: Check with `cargo check`
