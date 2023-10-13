@@ -26,7 +26,7 @@ struct MetaReplaceToken {
     mode_hook: ModeHook,
 }
 
-pub fn new(key: &str) -> Box<dyn HookMetadata> {
+pub(super) fn new(key: &str) -> Box<dyn HookMetadata> {
     Box::new(MetaReplaceToken {
         rp: None,
         mode_hook: match key {

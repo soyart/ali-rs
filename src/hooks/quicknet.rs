@@ -27,7 +27,7 @@ struct MetaQuickNet {
     mode_hook: ModeHook,
 }
 
-pub fn new(key: &str) -> Box<dyn HookMetadata> {
+pub(super) fn new(key: &str) -> Box<dyn HookMetadata> {
     Box::new(MetaQuickNet {
         qn: None,
         mode_hook: match key {

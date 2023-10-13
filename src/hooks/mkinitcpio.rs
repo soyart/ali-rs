@@ -17,7 +17,7 @@ use super::{
 };
 use crate::errors::AliError;
 
-pub fn new(key: &str) -> Box<dyn HookMetadata> {
+pub(super) fn new(key: &str) -> Box<dyn HookMetadata> {
     Box::new(MetaMkinitcpio {
         conf: None,
         mode_hook: match key {

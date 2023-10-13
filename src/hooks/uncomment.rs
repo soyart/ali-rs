@@ -33,7 +33,7 @@ struct MetaUncomment {
     uc: Option<Uncomment>,
 }
 
-pub fn new(key: &str) -> Box<dyn HookMetadata> {
+pub(super) fn new(key: &str) -> Box<dyn HookMetadata> {
     Box::new(MetaUncomment {
         uc: None,
         mode_hook: match key {
