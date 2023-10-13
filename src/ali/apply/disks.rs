@@ -5,7 +5,9 @@ use crate::linux::fdisk;
 
 use super::map_err::map_err_mountpoints;
 
-pub fn apply_disks(disks: &[ali::ManifestDisk]) -> Result<Vec<ActionMountpoints>, AliError> {
+pub fn apply_disks(
+    disks: &[ali::ManifestDisk],
+) -> Result<Vec<ActionMountpoints>, AliError> {
     let mut actions: Vec<ActionMountpoints> = Vec::new();
 
     for disk in disks.iter() {
@@ -15,7 +17,11 @@ pub fn apply_disks(disks: &[ali::ManifestDisk]) -> Result<Vec<ActionMountpoints>
 
         match apply_disk(disk) {
             Err(err) => {
-                return Err(map_err_mountpoints(err, action_apply_disk, actions));
+                return Err(map_err_mountpoints(
+                    err,
+                    action_apply_disk,
+                    actions,
+                ));
             }
             Ok(disk_actions) => {
                 actions.extend(disk_actions);
@@ -29,7 +35,9 @@ pub fn apply_disks(disks: &[ali::ManifestDisk]) -> Result<Vec<ActionMountpoints>
     Ok(actions)
 }
 
-pub fn apply_disk(disk: &ali::ManifestDisk) -> Result<Vec<ActionMountpoints>, AliError> {
+pub fn apply_disk(
+    disk: &ali::ManifestDisk,
+) -> Result<Vec<ActionMountpoints>, AliError> {
     let mut actions = Vec::new();
 
     let action_create_table = ActionMountpoints::CreatePartitionTable {
@@ -48,7 +56,8 @@ pub fn apply_disk(disk: &ali::ManifestDisk) -> Result<Vec<ActionMountpoints>, Al
     // 2. Set partition type
     for (n, part) in disk.partitions.iter().enumerate() {
         let partition_number = n + 1;
-        let cmd_create_part = fdisk::create_partition_cmd(&disk.table, partition_number, part);
+        let cmd_create_part =
+            fdisk::create_partition_cmd(&disk.table, partition_number, part);
 
         let action_create_partition = ActionMountpoints::CreatePartition {
             device: disk.device.clone(),
@@ -57,7 +66,11 @@ pub fn apply_disk(disk: &ali::ManifestDisk) -> Result<Vec<ActionMountpoints>, Al
         };
 
         if let Err(err) = fdisk::run_fdisk_cmd(&disk.device, &cmd_create_part) {
-            return Err(map_err_mountpoints(err, action_create_partition, actions));
+            return Err(map_err_mountpoints(
+                err,
+                action_create_partition,
+                actions,
+            ));
         }
 
         actions.push(action_create_partition);
@@ -68,11 +81,16 @@ pub fn apply_disk(disk: &ali::ManifestDisk) -> Result<Vec<ActionMountpoints>, Al
             partition_type: part.part_type.clone(),
         };
 
-        let cmd_set_type = fdisk::set_partition_type_cmd(partition_number, part);
+        let cmd_set_type =
+            fdisk::set_partition_type_cmd(partition_number, part);
         let result_set_type = fdisk::run_fdisk_cmd(&disk.device, &cmd_set_type);
 
         if let Err(err) = result_set_type {
-            return Err(map_err_mountpoints(err, action_set_part_type, actions));
+            return Err(map_err_mountpoints(
+                err,
+                action_set_part_type,
+                actions,
+            ));
         }
 
         actions.push(action_set_part_type);

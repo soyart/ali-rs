@@ -1,5 +1,7 @@
-use crate::ali::validation;
-use crate::ali::Manifest;
+use crate::ali::{
+    validation,
+    Manifest,
+};
 use crate::errors::AliError;
 
 pub(super) fn run(manifest_file: &str) -> Result<(), AliError> {

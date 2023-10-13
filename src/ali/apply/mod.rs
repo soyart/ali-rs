@@ -10,13 +10,18 @@ mod routines;
 use std::collections::HashSet;
 
 use crate::ali::Manifest;
-use crate::entity::stage::{self, Stage, StageActions};
+use crate::entity::stage::{
+    self,
+    Stage,
+    StageActions,
+};
 use crate::errors::AliError;
+
+type ApplyFn = fn(&Manifest, &str, &mut StageActions) -> Result<(), AliError>;
 
 /// Use `manifest` to install a new system to `install_location`
 /// skipping any stages in `skip`, and maps `AliError::ApplyError`
 /// to `AliError::InstallError` with StageActions embedded.
-#[rustfmt::skip]
 pub fn apply_manifest(
     manifest: &Manifest,
     install_location: &str,
@@ -29,33 +34,16 @@ pub fn apply_manifest(
             continue;
         }
 
-        let result = match stage {
-            Stage::Mountpoints => {
-                apply_stages::mountpoints(manifest, install_location, &mut progress)
-            }
-
-            Stage::Bootstrap => {
-                apply_stages::bootstrap(manifest, install_location, &mut progress)
-            },
-
-            Stage::Routines => {
-                apply_stages::routines(manifest, install_location, &mut progress)
-            },
-
-            Stage::ChrootAli => {
-                apply_stages::chroot_ali(manifest, install_location, &mut progress)
-            },
-
-            Stage::ChrootUser => {
-                apply_stages::chroot_user(manifest, install_location, &mut progress)
-            }
-
-            Stage::PostInstallUser => {
-                apply_stages::postinstall_user(manifest, install_location, &mut progress)
-            }
+        let f: ApplyFn = match stage {
+            Stage::Mountpoints => apply_stages::mountpoints,
+            Stage::Bootstrap => apply_stages::bootstrap,
+            Stage::Routines => apply_stages::routines,
+            Stage::ChrootAli => apply_stages::chroot_ali,
+            Stage::ChrootUser => apply_stages::chroot_user,
+            Stage::PostInstallUser => apply_stages::postinstall_user,
         };
 
-        if let Err(err) = result {
+        if let Err(err) = f(manifest, install_location, &mut progress) {
             return Err(AliError::InstallError {
                 error: Box::new(err),
                 stages_performed: progress,

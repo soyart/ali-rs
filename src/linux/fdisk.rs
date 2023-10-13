@@ -1,7 +1,9 @@
 /// This modules formats block devices by simply piping printf output to fdisk binary
 /// @TODO: Consider fdisk sys https://github.com/IBM/fdisk-sys
-///
-use crate::ali::{ManifestPartition, PartitionTable};
+use crate::ali::{
+    ManifestPartition,
+    PartitionTable,
+};
 use crate::errors::AliError;
 use crate::utils::shell;
 
@@ -27,19 +29,26 @@ pub fn create_partition_cmd(
     };
 
     match table {
-        PartitionTable::Gpt => assemble_and_w(&["n", &part_num.to_string(), "", &size]),
-        PartitionTable::Mbr => assemble_and_w(&[
-            "n",
-            "p", // Only create primary msdos partition for now
-            &part_num.to_string(),
-            "",
-            &size,
-        ]),
+        PartitionTable::Gpt => {
+            assemble_and_w(&["n", &part_num.to_string(), "", &size])
+        }
+        PartitionTable::Mbr => {
+            assemble_and_w(&[
+                "n",
+                "p", // Only create primary msdos partition for now
+                &part_num.to_string(),
+                "",
+                &size,
+            ])
+        }
     }
 }
 
 /// Returns fdisk cmd for changing partition type.
-pub fn set_partition_type_cmd(part_num: usize, part: &ManifestPartition) -> String {
+pub fn set_partition_type_cmd(
+    part_num: usize,
+    part: &ManifestPartition,
+) -> String {
     match part_num {
         1 => assemble_and_w(&["t", &part.part_type]),
         _ => assemble_and_w(&["t", &part_num.to_string(), &part.part_type]),
@@ -101,7 +110,8 @@ mod tests {
         ];
 
         for test in tests {
-            let result = create_partition_cmd(&test.table, test.num, &test.part);
+            let result =
+                create_partition_cmd(&test.table, test.num, &test.part);
             assert_eq!(test.expected, result);
         }
     }
@@ -120,7 +130,8 @@ mod tests {
         }
 
         let create_gpt_table = create_table_cmd(&PartitionTable::Gpt);
-        run_fdisk_cmd(fname, &create_gpt_table).expect("failed to create gpt table");
+        run_fdisk_cmd(fname, &create_gpt_table)
+            .expect("failed to create gpt table");
 
         let manifest_p1 = ManifestPartition {
             label: "efi".to_string(),
@@ -134,8 +145,10 @@ mod tests {
             part_type: "8e".to_string(),
         };
 
-        let create_gpt_p1 = create_partition_cmd(&PartitionTable::Gpt, 1, &manifest_p1);
-        let create_gpt_p2 = create_partition_cmd(&PartitionTable::Gpt, 2, &manifest_p2);
+        let create_gpt_p1 =
+            create_partition_cmd(&PartitionTable::Gpt, 1, &manifest_p1);
+        let create_gpt_p2 =
+            create_partition_cmd(&PartitionTable::Gpt, 2, &manifest_p2);
 
         run_fdisk_cmd(fname, &create_gpt_p1).expect("failed to create p1");
         run_fdisk_cmd(fname, &create_gpt_p2).expect("failed to create p2");

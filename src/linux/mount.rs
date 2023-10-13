@@ -16,7 +16,9 @@ pub fn mount_fs(fs: &ManifestFs) -> Result<(), AliError> {
 
     let mount_point = fs.mnt.clone().unwrap();
     let cmd_mount = match fs.fs_opts {
-        Some(ref opts) => format!("mount -o {opts} {} {mount_point}", fs.device),
+        Some(ref opts) => {
+            format!("mount -o {opts} {} {mount_point}", fs.device)
+        }
         None => format!("mount {} {mount_point}", fs.device),
     };
 

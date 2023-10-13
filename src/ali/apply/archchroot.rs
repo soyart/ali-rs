@@ -1,6 +1,9 @@
 use crate::ali::Manifest;
 use crate::constants::defaults;
-use crate::entity::action::{ActionChrootAli, ActionChrootUser};
+use crate::entity::action::{
+    ActionChrootAli,
+    ActionChrootUser,
+};
 use crate::errors::AliError;
 use crate::hooks;
 use crate::utils::shell;
@@ -8,7 +11,10 @@ use crate::utils::shell;
 use super::map_err::*;
 
 // @TODO: root password
-pub fn chroot_ali(manifest: &Manifest, location: &str) -> Result<Vec<ActionChrootAli>, AliError> {
+pub fn chroot_ali(
+    manifest: &Manifest,
+    location: &str,
+) -> Result<Vec<ActionChrootAli>, AliError> {
     let mut actions = Vec::new();
 
     let (action_tz, cmd_tz) = cmd_link_timezone(&manifest.timezone);
@@ -26,7 +32,10 @@ pub fn chroot_ali(manifest: &Manifest, location: &str) -> Result<Vec<ActionChroo
     Ok(actions)
 }
 
-pub fn chroot_user<'a, I>(cmds: I, location: &str) -> Result<Vec<ActionChrootUser>, AliError>
+pub fn chroot_user<'a, I>(
+    cmds: I,
+    location: &str,
+) -> Result<Vec<ActionChrootUser>, AliError>
 where
     I: Iterator<Item = &'a String>,
 {
@@ -34,13 +43,18 @@ where
 
     for cmd in cmds {
         if cmd.starts_with('#') {
-            let action_hook = hooks::apply_hook(cmd, true, location)?;
+            let action_hook = hooks::apply_hook(
+                cmd,
+                hooks::Caller::ManifestChroot,
+                location,
+            )?;
             actions.push(ActionChrootUser::Hook(action_hook));
 
             continue;
         }
 
-        let action_user_cmd = ActionChrootUser::UserArchChrootCmd(cmd.to_string());
+        let action_user_cmd =
+            ActionChrootUser::UserArchChrootCmd(cmd.to_string());
         if let Err(err) = shell::arch_chroot(location, cmd) {
             return Err(map_err_chroot_user(err, action_user_cmd, actions));
         }

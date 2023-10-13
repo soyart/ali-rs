@@ -2,7 +2,11 @@ use serde_json::json;
 
 use crate::errors::AliError;
 
-use super::ActionHook;
+use super::{
+    ActionHook,
+    REPLACE_TOKEN,
+    REPLACE_TOKEN_PRINT,
+};
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 struct ReplaceToken {
@@ -23,13 +27,18 @@ struct ReplaceToken {
 ///
 /// @replace-token PORT 2222 /etc_templates/ssh/sshd_config /etc/ssh/sshd_config
 /// => Replace key PORT value with "2222", using /etc_templates/ssh/sshd_config as template and writes output to /etc/ssh/sshd_config
-pub(super) fn replace_token(cmd: &str) -> Result<ActionHook, AliError> {
+pub(super) fn replace_token(
+    cmd: &str,
+    // @TODO: Use these params
+    caller: super::Caller,
+    root_location: &str,
+) -> Result<ActionHook, AliError> {
     let r = parse_replace_token(cmd)?;
 
     // @TODO: Read from remote template, e.g. with https or ssh
     let template = std::fs::read_to_string(&r.template).map_err(|err| {
         AliError::HookError(format!(
-            "@replace-token: read template {}: {err}",
+            "{REPLACE_TOKEN}: read template {}: {err}",
             r.template
         ))
     })?;
@@ -39,9 +48,11 @@ pub(super) fn replace_token(cmd: &str) -> Result<ActionHook, AliError> {
     if r.print_only {
         println!("{}", result);
     } else {
+        super::warn_if_no_mountpoint(REPLACE_TOKEN, caller, root_location)?;
+
         std::fs::write(&r.output, result).map_err(|err| {
             AliError::HookError(format!(
-                "@replace-token: failed to write to output to {}: {err}",
+                "{REPLACE_TOKEN}: failed to write to output to {}: {err}",
                 r.output
             ))
         })?;
@@ -55,22 +66,22 @@ fn parse_replace_token(cmd: &str) -> Result<ReplaceToken, AliError> {
     let parts = shlex::split(cmd);
     if parts.is_none() {
         return Err(AliError::BadHookCmd(format!(
-            "@replace-token: bad cmd: {cmd}"
+            "{REPLACE_TOKEN}: bad cmd: {cmd}"
         )));
     }
 
     let parts = parts.unwrap();
     if parts.len() < 3 {
-        return Err(AliError::BadHookCmd(
-            "@replace-token: expect at least 3 arguments".to_string(),
-        ));
+        return Err(AliError::BadHookCmd(format!(
+            "{REPLACE_TOKEN}: expect at least 2 arguments"
+        )));
     }
 
     let cmd = parts.first().unwrap();
 
-    if !matches!(cmd.as_str(), "@replace-token" | "@replace-token-print") {
+    if !matches!(cmd.as_str(), REPLACE_TOKEN | REPLACE_TOKEN_PRINT) {
         return Err(AliError::BadHookCmd(format!(
-            "@replace-token: bad cmd: {cmd}"
+            "{REPLACE_TOKEN}: bad cmd: {cmd}"
         )));
     }
 
@@ -78,11 +89,12 @@ fn parse_replace_token(cmd: &str) -> Result<ReplaceToken, AliError> {
 
     if l != 4 && l != 5 {
         return Err(AliError::BadHookCmd(format!(
-            "@replace-token: bad cmd parts (expecting 3-4): {l}"
+            "{REPLACE_TOKEN}: bad cmd parts (expecting 3-4): {l}"
         )));
     }
 
-    let (token, value, template) = (parts[1].clone(), parts[2].clone(), parts[3].clone());
+    let (token, value, template) =
+        (parts[1].clone(), parts[2].clone(), parts[3].clone());
 
     // If not given, then use template as output
     let output = parts
@@ -90,7 +102,7 @@ fn parse_replace_token(cmd: &str) -> Result<ReplaceToken, AliError> {
         .map(|s| s.to_owned())
         .unwrap_or(template.clone());
 
-    let print_only = parts[0].as_str() == "@replace-token-print";
+    let print_only = parts[0].as_str() == REPLACE_TOKEN_PRINT;
 
     Ok(ReplaceToken {
         token,

@@ -1,7 +1,13 @@
-use std::collections::{HashMap, LinkedList};
+use std::collections::{
+    HashMap,
+    LinkedList,
+};
 use std::process::Command;
 
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 use toml;
 
 use crate::utils::shell::CmdError;
@@ -25,18 +31,21 @@ struct EntryBlkid {
 }
 
 pub(super) fn run_blkid(cmd_blkid: &str) -> Result<String, AliError> {
-    let cmd = Command::new(cmd_blkid)
-        .output()
-        .map_err(|err| AliError::CmdFailed {
+    let cmd = Command::new(cmd_blkid).output().map_err(|err| {
+        AliError::CmdFailed {
             error: CmdError::ErrSpawn { error: err },
             context: "blkid command failed".to_string(),
-        })?;
+        }
+    })?;
 
-    String::from_utf8(cmd.stdout)
-        .map_err(|err| AliError::AliRsBug(format!("blkid output not string: {err}")))
+    String::from_utf8(cmd.stdout).map_err(|err| {
+        AliError::AliRsBug(format!("blkid output not string: {err}"))
+    })
 }
 
-pub(super) fn sys_fs_ready(output_blkid: &str) -> HashMap<String, BlockDevType> {
+pub(super) fn sys_fs_ready(
+    output_blkid: &str,
+) -> HashMap<String, BlockDevType> {
     let lines_blkid: Vec<&str> = output_blkid.lines().collect();
 
     let mut fs_ready = HashMap::new();
@@ -55,8 +64,8 @@ pub(super) fn sys_fs_ready(output_blkid: &str) -> HashMap<String, BlockDevType> 
         let dev_entry: Vec<&str> = line_elems[1].split_whitespace().collect();
         let dev_entry = dev_entry.join("\n");
 
-        let dev_entry: EntryBlkid =
-            toml::from_str(&dev_entry).expect("failed to unmarshal blkid output");
+        let dev_entry: EntryBlkid = toml::from_str(&dev_entry)
+            .expect("failed to unmarshal blkid output");
 
         // Non-LVM fs-ready devs should not have type yet
         if dev_entry.dev_type.is_some() {
@@ -93,13 +102,20 @@ pub(super) fn sys_fs(output_blkid: &str) -> HashMap<String, BlockDevType> {
         let dev_entry: Vec<&str> = line_elems[1].split_whitespace().collect();
         let dev_entry = dev_entry.join("\n");
 
-        let dev_entry: EntryBlkid =
-            toml::from_str(&dev_entry).expect("failed to unmarshal blkid output");
+        let dev_entry: EntryBlkid = toml::from_str(&dev_entry)
+            .expect("failed to unmarshal blkid output");
 
         if let Some(dev_type) = dev_entry.dev_type {
             match dev_type.as_str() {
-                "iso9660" | "LVM2_member" | "crypto_LUKS" | "squashfs" => continue,
-                _ => fs.insert(dev_name.to_string(), BlockDevType::Fs(dev_type.to_string())),
+                "iso9660" | "LVM2_member" | "crypto_LUKS" | "squashfs" => {
+                    continue
+                }
+                _ => {
+                    fs.insert(
+                        dev_name.to_string(),
+                        BlockDevType::Fs(dev_type.to_string()),
+                    )
+                }
             };
         }
     }
@@ -115,9 +131,13 @@ pub(super) fn sys_fs(output_blkid: &str) -> HashMap<String, BlockDevType> {
 // and we construct VGs based on LVs and PVs
 //
 // Note: Takes in `lvs_cmd` and `pvs_cmd` to allow tests.
-pub(super) fn sys_lvms(lvs_cmd: &str, pvs_cmd: &str) -> HashMap<String, BlockDevPaths> {
+pub(super) fn sys_lvms(
+    lvs_cmd: &str,
+    pvs_cmd: &str,
+) -> HashMap<String, BlockDevPaths> {
     let cmd_lvs = Command::new(lvs_cmd).output().expect("failed to run `lvs`");
-    let output_lvs = String::from_utf8(cmd_lvs.stdout).expect("output is not utf-8");
+    let output_lvs =
+        String::from_utf8(cmd_lvs.stdout).expect("output is not utf-8");
     let lines_lvs: Vec<&str> = output_lvs.lines().skip(1).collect();
 
     // # Collect VG leading to LV
@@ -164,7 +184,8 @@ pub(super) fn sys_lvms(lvs_cmd: &str, pvs_cmd: &str) -> HashMap<String, BlockDev
 
     let cmd_pvs = Command::new(pvs_cmd).output().expect("failed to run `pvs`");
 
-    let output_pvs = String::from_utf8(cmd_pvs.stdout).expect("output is not utf-8");
+    let output_pvs =
+        String::from_utf8(cmd_pvs.stdout).expect("output is not utf-8");
     let lines_pvs: Vec<&str> = output_pvs.lines().skip(1).collect();
 
     let mut lvms = HashMap::new();
@@ -241,7 +262,8 @@ fn test_trace_existing_fs_ready() {
     let mut expected_results = HashMap::new();
     expected_results.insert("/dev/vda2".to_string(), TYPE_UNKNOWN);
 
-    let output_blkid = run_blkid("./test_assets/mock_cmd/blkid").expect("run_blkid failed");
+    let output_blkid =
+        run_blkid("./test_assets/mock_cmd/blkid").expect("run_blkid failed");
     let traced = sys_fs_ready(&output_blkid);
     for (k, v) in traced.into_iter() {
         let expected = expected_results.get(&k);
@@ -264,7 +286,8 @@ fn test_trace_existing_fs() {
         BlockDevType::Fs("btrfs".to_string()),
     );
 
-    let output_blkid = run_blkid("./test_assets/mock_cmd/blkid").expect("run_blkid failed");
+    let output_blkid =
+        run_blkid("./test_assets/mock_cmd/blkid").expect("run_blkid failed");
     let traced = sys_fs(&output_blkid);
     for (k, v) in traced.into_iter() {
         let expected = expected_results.get(&k);
@@ -277,7 +300,8 @@ fn test_trace_existing_fs() {
 #[test]
 fn test_trace_existing_lvms() {
     // Hard-coded expected values from ./test_assets/mock_cmd/{lvs,pvs}
-    let traced = sys_lvms("./test_assets/mock_cmd/lvs", "./test_assets/mock_cmd/pvs");
+    let traced =
+        sys_lvms("./test_assets/mock_cmd/lvs", "./test_assets/mock_cmd/pvs");
 
     // Hard-coded expected values
     let lists_vda1 = vec![

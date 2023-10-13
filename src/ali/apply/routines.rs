@@ -43,21 +43,31 @@ fn genfstab_uuid(install_location: &str) -> Result<(), AliError> {
     shell::sh_c(&cmd_genfstab_uuid(install_location))
 }
 
-fn hostname(hostname: &Option<String>, install_location: &str) -> Result<(), AliError> {
+fn hostname(
+    hostname: &Option<String>,
+    install_location: &str,
+) -> Result<(), AliError> {
     let hostname = hostname.clone().unwrap_or(defaults::HOSTNAME.to_string());
 
     let etc_hostname = format!("{install_location}/etc/hostname");
 
     std::fs::write(&etc_hostname, hostname).map_err(|err| {
-        AliError::FileError(err, format!("failed to write hostname to {etc_hostname}"))
+        AliError::FileError(
+            err,
+            format!("failed to write hostname to {etc_hostname}"),
+        )
     })
 }
 
 fn locale_conf(install_location: &str) -> Result<(), AliError> {
     let dst = format!("{install_location}/etc/locale.conf");
 
-    std::fs::write(&dst, defaults::LOCALE_CONF)
-        .map_err(|err| AliError::FileError(err, format!("failed to create new locale.conf {dst}")))
+    std::fs::write(&dst, defaults::LOCALE_CONF).map_err(|err| {
+        AliError::FileError(
+            err,
+            format!("failed to create new locale.conf {dst}"),
+        )
+    })
 }
 
 fn root_password(

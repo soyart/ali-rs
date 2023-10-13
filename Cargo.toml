@@ -16,6 +16,7 @@ serde_json = "1.0"
 humanize-rs = ">=0.1.5"
 shlex = ">=1.2"
 pwhash = "1"
+colored = ">=2"
 
 [badges]
 github = { repository = "soyart/ali-rs", workflow = "cargo-test" }

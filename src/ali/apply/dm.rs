@@ -33,7 +33,8 @@ pub fn apply_dm(dm: &Dm) -> Result<Vec<ActionMountpoints>, AliError> {
 
             if let Some(pvs) = &lvm.pvs {
                 for pv in pvs {
-                    let action_create_pv = ActionMountpoints::CreateDmLvmPv(pv.clone());
+                    let action_create_pv =
+                        ActionMountpoints::CreateDmLvmPv(pv.clone());
 
                     linux::lvm::create_pv(pv)?;
                     actions.push(action_create_pv);

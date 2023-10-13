@@ -5,7 +5,9 @@ use crate::linux;
 
 use super::map_err::map_err_mountpoints;
 
-pub fn apply_filesystem(filesystem: &ManifestFs) -> Result<ActionMountpoints, AliError> {
+pub fn apply_filesystem(
+    filesystem: &ManifestFs,
+) -> Result<ActionMountpoints, AliError> {
     linux::mkfs::create_fs(filesystem)?;
 
     Ok(ActionMountpoints::CreateFs {
@@ -36,7 +38,9 @@ pub fn mount_filesystem(
     })
 }
 
-pub fn apply_filesystems(filesystems: &[ManifestFs]) -> Result<Vec<ActionMountpoints>, AliError> {
+pub fn apply_filesystems(
+    filesystems: &[ManifestFs],
+) -> Result<Vec<ActionMountpoints>, AliError> {
     let mut actions = Vec::new();
 
     for fs in filesystems {
@@ -49,7 +53,11 @@ pub fn apply_filesystems(filesystems: &[ManifestFs]) -> Result<Vec<ActionMountpo
 
         match apply_filesystem(fs) {
             Err(err) => {
-                return Err(map_err_mountpoints(err, action_create_fs, actions));
+                return Err(map_err_mountpoints(
+                    err,
+                    action_create_fs,
+                    actions,
+                ));
             }
             Ok(action) => actions.push(action),
         }

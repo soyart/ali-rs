@@ -1,7 +1,12 @@
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 use std::collections::LinkedList;
 
-#[derive(Debug, PartialEq, Eq, std::hash::Hash, Clone, Serialize, Deserialize)]
+#[derive(
+    Debug, PartialEq, Eq, std::hash::Hash, Clone, Serialize, Deserialize,
+)]
 pub struct BlockDev {
     // Full path to device, with hard-coded format:
     // Disk => /dev/dev_name
@@ -13,7 +18,9 @@ pub struct BlockDev {
     pub device_type: BlockDevType,
 }
 
-#[derive(Debug, PartialEq, Eq, std::hash::Hash, Clone, Serialize, Deserialize)]
+#[derive(
+    Debug, PartialEq, Eq, std::hash::Hash, Clone, Serialize, Deserialize,
+)]
 pub enum DmType {
     Luks,
     LvmPv,
@@ -21,7 +28,9 @@ pub enum DmType {
     LvmLv,
 }
 
-#[derive(Debug, PartialEq, Eq, std::hash::Hash, Clone, Serialize, Deserialize)]
+#[derive(
+    Debug, PartialEq, Eq, std::hash::Hash, Clone, Serialize, Deserialize,
+)]
 pub enum BlockDevType {
     // Disks
     Disk,

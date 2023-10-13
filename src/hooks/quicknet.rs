@@ -1,7 +1,12 @@
 use serde_json::json;
 
 use super::constants::quicknet::*;
-use super::ActionHook;
+use super::{
+    ActionHook,
+    Caller,
+    QUICKNET,
+    QUICKNET_PRINT,
+};
 use crate::errors::AliError;
 use crate::utils::shell;
 
@@ -11,10 +16,14 @@ struct QuickNet<'a> {
     print_only: bool,
 }
 
-pub(super) fn quicknet(cmd_string: &str, root_location: &str) -> Result<ActionHook, AliError> {
+pub(super) fn quicknet(
+    cmd_string: &str,
+    caller: Caller,
+    root_location: &str,
+) -> Result<ActionHook, AliError> {
     let qn = parse_quicknet(cmd_string)?;
 
-    apply_quicknet(qn, root_location)
+    apply_quicknet(qn, caller, root_location)
 }
 
 /// @quicknet [dns <DNS_UPSTREAM>] <INTERFACE>
@@ -29,27 +38,27 @@ fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
     let l = parts.len();
 
     if l <= 1 {
-        return Err(AliError::BadHookCmd(
-            "@quicknet: bad cmd: only 1 string is supplied".to_string(),
-        ));
+        return Err(AliError::BadHookCmd(format!(
+            "{QUICKNET}: bad cmd: only 1 string is supplied"
+        )));
     }
 
     let cmd = parts.first().unwrap();
-    if !matches!(*cmd, "@quicknet" | "@quicknet-print") {
-        return Err(AliError::BadHookCmd(
-            "@quicknet: bad cmd: 1st part does not start with \"@quicknet\"".to_string(),
-        ));
+    if !matches!(*cmd, QUICKNET | QUICKNET_PRINT,) {
+        return Err(AliError::BadHookCmd(format!(
+            "{QUICKNET}: bad cmd: 1st part does not start with \"@quicknet\""
+        )));
     }
 
-    let print_only = *cmd == "@quicknet-print";
+    let print_only = *cmd == QUICKNET_PRINT;
 
     match l {
         2 => {
             let interface = parts[1];
             if interface == "dns" {
-                return Err(AliError::BadHookCmd(
-                    "@quicknet: got only keyword `dns`".to_string(),
-                ));
+                return Err(AliError::BadHookCmd(format!(
+                    "{QUICKNET}: got only keyword `dns`"
+                )));
             }
 
             Ok(QuickNet {
@@ -70,9 +79,9 @@ fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
             }
 
             if dns_keyword_idx.is_none() {
-                return Err(AliError::BadHookCmd(
-                    "@quicknet: missing argument keyword \"dns\"".to_string(),
-                ));
+                return Err(AliError::BadHookCmd(format!(
+                    "{QUICKNET}: missing argument keyword \"dns\""
+                )));
             }
             // #cmd dns upstream inf  1
             // #cmd inf dns upstream  2
@@ -84,7 +93,7 @@ fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
                     1
                 } else {
                     return Err(AliError::BadHookCmd(format!(
-                        "@quicknet: \"dns\" keyword in bad position: {dns_keyword_idx}"
+                        "{QUICKNET}: \"dns\" keyword in bad position: {dns_keyword_idx}"
                     )));
                 }
             };
@@ -96,32 +105,38 @@ fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
             })
         }
 
-        _ => Err(AliError::BadHookCmd(format!(
-            "@quicknet: unexpected cmd parts: {l}"
-        ))),
+        _ => {
+            Err(AliError::BadHookCmd(format!(
+                "{QUICKNET}: unexpected cmd parts: {l}"
+            )))
+        }
     }
 }
 
 /// Creates directory "{root_location}/etc/systemd/network/"
 /// and write networkd quicknet config file for it
-fn apply_quicknet(qn: QuickNet, root_location: &str) -> Result<ActionHook, AliError> {
+fn apply_quicknet(
+    qn: QuickNet,
+    caller: Caller,
+    root_location: &str,
+) -> Result<ActionHook, AliError> {
     // Formats filename and string output
-    let filename = FILENAME.replace(TOKEN_INTERFACE, qn.interface);
+    let filename = FILENAME_TPL.replace(TOKEN_INTERFACE, qn.interface);
     let filename = format!("{root_location}/{filename}");
     let result = qn.encode_to_string();
 
-    match qn.print_only {
-        true => {
-            println!("{}", result);
-        }
-        false => {
-            // Extends to include systemd path
-            let root_location = format!("{root_location}/etc/systemd/network");
-            shell::exec("mkdir", &["-p", &root_location])?;
+    if qn.print_only {
+        println!("{}", result);
+    } else {
+        super::warn_if_no_mountpoint(QUICKNET, caller, root_location)?;
 
-            std::fs::write(&filename, result)
-                .map_err(|err| AliError::FileError(err, format!("writing file {filename}")))?;
-        }
+        // Extends to include systemd path
+        let root_location = format!("{root_location}/etc/systemd/network");
+        shell::exec("mkdir", &["-p", &root_location])?;
+
+        std::fs::write(&filename, result).map_err(|err| {
+            AliError::FileError(err, format!("writing file {filename}"))
+        })?;
     }
 
     Ok(ActionHook::QuickNet(qn.to_string()))

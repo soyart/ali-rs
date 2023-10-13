@@ -3,7 +3,10 @@ pub mod validation;
 
 use std::collections::HashSet;
 
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 
 use crate::errors::AliError;
 
@@ -152,7 +155,8 @@ pub enum Dm {
 
 #[inline]
 pub fn parse(manifest: &str) -> Result<Manifest, AliError> {
-    serde_yaml::from_str(manifest).map_err(|err| AliError::BadManifest(err.to_string()))
+    serde_yaml::from_str(manifest)
+        .map_err(|err| AliError::BadManifest(err.to_string()))
 }
 
 #[test]
