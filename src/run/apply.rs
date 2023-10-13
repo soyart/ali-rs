@@ -108,10 +108,10 @@ fn update_manifest(manifest: &mut Manifest) {
     // Update manifest.pacstraps if any of the filesystems is Btrfs
     match (has_btrfs, manifest.pacstraps.as_mut()) {
         (true, Some(ref mut pacstraps)) => {
-            pacstraps.insert(btrfs_progs.clone());
+            pacstraps.insert(btrfs_progs);
         }
         (true, None) => {
-            manifest.pacstraps = Some(HashSet::from([btrfs_progs.clone()]));
+            manifest.pacstraps = Some(HashSet::from([btrfs_progs]));
         }
         _ => {}
     }
@@ -133,11 +133,11 @@ fn update_manifest(manifest: &mut Manifest) {
     // Update manifest.pacstraps if we have LVMs in manifest
     match (has_lvm, manifest.pacstraps.as_mut()) {
         (true, Some(ref mut pacstraps)) => {
-            pacstraps.insert(lvm2.clone());
+            pacstraps.insert(lvm2);
         }
 
         (true, None) => {
-            manifest.pacstraps = Some(HashSet::from([lvm2.clone()]));
+            manifest.pacstraps = Some(HashSet::from([lvm2]));
         }
         _ => {}
     }
