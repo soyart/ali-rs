@@ -4,17 +4,84 @@ use crate::errors::AliError;
 
 use super::{
     ActionHook,
+    Caller,
+    Hook,
+    HookMetadata,
+    ModeHook,
     REPLACE_TOKEN,
     REPLACE_TOKEN_PRINT,
 };
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct ReplaceToken {
     token: String,
     value: String,
     template: String,
     output: String,
     print_only: bool,
+}
+
+struct MetaReplaceToken {
+    rp: Option<ReplaceToken>,
+    mode_hook: ModeHook,
+}
+
+pub fn new(key: &str) -> Box<dyn HookMetadata> {
+    Box::new(MetaReplaceToken {
+        rp: None,
+        mode_hook: match key {
+            REPLACE_TOKEN => ModeHook::Normal,
+            REPLACE_TOKEN_PRINT => ModeHook::Print,
+            _ => panic!("unexpected key {key}"),
+        },
+    })
+}
+
+impl HookMetadata for MetaReplaceToken {
+    fn base_key(&self) -> &'static str {
+        REPLACE_TOKEN
+    }
+
+    fn usage(&self) -> &'static str {
+        "<TOKEN> <VALUE> <TEMPLATE> [OUTPUT]"
+    }
+
+    fn mode(&self) -> ModeHook {
+        self.mode_hook.clone()
+    }
+
+    fn should_chroot(&self) -> bool {
+        false
+    }
+
+    fn preferred_callers(&self) -> std::collections::HashSet<super::Caller> {
+        super::all_callers()
+    }
+
+    fn abort_if_no_mount(&self) -> bool {
+        false
+    }
+
+    fn try_parse(&mut self, s: &str) -> Result<(), AliError> {
+        let rp = parse_replace_token(s)?;
+        self.rp = Some(rp);
+
+        Ok(())
+    }
+
+    fn advance(&self) -> Box<dyn super::Hook> {
+        Box::new(self.rp.clone().unwrap())
+    }
+}
+
+impl Hook for ReplaceToken {
+    fn apply(
+        &self,
+        _caller: &Caller,
+        root_location: &str,
+    ) -> Result<ActionHook, AliError> {
+        replace_token(self, root_location)
+    }
 }
 
 /// @replace-token <TOKEN> <VALUE> <TEMPLATE> [OUTPUT]
@@ -27,14 +94,10 @@ struct ReplaceToken {
 ///
 /// @replace-token PORT 2222 /etc_templates/ssh/sshd_config /etc/ssh/sshd_config
 /// => Replace key PORT value with "2222", using /etc_templates/ssh/sshd_config as template and writes output to /etc/ssh/sshd_config
-pub(super) fn replace_token(
-    cmd: &str,
-    // @TODO: Use these params
-    caller: super::Caller,
+fn replace_token(
+    r: &ReplaceToken,
     root_location: &str,
 ) -> Result<ActionHook, AliError> {
-    let r = parse_replace_token(cmd)?;
-
     // @TODO: Read from remote template, e.g. with https or ssh
     let template = std::fs::read_to_string(&r.template).map_err(|err| {
         AliError::HookError(format!(
@@ -48,9 +111,12 @@ pub(super) fn replace_token(
     if r.print_only {
         println!("{}", result);
     } else {
-        super::warn_if_no_mountpoint(REPLACE_TOKEN, caller, root_location)?;
+        let output_location = match root_location {
+            "/" => r.output.clone(),
+            _ => format!("/{root_location}/{}", r.output),
+        };
 
-        std::fs::write(&r.output, result).map_err(|err| {
+        std::fs::write(output_location, result).map_err(|err| {
             AliError::HookError(format!(
                 "{REPLACE_TOKEN}: failed to write to output to {}: {err}",
                 r.output

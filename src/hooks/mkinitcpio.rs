@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use serde::{
     Deserialize,
     Serialize,
@@ -7,26 +9,91 @@ use super::constants::mkinitcpio::*;
 use super::{
     ActionHook,
     Caller,
+    Hook,
+    HookMetadata,
+    ModeHook,
     MKINITCPIO,
     MKINITCPIO_PRINT,
 };
 use crate::errors::AliError;
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
-struct Mkinitcpio {
-    pub boot_hook: Option<BootHooksRoot>,
-    pub binaries: Option<Vec<String>>,
-    pub hooks: Option<Vec<String>>,
-    pub print_only: bool,
+pub fn new(key: &str) -> Box<dyn HookMetadata> {
+    Box::new(MetaMkinitcpio {
+        conf: None,
+        mode_hook: match key {
+            super::MKINITCPIO => ModeHook::Normal,
+            super::MKINITCPIO_PRINT => ModeHook::Print,
+            key => panic!("unexpected key {key}"),
+        },
+    })
 }
 
-pub fn mkinitcpio(
-    cmd: &str,
-    caller: Caller,
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+struct Mkinitcpio {
+    boot_hook: Option<BootHooksRoot>,
+    binaries: Option<Vec<String>>,
+    hooks: Option<Vec<String>>,
+    print_only: bool,
+}
+
+struct MetaMkinitcpio {
+    conf: Option<Mkinitcpio>,
+    mode_hook: ModeHook,
+}
+
+impl HookMetadata for MetaMkinitcpio {
+    fn base_key(&self) -> &'static str {
+        MKINITCPIO
+    }
+
+    fn usage(&self) -> &'static str {
+        "[boot_hook=<BOOT_HOOK_PRESET>] [hooks=<HOOKS>] [binaries=BINARIES]"
+    }
+
+    fn mode(&self) -> ModeHook {
+        self.mode_hook.clone()
+    }
+
+    fn should_chroot(&self) -> bool {
+        true
+    }
+
+    fn preferred_callers(&self) -> std::collections::HashSet<Caller> {
+        HashSet::from([Caller::ManifestChroot, Caller::Cli])
+    }
+
+    fn abort_if_no_mount(&self) -> bool {
+        true
+    }
+
+    fn try_parse(&mut self, s: &str) -> Result<(), AliError> {
+        let result = parse_mkinitcpio(s)?;
+        self.conf = Some(result);
+
+        Ok(())
+    }
+
+    fn advance(&self) -> Box<dyn Hook> {
+        Box::new(self.conf.clone().unwrap())
+    }
+}
+
+impl Hook for Mkinitcpio {
+    fn apply(
+        &self,
+        caller: &Caller,
+        root_location: &str,
+    ) -> Result<ActionHook, AliError> {
+        let conf = self.clone();
+        apply_mkinitcpio(conf, caller, root_location)
+    }
+}
+
+fn apply_mkinitcpio(
+    mut m: Mkinitcpio,
+    _caller: &Caller,
     root_location: &str,
 ) -> Result<ActionHook, AliError> {
-    let mut m = parse(cmd)?;
-
     if m.boot_hook.is_some() {
         let hooks = preset(m.boot_hook.clone().unwrap());
         let hooks = split_whitespace_to_strings(&hooks);
@@ -57,7 +124,7 @@ pub fn mkinitcpio(
         return Ok(ActionHook::Mkinitcpio(s));
     }
 
-    super::warn_if_no_mountpoint(MKINITCPIO, caller, root_location)?;
+    let _mkinitcpio_conf = format!("/{root_location}/mkinitcpio.conf");
 
     Err(AliError::NotImplemented(format!(
         "{MKINITCPIO}: write files",
@@ -112,7 +179,7 @@ fn decide_boot_hooks(v: &str) -> Result<BootHooksRoot, AliError> {
     )))
 }
 
-fn parse(s: &str) -> Result<Mkinitcpio, AliError> {
+fn parse_mkinitcpio(s: &str) -> Result<Mkinitcpio, AliError> {
     let parts = shlex::split(s).unwrap();
     if parts.len() < 2 {
         return Err(AliError::BadHookCmd(format!(

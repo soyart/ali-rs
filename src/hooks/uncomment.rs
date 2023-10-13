@@ -3,6 +3,9 @@ use serde_json::json;
 use super::{
     ActionHook,
     Caller,
+    Hook,
+    HookMetadata,
+    ModeHook,
     UNCOMMENT,
     UNCOMMENT_ALL,
     UNCOMMENT_ALL_PRINT,
@@ -10,11 +13,13 @@ use super::{
 };
 use crate::errors::AliError;
 
+#[derive(Clone)]
 pub(super) enum Mode {
     All,
     Once,
 }
 
+#[derive(Clone)]
 struct Uncomment {
     marker: String,
     pattern: String,
@@ -23,13 +28,74 @@ struct Uncomment {
     print_only: bool,
 }
 
-pub(super) fn uncomment(
-    cmd: &str,
-    caller: Caller,
+struct MetaUncomment {
+    mode_hook: ModeHook,
+    uc: Option<Uncomment>,
+}
+
+pub fn new(key: &str) -> Box<dyn HookMetadata> {
+    Box::new(MetaUncomment {
+        uc: None,
+        mode_hook: match key {
+            UNCOMMENT | UNCOMMENT_ALL => ModeHook::Normal,
+            UNCOMMENT_PRINT | UNCOMMENT_ALL_PRINT => ModeHook::Print,
+            key => panic!("unexpected key {key}"),
+        },
+    })
+}
+
+impl HookMetadata for MetaUncomment {
+    fn base_key(&self) -> &'static str {
+        super::UNCOMMENT
+    }
+
+    fn usage(&self) -> &'static str {
+        "<PATTERN> [marker <COMMENT_MARKER=\"#\">] FILE"
+    }
+
+    fn mode(&self) -> ModeHook {
+        self.mode_hook.clone()
+    }
+
+    fn should_chroot(&self) -> bool {
+        false
+    }
+
+    fn preferred_callers(&self) -> std::collections::HashSet<Caller> {
+        super::all_callers()
+    }
+
+    fn abort_if_no_mount(&self) -> bool {
+        false
+    }
+
+    fn try_parse(&mut self, s: &str) -> Result<(), AliError> {
+        let uc = parse_uncomment(s)?;
+        self.uc = Some(uc);
+
+        Ok(())
+    }
+
+    fn advance(&self) -> Box<dyn super::Hook> {
+        Box::new(self.uc.clone().unwrap())
+    }
+}
+
+impl Hook for Uncomment {
+    fn apply(
+        &self,
+        caller: &Caller,
+        root_location: &str,
+    ) -> Result<ActionHook, AliError> {
+        uncomment(self, caller, root_location)
+    }
+}
+
+fn uncomment(
+    uc: &Uncomment,
+    caller: &Caller,
     root_location: &str,
 ) -> Result<ActionHook, AliError> {
-    let uc = parse_uncomment(cmd)?;
-
     let target = match caller {
         Caller::ManifestPostInstall => {
             format!("{root_location}/{}", uc.file)
@@ -58,12 +124,6 @@ pub(super) fn uncomment(
             println!("{}", uncommented);
         }
         false => {
-            let hook_name = match uc.mode {
-                Mode::All => UNCOMMENT_ALL,
-                Mode::Once => UNCOMMENT,
-            };
-
-            super::warn_if_no_mountpoint(hook_name, caller, root_location)?;
             std::fs::write(&target, uncommented).map_err(|err| {
                 AliError::FileError(
                     err,

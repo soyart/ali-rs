@@ -1,38 +1,97 @@
+use std::collections::HashSet;
+
 use serde_json::json;
 
 use super::constants::quicknet::*;
 use super::{
     ActionHook,
     Caller,
+    Hook,
+    HookMetadata,
+    ModeHook,
     QUICKNET,
     QUICKNET_PRINT,
 };
 use crate::errors::AliError;
 use crate::utils::shell;
 
-struct QuickNet<'a> {
-    interface: &'a str,
-    dns_upstream: Option<&'a str>,
+#[derive(Clone)]
+struct QuickNet {
+    interface: String,
+    dns_upstream: Option<String>,
     print_only: bool,
 }
 
-pub(super) fn quicknet(
-    cmd_string: &str,
-    caller: Caller,
-    root_location: &str,
-) -> Result<ActionHook, AliError> {
-    let qn = parse_quicknet(cmd_string)?;
-
-    apply_quicknet(qn, caller, root_location)
+struct MetaQuickNet {
+    qn: Option<QuickNet>,
+    mode_hook: ModeHook,
 }
 
-/// @quicknet [dns <DNS_UPSTREAM>] <INTERFACE>
-/// Examples:
-/// @quicknet ens3
-/// => Setup simple DHCP for ens3
-///
-/// @quicknet dns 1.1.1.1 ens3
-/// => Setup simple DHCP and DNS upstream 1.1.1.1 for ens3
+pub fn new(key: &str) -> Box<dyn HookMetadata> {
+    Box::new(MetaQuickNet {
+        qn: None,
+        mode_hook: match key {
+            QUICKNET => ModeHook::Normal,
+            QUICKNET_PRINT => ModeHook::Print,
+            key => panic!("unexpected key {key}"),
+        },
+    })
+}
+
+impl super::HookMetadata for MetaQuickNet {
+    fn base_key(&self) -> &'static str {
+        QUICKNET
+    }
+
+    /// @quicknet [dns <DNS_UPSTREAM>] <INTERFACE>
+    /// Examples:
+    /// @quicknet ens3
+    /// => Setup simple DHCP for ens3
+    ///
+    /// @quicknet dns 1.1.1.1 ens3
+    /// => Setup simple DHCP and DNS upstream 1.1.1.1 for ens3
+    fn usage(&self) -> &'static str {
+        "interface [dns <DNS_STREAM>]"
+    }
+
+    fn mode(&self) -> ModeHook {
+        self.mode_hook.clone()
+    }
+
+    fn should_chroot(&self) -> bool {
+        true
+    }
+
+    fn preferred_callers(&self) -> HashSet<Caller> {
+        HashSet::from([Caller::ManifestChroot, Caller::Cli])
+    }
+
+    fn abort_if_no_mount(&self) -> bool {
+        false
+    }
+
+    fn try_parse(&mut self, s: &str) -> Result<(), AliError> {
+        let result = parse_quicknet(s)?;
+        self.qn = Some(result);
+
+        Ok(())
+    }
+
+    fn advance(&self) -> Box<dyn Hook> {
+        Box::new(self.qn.clone().unwrap())
+    }
+}
+
+impl Hook for QuickNet {
+    fn apply(
+        &self,
+        _caller: &Caller,
+        root_location: &str,
+    ) -> Result<ActionHook, AliError> {
+        apply_quicknet(self, root_location)
+    }
+}
+
 fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
     let parts: Vec<&str> = cmd.split_whitespace().collect();
     let l = parts.len();
@@ -62,7 +121,7 @@ fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
             }
 
             Ok(QuickNet {
-                interface,
+                interface: interface.to_string(),
                 dns_upstream: None,
                 print_only,
             })
@@ -99,8 +158,8 @@ fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
             };
 
             Ok(QuickNet {
-                interface: parts[interface_idx],
-                dns_upstream: Some(parts[dns_keyword_idx + 1]),
+                interface: parts[interface_idx].to_string(),
+                dns_upstream: Some(parts[dns_keyword_idx + 1].to_string()),
                 print_only,
             })
         }
@@ -116,20 +175,17 @@ fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
 /// Creates directory "{root_location}/etc/systemd/network/"
 /// and write networkd quicknet config file for it
 fn apply_quicknet(
-    qn: QuickNet,
-    caller: Caller,
+    qn: &QuickNet,
     root_location: &str,
 ) -> Result<ActionHook, AliError> {
     // Formats filename and string output
-    let filename = FILENAME_TPL.replace(TOKEN_INTERFACE, qn.interface);
+    let filename = FILENAME_TPL.replace(TOKEN_INTERFACE, &qn.interface);
     let filename = format!("{root_location}/{filename}");
     let result = qn.encode_to_string();
 
     if qn.print_only {
         println!("{}", result);
     } else {
-        super::warn_if_no_mountpoint(QUICKNET, caller, root_location)?;
-
         // Extends to include systemd path
         let root_location = format!("{root_location}/etc/systemd/network");
         shell::exec("mkdir", &["-p", &root_location])?;
@@ -142,7 +198,7 @@ fn apply_quicknet(
     Ok(ActionHook::QuickNet(qn.to_string()))
 }
 
-impl<'a> ToString for QuickNet<'a> {
+impl ToString for QuickNet {
     fn to_string(&self) -> String {
         json!({
             "interface": self.interface,
@@ -152,10 +208,10 @@ impl<'a> ToString for QuickNet<'a> {
     }
 }
 
-impl<'a> QuickNet<'a> {
+impl QuickNet {
     fn encode_to_string(&self) -> String {
-        let mut s = NETWORKD_DHCP.replace(TOKEN_INTERFACE, self.interface);
-        if let Some(upstream) = self.dns_upstream {
+        let mut s = NETWORKD_DHCP.replace(TOKEN_INTERFACE, &self.interface);
+        if let Some(ref upstream) = self.dns_upstream {
             let dns_conf = NETWORKD_DNS.replace(TOKEN_DNS, upstream);
 
             s = format!("{s}\n{dns_conf}");
