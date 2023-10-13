@@ -167,13 +167,13 @@ pub(super) fn collect_valid_luks(
                 )));
             }
 
-            found_vg = Some(should_be_vg.clone());
+            found_vg = Some(should_be_vg);
             break 'find_some_vg;
         }
     }
 
     let luks_dev = BlockDev {
-        device: luks_path.clone(),
+        device: luks_path,
         device_type: TYPE_LUKS,
     };
 

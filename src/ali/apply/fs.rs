@@ -32,9 +32,9 @@ pub fn mount_filesystem(
     linux::mount::mount_fs(&fs)?;
 
     Ok(ActionMountpoints::MountFs {
-        src: fs.device.clone(),
+        src: fs.device,
         dst: mountpoint,
-        opts: fs.mnt_opts.clone(),
+        opts: fs.mnt_opts,
     })
 }
 
