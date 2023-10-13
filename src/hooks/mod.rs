@@ -46,28 +46,38 @@ enum ModeHook {
     Print,
 }
 
-/// HookMetadata provides this module with per-hook information
-/// that this module needs in order to validate hooks.
+/// HookMetadata provides this module with per-hook information that
+/// this module needs in order to validate hooks and helps with control flow.
+///
+/// By convention, a new HookMetadata is created via with a _key_ string -
+/// this allows HookMetadata to determine [`ModeHook`](ModeHook), which
+/// is later accessed via [`mode()`](Self::mode), as with [`quicknet::new`](crate::hooks::quicknet::new).
+///
+/// The newly created HookMetadata is then fed a command string
+/// via [`try_parse`](Self::try_parse).
+///
+/// HookMetadata is responsible for parsing the hook command string
+/// and returning the [Hook](Hook) implementation via [`Self::advance`](Self::advanced),
+/// populating any information the Hook implementation might require.
 trait HookMetadata {
-    /// [Default] Prints help to output
+    /// (Default) Prints help to output
     fn help(&self) {
         println!(
             "{}",
             format!("{}: {}", self.hook_key(), self.usage()).green(),
         );
     }
-
-    /// [Default] Prints yellow warning text to output
+    /// (Default) Prints yellow warning text to output
     fn eprintln_warn(&self, msg: &str) {
         eprintln!("{}", format!("{} WARN: {msg}", self.base_key()).yellow());
     }
 
-    /// [Default] Wraps error in hook with some string prefix
+    /// (Default) Wraps error in hook with some string prefix
     fn hook_error(&self, msg: &str) -> AliError {
         AliError::HookError(format!("{}: {msg}", self.hook_key()))
     }
 
-    /// [Default] Full key of the hook
+    /// (Default) Full key of the hook
     fn hook_key(&self) -> String {
         match self.mode() {
             ModeHook::Normal => self.base_key().to_string(),
@@ -96,10 +106,10 @@ trait HookMetadata {
     fn abort_if_no_mount(&self) -> bool;
 
     /// Tries parsing `s` and returns error if any
-    /// Implementation should use this change to populate parsed data
-    /// (hence `&mut self`).
+    /// Implementation should use this chance to populate parsed data
+    /// (hence `&mut self`) so that we only parse once.
     ///
-    /// Implementation may parse later with Self.advance
+    /// Nonetheless, implementation may parse s later with Self.advance,
     fn try_parse(&mut self, s: &str) -> Result<(), AliError>;
 
     /// Returns the real implementation of the hook
@@ -128,21 +138,7 @@ pub fn apply_hook(
 
     let key = *hook_parts.first().unwrap();
 
-    let mut hook_meta: Box<dyn HookMetadata> = match key {
-        UNCOMMENT | UNCOMMENT_PRINT | UNCOMMENT_ALL | UNCOMMENT_ALL_PRINT => {
-            uncomment::new(key)
-        }
-
-        QUICKNET | QUICKNET_PRINT => quicknet::new(key),
-
-        REPLACE_TOKEN | REPLACE_TOKEN_PRINT => replace_token::new(key),
-
-        MKINITCPIO | MKINITCPIO_PRINT => mkinitcpio::new(key),
-
-        key => {
-            return Err(AliError::BadArgs(format!("unknown hook key: {key}")))
-        }
-    };
+    let mut hook_meta = hook_metadata(key)?;
 
     if let Err(err) = hook_meta.try_parse(hook_cmd) {
         hook_meta.help();
@@ -154,6 +150,22 @@ pub fn apply_hook(
     }
 
     hook_meta.advance().apply(&caller, root_location)
+}
+
+fn hook_metadata(k: &str) -> Result<Box<dyn HookMetadata>, AliError> {
+    match k {
+        QUICKNET | QUICKNET_PRINT => Ok(quicknet::new(k)),
+
+        REPLACE_TOKEN | REPLACE_TOKEN_PRINT => Ok(replace_token::new(k)),
+
+        MKINITCPIO | MKINITCPIO_PRINT => Ok(mkinitcpio::new(k)),
+
+        UNCOMMENT | UNCOMMENT_PRINT | UNCOMMENT_ALL | UNCOMMENT_ALL_PRINT => {
+            Ok(uncomment::new(k))
+        }
+
+        key => Err(AliError::BadArgs(format!("unknown hook key: {key}"))),
+    }
 }
 
 impl std::fmt::Display for Caller {
