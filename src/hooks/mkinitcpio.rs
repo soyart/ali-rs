@@ -73,8 +73,12 @@ impl HookMetadata for MetaMkinitcpio {
         Ok(())
     }
 
-    fn advance(&self) -> Box<dyn Hook> {
-        Box::new(self.conf.clone().unwrap())
+    fn commit(
+        &self,
+        caller: &Caller,
+        root_location: &str,
+    ) -> Result<ActionHook, AliError> {
+        self.conf.as_ref().unwrap().exec(caller, root_location)
     }
 }
 
@@ -203,7 +207,7 @@ fn parse_mkinitcpio(s: &str) -> Result<Mkinitcpio, AliError> {
             mkinitcpio.print_only = false;
         }
         _ => {
-            return Err(AliError::BadHookCmd(format!(
+            return Err(AliError::AliRsBug(format!(
                 "{MKINITCPIO}: unknown hook command {cmd}"
             )))
         }
@@ -212,7 +216,7 @@ fn parse_mkinitcpio(s: &str) -> Result<Mkinitcpio, AliError> {
     for (k, v) in keys_vals {
         let duplicate_key = !dups.insert(k);
         if duplicate_key {
-            return Err(AliError::BadHookCmd(format!(
+            return Err(AliError::AliRsBug(format!(
                 "{MKINITCPIO}: duplicate key {k}"
             )));
         }

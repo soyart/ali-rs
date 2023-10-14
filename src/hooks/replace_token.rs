@@ -69,8 +69,12 @@ impl HookMetadata for MetaReplaceToken {
         Ok(())
     }
 
-    fn advance(&self) -> Box<dyn super::Hook> {
-        Box::new(self.rp.clone().unwrap())
+    fn commit(
+        &self,
+        caller: &Caller,
+        root_location: &str,
+    ) -> Result<ActionHook, AliError> {
+        self.rp.as_ref().unwrap().exec(caller, root_location)
     }
 }
 

@@ -77,8 +77,12 @@ impl super::HookMetadata for MetaQuickNet {
         Ok(())
     }
 
-    fn advance(&self) -> Box<dyn Hook> {
-        Box::new(self.qn.clone().unwrap())
+    fn commit(
+        &self,
+        caller: &Caller,
+        root_location: &str,
+    ) -> Result<ActionHook, AliError> {
+        self.qn.as_ref().unwrap().exec(caller, root_location)
     }
 }
 
@@ -93,27 +97,19 @@ impl Hook for QuickNet {
 }
 
 fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
-    let parts: Vec<&str> = cmd.split_whitespace().collect();
-    let l = parts.len();
-
-    if l <= 1 {
-        return Err(AliError::BadHookCmd(format!(
-            "{QUICKNET}: bad cmd: only 1 string is supplied"
-        )));
-    }
-
-    let cmd = parts.first().unwrap();
-    if !matches!(*cmd, QUICKNET | QUICKNET_PRINT,) {
+    let (key, parts) = super::extract_key_and_parts(cmd)?;
+    if !matches!(key.as_str(), QUICKNET | QUICKNET_PRINT,) {
         return Err(AliError::BadHookCmd(format!(
             "{QUICKNET}: bad cmd: 1st part does not start with \"@quicknet\""
         )));
     }
 
-    let print_only = *cmd == QUICKNET_PRINT;
+    let print_only = key.as_str() == QUICKNET_PRINT;
+    let l = parts.len();
 
     match l {
         2 => {
-            let interface = parts[1];
+            let interface = parts.get(1).unwrap();
             if interface == "dns" {
                 return Err(AliError::BadHookCmd(format!(
                     "{QUICKNET}: got only keyword `dns`"
@@ -166,7 +162,7 @@ fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
 
         _ => {
             Err(AliError::BadHookCmd(format!(
-                "{QUICKNET}: unexpected cmd parts: {l}"
+                "{QUICKNET}: unexpected cmd parts length: {l}"
             )))
         }
     }

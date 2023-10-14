@@ -76,8 +76,12 @@ impl HookMetadata for MetaUncomment {
         Ok(())
     }
 
-    fn advance(&self) -> Box<dyn super::Hook> {
-        Box::new(self.uc.clone().unwrap())
+    fn commit(
+        &self,
+        caller: &Caller,
+        root_location: &str,
+    ) -> Result<ActionHook, AliError> {
+        self.uc.as_ref().unwrap().exec(caller, root_location)
     }
 }
 

@@ -3,6 +3,7 @@ mod mkinitcpio;
 mod quicknet;
 mod replace_token;
 mod uncomment;
+mod wrappers;
 
 pub use self::constants::hook_keys::*;
 
@@ -69,7 +70,10 @@ trait HookMetadata {
     }
     /// (Default) Prints yellow warning text to output
     fn eprintln_warn(&self, msg: &str) {
-        eprintln!("{}", format!("{} WARN: {msg}", self.base_key()).yellow());
+        eprintln!(
+            "### {} ###",
+            format!("{} WARN: {msg}", self.base_key()).yellow()
+        );
     }
 
     /// (Default) Wraps error in hook with some string prefix
@@ -112,8 +116,11 @@ trait HookMetadata {
     /// Nonetheless, implementation may parse s later with Self.advance,
     fn try_parse(&mut self, s: &str) -> Result<(), AliError>;
 
-    /// Returns the real implementation of the hook
-    fn advance(&self) -> Box<dyn Hook>;
+    fn commit(
+        &self,
+        caller: &Caller,
+        root_location: &str,
+    ) -> Result<ActionHook, AliError>;
 }
 
 /// Hook represents the real hook action to be performed.
@@ -134,7 +141,7 @@ pub fn apply_hook(
     root_location: &str,
 ) -> Result<ActionHook, AliError> {
     let hook_meta = parse_validate_meta(cmd, &caller, root_location)?;
-    hook_meta.advance().exec(&caller, root_location)
+    hook_meta.commit(&caller, root_location)
 }
 
 /// Validates if hook_cmd is valid for its caller and mountpoint
@@ -150,6 +157,22 @@ pub fn validate_hook(
 
 pub fn is_hook(cmd: &str) -> bool {
     cmd.starts_with('@')
+}
+
+pub fn extract_key_and_parts(
+    cmd: &str,
+) -> Result<(String, Vec<String>), AliError> {
+    let parts = cmd.split_whitespace().collect::<Vec<_>>();
+    if parts.first().is_none() {
+        return Err(AliError::AliRsBug("@mnt: got 0 part".to_string()));
+    }
+
+    let key = parts.first().unwrap();
+
+    Ok((
+        key.to_string(),
+        parts.into_iter().map(|s| s.to_string()).collect(),
+    ))
 }
 
 fn parse_validate_meta(

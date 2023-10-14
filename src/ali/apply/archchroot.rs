@@ -10,7 +10,6 @@ use crate::utils::shell;
 
 use super::map_err::*;
 
-// @TODO: root password
 pub fn chroot_ali(
     manifest: &Manifest,
     location: &str,
