@@ -146,7 +146,7 @@ pub fn apply_hook(
     }
 
     if hook_meta.should_chroot() {
-        handle_no_mountpoint(&hook_meta, &caller, root_location)?;
+        handle_no_mountpoint(hook_meta.as_ref(), &caller, root_location)?;
     }
 
     hook_meta.advance().apply(&caller, root_location)
@@ -191,7 +191,7 @@ fn all_callers() -> HashSet<Caller> {
 }
 
 fn handle_no_mountpoint(
-    hook: &Box<dyn HookMetadata>,
+    hook: &dyn HookMetadata,
     caller: &Caller,
     mountpoint: &str,
 ) -> Result<(), AliError> {
