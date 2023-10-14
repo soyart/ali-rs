@@ -82,7 +82,7 @@ impl HookMetadata for MetaUncomment {
 }
 
 impl Hook for Uncomment {
-    fn apply(
+    fn exec(
         &self,
         caller: &Caller,
         root_location: &str,

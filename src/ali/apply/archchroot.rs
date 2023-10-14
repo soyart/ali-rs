@@ -42,14 +42,14 @@ where
     let mut actions = Vec::new();
 
     for cmd in cmds {
-        if cmd.starts_with('#') {
+        if hooks::is_hook(&cmd) {
             let action_hook = hooks::apply_hook(
                 cmd,
                 hooks::Caller::ManifestChroot,
                 location,
             )?;
-            actions.push(ActionChrootUser::Hook(action_hook));
 
+            actions.push(ActionChrootUser::Hook(action_hook));
             continue;
         }
 

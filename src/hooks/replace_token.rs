@@ -75,7 +75,7 @@ impl HookMetadata for MetaReplaceToken {
 }
 
 impl Hook for ReplaceToken {
-    fn apply(
+    fn exec(
         &self,
         _caller: &Caller,
         root_location: &str,

@@ -83,7 +83,7 @@ impl super::HookMetadata for MetaQuickNet {
 }
 
 impl Hook for QuickNet {
-    fn apply(
+    fn exec(
         &self,
         _caller: &Caller,
         root_location: &str,

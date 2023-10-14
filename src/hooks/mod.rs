@@ -118,19 +118,46 @@ trait HookMetadata {
 
 /// Hook represents the real hook action to be performed.
 trait Hook {
-    fn apply(
+    fn exec(
         &self,
         caller: &Caller,
         root_location: &str,
     ) -> Result<ActionHook, AliError>;
 }
 
+/// Parses hook_cmd from manifest or CLI to hooks,
+/// into some HookMetadata, and validates it before finally
+/// executing the hook.
 pub fn apply_hook(
-    hook_cmd: &str,
+    cmd: &str,
     caller: Caller,
     root_location: &str,
 ) -> Result<ActionHook, AliError> {
-    let hook_parts = hook_cmd.split_whitespace().collect::<Vec<_>>();
+    let hook_meta = parse_validate_meta(cmd, &caller, root_location)?;
+    hook_meta.advance().exec(&caller, root_location)
+}
+
+/// Validates if hook_cmd is valid for its caller and mountpoint
+pub fn validate_hook(
+    cmd: &str,
+    caller: &Caller,
+    root_location: &str,
+) -> Result<(), AliError> {
+    _ = parse_validate_meta(cmd, caller, root_location)?;
+
+    Ok(())
+}
+
+pub fn is_hook(cmd: &str) -> bool {
+    cmd.starts_with('@')
+}
+
+fn parse_validate_meta(
+    cmd: &str,
+    caller: &Caller,
+    root_location: &str,
+) -> Result<Box<dyn HookMetadata>, AliError> {
+    let hook_parts = cmd.split_whitespace().collect::<Vec<_>>();
 
     if hook_parts.is_empty() {
         return Err(AliError::BadManifest("empty hook".to_string()));
@@ -140,7 +167,7 @@ pub fn apply_hook(
 
     let mut hook_meta = hook_metadata(key)?;
 
-    if let Err(err) = hook_meta.try_parse(hook_cmd) {
+    if let Err(err) = hook_meta.try_parse(cmd) {
         hook_meta.help();
         return Err(err);
     }
@@ -149,7 +176,7 @@ pub fn apply_hook(
         handle_no_mountpoint(hook_meta.as_ref(), &caller, root_location)?;
     }
 
-    hook_meta.advance().apply(&caller, root_location)
+    Ok(hook_meta)
 }
 
 fn hook_metadata(k: &str) -> Result<Box<dyn HookMetadata>, AliError> {

@@ -160,7 +160,7 @@ pub fn postinstall_user(
     // Apply manifest.postinstall with sh -c 'cmd'
     if let Some(ref cmds) = manifest.postinstall {
         for cmd in cmds {
-            if cmd.starts_with('#') {
+            if hooks::is_hook(&cmd) {
                 let action_hook = hooks::apply_hook(
                     cmd,
                     hooks::Caller::ManifestPostInstall,

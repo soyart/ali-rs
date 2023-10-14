@@ -79,7 +79,7 @@ impl HookMetadata for MetaMkinitcpio {
 }
 
 impl Hook for Mkinitcpio {
-    fn apply(
+    fn exec(
         &self,
         caller: &Caller,
         root_location: &str,

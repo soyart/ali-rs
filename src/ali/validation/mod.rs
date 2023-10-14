@@ -1,4 +1,5 @@
-mod blk; // Block device validation
+mod blk;
+mod hooks;
 
 use crate::ali::Manifest;
 use crate::constants::{
@@ -46,6 +47,8 @@ pub fn validate(
             }
         }
     }
+
+    hooks::validate(manifest)?;
 
     // Check timezone file in local installer
     let zone_info = format!(
