@@ -41,7 +41,7 @@ where
     let mut actions = Vec::new();
 
     for cmd in cmds {
-        if hooks::is_hook(&cmd) {
+        if hooks::is_hook(cmd) {
             let action_hook = hooks::apply_hook(
                 cmd,
                 hooks::Caller::ManifestChroot,

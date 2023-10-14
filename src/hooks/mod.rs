@@ -196,7 +196,7 @@ fn parse_validate_meta(
     }
 
     if hook_meta.should_chroot() {
-        handle_no_mountpoint(hook_meta.as_ref(), &caller, root_location)?;
+        handle_no_mountpoint(hook_meta.as_ref(), caller, root_location)?;
     }
 
     Ok(hook_meta)

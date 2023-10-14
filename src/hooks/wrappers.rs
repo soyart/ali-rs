@@ -17,8 +17,8 @@ struct Wrapper {
 
 impl Wrapper {
     #[inline(always)]
-    fn unwrap_inner(&self) -> &Box<dyn HookMetadata> {
-        self._inner.as_ref().unwrap()
+    fn unwrap_inner(&self) -> &dyn HookMetadata {
+        self._inner.as_ref().unwrap().as_ref()
     }
 }
 
@@ -133,7 +133,7 @@ impl HookMetadata for WrapperNoMnt {
 
 fn parse_wrapper_mnt(w: &mut WrapperMnt, cmd: &str) -> Result<(), AliError> {
     let (key, parts) = hooks::extract_key_and_parts(cmd)?;
-    if &key != WRAPPER_MNT {
+    if key != WRAPPER_MNT {
         return Err(AliError::AliRsBug(format!(
             "{}: bad key {key}",
             w.base_key()
@@ -156,7 +156,7 @@ fn parse_wrapper_mnt(w: &mut WrapperMnt, cmd: &str) -> Result<(), AliError> {
             w.base_key()
         )));
     }
-    if hooks::is_hook(&mountpoint) {
+    if hooks::is_hook(mountpoint) {
         return Err(AliError::BadHookCmd(format!(
             "{}: expected mountpoint, found hook key {mountpoint}",
             w.base_key()
@@ -204,7 +204,7 @@ fn parse_wrapper_no_mnt(w: &mut WrapperNoMnt, s: &str) -> Result<(), AliError> {
         )));
     }
 
-    let mut inner_meta = hooks::hook_metadata(&inner_key.unwrap())?;
+    let mut inner_meta = hooks::hook_metadata(inner_key.unwrap())?;
     inner_meta.try_parse(&inner_cmd)?;
 
     w._inner = Some(inner_meta);
