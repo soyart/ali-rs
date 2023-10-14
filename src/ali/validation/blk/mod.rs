@@ -334,9 +334,9 @@ impl std::fmt::Display for DmType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Luks => write!(f, "LUKS"),
-            Self::LvmPv => write!(f, "LVM PV"),
-            Self::LvmVg => write!(f, "LVM VG"),
-            Self::LvmLv => write!(f, "LVM LV"),
+            Self::LvmPv => write!(f, "LVM_PV"),
+            Self::LvmVg => write!(f, "LVM_VG"),
+            Self::LvmLv => write!(f, "LVM_LV"),
         }
     }
 }
@@ -348,7 +348,7 @@ impl std::fmt::Display for BlockDevType {
             Self::Partition => write!(f, "PARTITION"),
             Self::UnknownBlock => write!(f, "UNKNOWN_FS_BASE"),
             Self::Dm(dm_type) => write!(f, "DM_{}", dm_type),
-            Self::Fs(fs_type) => write!(f, "FS_{}", fs_type),
+            Self::Fs(fs_type) => write!(f, "FS_{}", fs_type.to_uppercase()),
         }
     }
 }
