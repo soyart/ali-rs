@@ -12,13 +12,13 @@ use super::{
 
 #[derive(Default)]
 struct Wrapper {
-    _inner: Option<Box<dyn HookMetadata>>,
+    inner: Option<Box<dyn HookMetadata>>,
 }
 
 impl Wrapper {
     #[inline(always)]
     fn unwrap_inner(&self) -> &dyn HookMetadata {
-        self._inner.as_ref().unwrap().as_ref()
+        self.inner.as_ref().unwrap().as_ref()
     }
 }
 
@@ -170,7 +170,7 @@ fn parse_wrapper_mnt(w: &mut WrapperMnt, cmd: &str) -> Result<(), AliError> {
 
     inner_meta.try_parse(&inner_cmd)?;
 
-    w._inner = Some(inner_meta);
+    w.inner = Some(inner_meta);
     w.1 = mountpoint.to_owned();
 
     Ok(())
@@ -207,7 +207,7 @@ fn parse_wrapper_no_mnt(w: &mut WrapperNoMnt, s: &str) -> Result<(), AliError> {
     let mut inner_meta = hooks::hook_metadata(inner_key.unwrap())?;
     inner_meta.try_parse(&inner_cmd)?;
 
-    w._inner = Some(inner_meta);
+    w.inner = Some(inner_meta);
 
     Ok(())
 }
