@@ -1,7 +1,6 @@
 use crate::errors::AliError;
-use crate::hooks;
-
-use super::{
+use crate::hooks::{
+    self,
     ActionHook,
     Caller,
     HookMetadata,
