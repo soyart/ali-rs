@@ -322,6 +322,41 @@ impl ToString for Uncomment {
 }
 
 #[test]
+fn test_parse_uncomment() {
+    let should_pass = vec![
+        "@uncomment Port /etc/ssh/sshd_config",
+        "@uncomment SomeKey /some_file",
+        "@uncomment someKey marker '#' ./someFile",
+        "@uncomment UseFoo marker '!!' ./someFile",
+    ];
+
+    let should_err = vec![
+        "@uncomment foo bar baz",
+        "@uncomment SomeKey",
+        "@uncomment marker '#' someKey someFile",
+        "@uncomment",
+    ];
+
+    for s in should_pass {
+        let result = HookUncomment::try_from(s);
+        if let Err(ref err) = result {
+            eprintln!("unexpected error result for {s}: {err}");
+        }
+
+        assert!(result.is_ok());
+    }
+
+    for s in should_err {
+        let result = HookUncomment::try_from(s);
+        if result.is_ok() {
+            eprintln!("unexpected ok result for {s}");
+        }
+
+        assert!(result.is_err());
+    }
+}
+
+#[test]
 fn test_uncomment_text_all() {
     let originals = [
         r#"#Port 22
