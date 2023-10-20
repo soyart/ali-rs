@@ -279,3 +279,53 @@ fn handle_no_mountpoint(
 
     Ok(())
 }
+
+#[test]
+fn test_extract_key_and_parts() {
+    let should_pass = vec![
+        (
+            "hook_key hook_body",
+            ("hook_key", vec!["hook_key", "hook_body"]),
+        ),
+        (
+            "key val1 val2 val3",
+            ("key", vec!["key", "val1", "val2", "val3"]),
+        ),
+        ("lone_key", ("lone_key", vec!["lone_key"])),
+    ];
+
+    for (s, (expected_key, expected_parts)) in should_pass {
+        let (key, parts) = extract_key_and_parts(s).unwrap();
+        assert_eq!(expected_key, key);
+        assert_eq!(expected_parts, parts);
+    }
+}
+
+#[test]
+fn test_extract_key_and_parts_shlex() {
+    let should_pass = vec![
+        (
+            "hook_key hook_body",
+            ("hook_key", vec!["hook_key", "hook_body"]),
+        ),
+        (
+            "key val1 val2 val3",
+            ("key", vec!["key", "val1", "val2", "val3"]),
+        ),
+        ("lone_key", ("lone_key", vec!["lone_key"])),
+        (
+            "key v1=val1 'val2 val3'",
+            ("key", vec!["key", "v1=val1", "val2 val3"]),
+        ),
+        (
+            "key v1=val1 v2='val2 val3'",
+            ("key", vec!["key", "v1=val1", "v2=val2 val3"]),
+        ),
+    ];
+
+    for (s, (expected_key, expected_parts)) in should_pass {
+        let (key, parts) = extract_key_and_parts_shlex(s).unwrap();
+        assert_eq!(expected_key, key);
+        assert_eq!(expected_parts, parts);
+    }
+}

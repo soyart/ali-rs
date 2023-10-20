@@ -13,7 +13,7 @@ use super::{
 use crate::errors::AliError;
 use crate::utils::shell;
 
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialEq)]
 struct QuickNet {
     interface: String,
     dns_upstream: Option<String>,
@@ -300,31 +300,56 @@ impl QuickNet {
 #[test]
 fn test_parse_quicknet() {
     let should_pass = vec![
-        "@quicknet eth0",
-        "@quicknet inf",
-        "@quicknet dns 1.1.1.1 eth0",
-        "@quicknet eth0 dns 1.1.1.1",
+        (
+            "@quicknet eth0",
+            QuickNet {
+                interface: "eth0".into(),
+                dns_upstream: None,
+            },
+        ),
+        (
+            "@quicknet inf",
+            QuickNet {
+                interface: "inf".into(),
+                dns_upstream: None,
+            },
+        ),
+        (
+            "@quicknet dns 1.1.1.1 eth0",
+            QuickNet {
+                interface: "eth0".into(),
+                dns_upstream: Some("1.1.1.1".into()),
+            },
+        ),
+        (
+            "@quicknet eth0 dns 1.1.1.1",
+            QuickNet {
+                interface: "eth0".into(),
+                dns_upstream: Some("1.1.1.1".into()),
+            },
+        ),
     ];
 
-    let should_err = vec![
-        "eth0",
-        "@quicknet",
-        "@quicknet dns",
-        "@quicknet eth0 1.1.1.1 dns",
-        "#quickmet eth0 dns",
-    ];
+    let should_err =
+        vec!["@quicknet", "@quicknet dns", "@quicknet eth0 1.1.1.1 dns"];
 
-    for cmd in should_pass {
-        let result = parse_quicknet(KEY_QUICKNET, cmd);
-        if let Err(err) = result {
-            panic!("got error from cmd {cmd}: {err}");
+    for (cmd, expected_qn) in should_pass {
+        let hook_result = HookQuickNet::try_from(cmd);
+        if let Err(ref err) = hook_result {
+            eprintln!("unexpected error result from {cmd}: {err}");
         }
+
+        let qn = hook_result.unwrap().qn.unwrap();
+        assert_eq!(expected_qn, qn);
     }
 
-    for cmd in should_err {
-        let result = parse_quicknet(KEY_QUICKNET, cmd);
-        if let Ok(qn) = result {
-            panic!("got ok result from bad arg {cmd}: {}", qn.to_string());
+    for cmd in &should_err {
+        let hook_result = HookQuickNet::try_from(*cmd);
+        if let Ok(hook) = hook_result {
+            panic!(
+                "unexpected ok result from bad arg {cmd}: {}",
+                hook.qn.unwrap().to_string()
+            );
         }
     }
 }
@@ -373,8 +398,8 @@ DNS=8.8.8.8
     ]);
 
     for (cmd, expected) in tests {
-        let qn = parse_quicknet(KEY_QUICKNET, cmd).unwrap();
-        let s = qn.encode_to_string();
+        let hook = HookQuickNet::try_from(cmd).unwrap();
+        let s = hook.qn.unwrap().encode_to_string();
 
         assert_eq!(expected, s);
     }
