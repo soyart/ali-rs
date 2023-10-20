@@ -9,11 +9,10 @@ use super::constants::mkinitcpio::*;
 use super::{
     ActionHook,
     Caller,
-    Hook,
     HookWrapper,
     ModeHook,
-    MKINITCPIO,
-    MKINITCPIO_PRINT,
+    KEY_MKINITCPIO,
+    KEY_MKINITCPIO_PRINT,
 };
 use crate::errors::AliError;
 
@@ -21,8 +20,8 @@ pub(super) fn new(key: &str) -> Box<dyn HookWrapper> {
     Box::new(MetaMkinitcpio {
         conf: None,
         mode_hook: match key {
-            super::MKINITCPIO => ModeHook::Normal,
-            super::MKINITCPIO_PRINT => ModeHook::Print,
+            super::KEY_MKINITCPIO => ModeHook::Normal,
+            super::KEY_MKINITCPIO_PRINT => ModeHook::Print,
             key => panic!("unexpected key {key}"),
         },
     })
@@ -43,7 +42,7 @@ struct MetaMkinitcpio {
 
 impl HookWrapper for MetaMkinitcpio {
     fn base_key(&self) -> &'static str {
-        MKINITCPIO
+        KEY_MKINITCPIO
     }
 
     fn usage(&self) -> &'static str {
@@ -82,7 +81,7 @@ impl HookWrapper for MetaMkinitcpio {
     }
 }
 
-impl Hook for Mkinitcpio {
+impl Mkinitcpio {
     fn run(
         &self,
         caller: &Caller,
@@ -131,7 +130,7 @@ fn apply_mkinitcpio(
     let _mkinitcpio_conf = format!("/{root_location}/mkinitcpio.conf");
 
     Err(AliError::NotImplemented(format!(
-        "{MKINITCPIO}: write files",
+        "{KEY_MKINITCPIO}: write files",
     )))
 }
 
@@ -179,7 +178,7 @@ fn decide_boot_hooks(v: &str) -> Result<BootHooksRoot, AliError> {
     }
 
     Err(AliError::BadHookCmd(format!(
-        "{MKINITCPIO}: no such boot_hook preset: {v}"
+        "{KEY_MKINITCPIO}: no such boot_hook preset: {v}"
     )))
 }
 
@@ -187,7 +186,7 @@ fn parse_mkinitcpio(s: &str) -> Result<Mkinitcpio, AliError> {
     let parts = shlex::split(s).unwrap();
     if parts.len() < 2 {
         return Err(AliError::BadHookCmd(format!(
-            "{MKINITCPIO}: need at least 1 argument"
+            "{KEY_MKINITCPIO}: need at least 1 argument"
         )));
     }
 
@@ -202,13 +201,13 @@ fn parse_mkinitcpio(s: &str) -> Result<Mkinitcpio, AliError> {
 
     let cmd = parts.first().unwrap();
     match cmd.as_str() {
-        MKINITCPIO_PRINT => {}
-        MKINITCPIO => {
+        KEY_MKINITCPIO_PRINT => {}
+        KEY_MKINITCPIO => {
             mkinitcpio.print_only = false;
         }
         _ => {
             return Err(AliError::AliRsBug(format!(
-                "{MKINITCPIO}: unknown hook command {cmd}"
+                "{KEY_MKINITCPIO}: unknown hook command {cmd}"
             )))
         }
     }
@@ -217,7 +216,7 @@ fn parse_mkinitcpio(s: &str) -> Result<Mkinitcpio, AliError> {
         let duplicate_key = !dups.insert(k);
         if duplicate_key {
             return Err(AliError::AliRsBug(format!(
-                "{MKINITCPIO}: duplicate key {k}"
+                "{KEY_MKINITCPIO}: duplicate key {k}"
             )));
         }
 

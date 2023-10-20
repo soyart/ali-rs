@@ -5,8 +5,8 @@ use crate::hooks::{
     Caller,
     HookWrapper,
     ModeHook,
-    WRAPPER_MNT,
-    WRAPPER_NO_MNT,
+    KEY_WRAPPER_MNT,
+    KEY_WRAPPER_NO_MNT,
 };
 
 #[derive(Default)]
@@ -23,15 +23,23 @@ impl Wrapper {
 
 /// Wraps another HookMetadata and enforce mountpoint to manifest mountpoint
 #[derive(Default)]
-struct WrapperMnt(Wrapper, String);
+struct WrapperMnt(Wrapper, Option<String>);
 
 /// Force mountpoint value to "/"
 #[derive(Default)]
 struct WrapperNoMnt(Wrapper);
 
+pub(super) fn new(key: &str) -> Box<dyn HookWrapper> {
+    match key {
+        KEY_WRAPPER_MNT => Box::new(WrapperMnt::default()),
+        KEY_WRAPPER_NO_MNT => Box::new(WrapperNoMnt::default()),
+        _ => panic!("unknown key {key}"),
+    }
+}
+
 impl HookWrapper for WrapperMnt {
     fn base_key(&self) -> &'static str {
-        WRAPPER_MNT
+        KEY_WRAPPER_MNT
     }
 
     fn usage(&self) -> &'static str {
@@ -63,14 +71,20 @@ impl HookWrapper for WrapperMnt {
         caller: &Caller,
         root_location: &str,
     ) -> Result<ActionHook, AliError> {
-        if self.1 == "/" {
+        if self.1.is_none() {
+            panic!("none mountpoint for WrapperMnt")
+        }
+
+        let mnt = self.1.clone().unwrap();
+
+        if mnt == "/" {
             self.eprintln_warn(&format!(
                 "got mountpoint /, which makes it no different from just caller the inner hook {}",
                 self.unwrap_inner().base_key(),
             ));
         }
 
-        if root_location != self.1 {
+        if root_location != mnt {
             self.eprintln_warn(&format!(
                 "difference in mountpoint for hook {}",
                 self.unwrap_inner().base_key()
@@ -78,23 +92,23 @@ impl HookWrapper for WrapperMnt {
 
             self.eprintln_warn(&format!(
                 "mountpoint from {}: {}, mountpoint from ali-rs: {root_location}",
-                self.base_key(), self.1
+                self.base_key(), mnt
             ));
 
             self.eprintln_warn(&format!(
                 "using mountpoint {} from {}",
-                self.1,
+                mnt,
                 self.base_key()
             ));
         }
 
-        self.unwrap_inner().run_hook(caller, &self.1)
+        self.unwrap_inner().run_hook(caller, &mnt)
     }
 }
 
 impl HookWrapper for WrapperNoMnt {
     fn base_key(&self) -> &'static str {
-        WRAPPER_NO_MNT
+        KEY_WRAPPER_NO_MNT
     }
 
     fn usage(&self) -> &'static str {
@@ -132,7 +146,7 @@ impl HookWrapper for WrapperNoMnt {
 
 fn parse_wrapper_mnt(w: &mut WrapperMnt, cmd: &str) -> Result<(), AliError> {
     let (key, parts) = hooks::extract_key_and_parts(cmd)?;
-    if key != WRAPPER_MNT {
+    if key != KEY_WRAPPER_MNT {
         return Err(AliError::AliRsBug(format!(
             "{}: bad key {key}",
             w.base_key()
@@ -165,19 +179,19 @@ fn parse_wrapper_mnt(w: &mut WrapperMnt, cmd: &str) -> Result<(), AliError> {
     let inner_cmd = parts[2..].join(" ");
 
     let (inner_key, _) = hooks::extract_key_and_parts(&inner_cmd)?;
-    let mut inner_meta = hooks::hook_metadata(&inner_key)?;
+    let mut inner_meta = hooks::init_blank_hook(&inner_key)?;
 
     inner_meta.try_parse(&inner_cmd)?;
 
     w.inner = Some(inner_meta);
-    w.1 = mountpoint.to_owned();
+    w.1 = Some(mountpoint.to_owned());
 
     Ok(())
 }
 
 fn parse_wrapper_no_mnt(w: &mut WrapperNoMnt, s: &str) -> Result<(), AliError> {
     let (key, parts) = hooks::extract_key_and_parts(s)?;
-    if key.as_str() != WRAPPER_NO_MNT {
+    if key.as_str() != KEY_WRAPPER_NO_MNT {
         return Err(AliError::AliRsBug(format!(
             "{}: bad key {key}",
             w.base_key()
@@ -203,7 +217,7 @@ fn parse_wrapper_no_mnt(w: &mut WrapperNoMnt, s: &str) -> Result<(), AliError> {
         )));
     }
 
-    let mut inner_meta = hooks::hook_metadata(inner_key.unwrap())?;
+    let mut inner_meta = hooks::init_blank_hook(inner_key.unwrap())?;
     inner_meta.try_parse(&inner_cmd)?;
 
     w.inner = Some(inner_meta);

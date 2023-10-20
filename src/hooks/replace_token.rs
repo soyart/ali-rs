@@ -5,11 +5,10 @@ use crate::errors::AliError;
 use super::{
     ActionHook,
     Caller,
-    Hook,
     HookWrapper,
     ModeHook,
-    REPLACE_TOKEN,
-    REPLACE_TOKEN_PRINT,
+    KEY_REPLACE_TOKEN,
+    KEY_REPLACE_TOKEN_PRINT,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -30,8 +29,8 @@ pub(super) fn new(key: &str) -> Box<dyn HookWrapper> {
     Box::new(MetaReplaceToken {
         rp: None,
         mode_hook: match key {
-            REPLACE_TOKEN => ModeHook::Normal,
-            REPLACE_TOKEN_PRINT => ModeHook::Print,
+            KEY_REPLACE_TOKEN => ModeHook::Normal,
+            KEY_REPLACE_TOKEN_PRINT => ModeHook::Print,
             _ => panic!("unexpected key {key}"),
         },
     })
@@ -39,7 +38,7 @@ pub(super) fn new(key: &str) -> Box<dyn HookWrapper> {
 
 impl HookWrapper for MetaReplaceToken {
     fn base_key(&self) -> &'static str {
-        REPLACE_TOKEN
+        KEY_REPLACE_TOKEN
     }
 
     fn usage(&self) -> &'static str {
@@ -78,7 +77,7 @@ impl HookWrapper for MetaReplaceToken {
     }
 }
 
-impl Hook for ReplaceToken {
+impl ReplaceToken {
     fn run(
         &self,
         _caller: &Caller,
@@ -105,7 +104,7 @@ fn replace_token(
     // @TODO: Read from remote template, e.g. with https or ssh
     let template = std::fs::read_to_string(&r.template).map_err(|err| {
         AliError::HookError(format!(
-            "{REPLACE_TOKEN}: read template {}: {err}",
+            "{KEY_REPLACE_TOKEN}: read template {}: {err}",
             r.template
         ))
     })?;
@@ -122,7 +121,7 @@ fn replace_token(
 
         std::fs::write(output_location, result).map_err(|err| {
             AliError::HookError(format!(
-                "{REPLACE_TOKEN}: failed to write to output to {}: {err}",
+                "{KEY_REPLACE_TOKEN}: failed to write to output to {}: {err}",
                 r.output
             ))
         })?;
@@ -136,22 +135,22 @@ fn parse_replace_token(cmd: &str) -> Result<ReplaceToken, AliError> {
     let parts = shlex::split(cmd);
     if parts.is_none() {
         return Err(AliError::BadHookCmd(format!(
-            "{REPLACE_TOKEN}: bad cmd: {cmd}"
+            "{KEY_REPLACE_TOKEN}: bad cmd: {cmd}"
         )));
     }
 
     let parts = parts.unwrap();
     if parts.len() < 3 {
         return Err(AliError::BadHookCmd(format!(
-            "{REPLACE_TOKEN}: expect at least 2 arguments"
+            "{KEY_REPLACE_TOKEN}: expect at least 2 arguments"
         )));
     }
 
     let cmd = parts.first().unwrap();
 
-    if !matches!(cmd.as_str(), REPLACE_TOKEN | REPLACE_TOKEN_PRINT) {
+    if !matches!(cmd.as_str(), KEY_REPLACE_TOKEN | KEY_REPLACE_TOKEN_PRINT) {
         return Err(AliError::BadHookCmd(format!(
-            "{REPLACE_TOKEN}: bad cmd: {cmd}"
+            "{KEY_REPLACE_TOKEN}: bad cmd: {cmd}"
         )));
     }
 
@@ -159,7 +158,7 @@ fn parse_replace_token(cmd: &str) -> Result<ReplaceToken, AliError> {
 
     if l != 4 && l != 5 {
         return Err(AliError::BadHookCmd(format!(
-            "{REPLACE_TOKEN}: bad cmd parts (expecting 3-4): {l}"
+            "{KEY_REPLACE_TOKEN}: bad cmd parts (expecting 3-4): {l}"
         )));
     }
 
@@ -172,7 +171,7 @@ fn parse_replace_token(cmd: &str) -> Result<ReplaceToken, AliError> {
         .map(|s| s.to_owned())
         .unwrap_or(template.clone());
 
-    let print_only = parts[0].as_str() == REPLACE_TOKEN_PRINT;
+    let print_only = parts[0].as_str() == KEY_REPLACE_TOKEN_PRINT;
 
     Ok(ReplaceToken {
         token,

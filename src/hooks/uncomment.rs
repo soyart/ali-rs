@@ -3,13 +3,12 @@ use serde_json::json;
 use super::{
     ActionHook,
     Caller,
-    Hook,
     HookWrapper,
     ModeHook,
-    UNCOMMENT,
-    UNCOMMENT_ALL,
-    UNCOMMENT_ALL_PRINT,
-    UNCOMMENT_PRINT,
+    KEY_UNCOMMENT,
+    KEY_UNCOMMENT_ALL,
+    KEY_UNCOMMENT_ALL_PRINT,
+    KEY_UNCOMMENT_PRINT,
 };
 use crate::errors::AliError;
 
@@ -37,8 +36,8 @@ pub(super) fn new(key: &str) -> Box<dyn HookWrapper> {
     Box::new(MetaUncomment {
         uc: None,
         mode_hook: match key {
-            UNCOMMENT | UNCOMMENT_ALL => ModeHook::Normal,
-            UNCOMMENT_PRINT | UNCOMMENT_ALL_PRINT => ModeHook::Print,
+            KEY_UNCOMMENT | KEY_UNCOMMENT_ALL => ModeHook::Normal,
+            KEY_UNCOMMENT_PRINT | KEY_UNCOMMENT_ALL_PRINT => ModeHook::Print,
             key => panic!("unexpected key {key}"),
         },
     })
@@ -46,7 +45,7 @@ pub(super) fn new(key: &str) -> Box<dyn HookWrapper> {
 
 impl HookWrapper for MetaUncomment {
     fn base_key(&self) -> &'static str {
-        super::UNCOMMENT
+        super::KEY_UNCOMMENT
     }
 
     fn usage(&self) -> &'static str {
@@ -85,7 +84,7 @@ impl HookWrapper for MetaUncomment {
     }
 }
 
-impl Hook for Uncomment {
+impl Uncomment {
     fn run(
         &self,
         caller: &Caller,
@@ -114,7 +113,9 @@ fn uncomment(
     let original = std::fs::read_to_string(&target).map_err(|err| {
         AliError::FileError(
             err,
-            format!("{UNCOMMENT}: read original file to uncomment: {target}"),
+            format!(
+                "{KEY_UNCOMMENT}: read original file to uncomment: {target}"
+            ),
         )
     })?;
 
@@ -131,7 +132,7 @@ fn uncomment(
             std::fs::write(&target, uncommented).map_err(|err| {
                 AliError::FileError(
                     err,
-                    format!("{UNCOMMENT} write uncommented to {target}"),
+                    format!("{KEY_UNCOMMENT} write uncommented to {target}"),
                 )
             })?;
         }
@@ -181,7 +182,7 @@ fn uncomment_text_once(
     }
 
     Err(AliError::HookError(format!(
-        "{UNCOMMENT}: no such comment pattern '{marker} {key}'"
+        "{KEY_UNCOMMENT}: no such comment pattern '{marker} {key}'"
     )))
 }
 
@@ -196,29 +197,29 @@ fn parse_uncomment(hook_cmd: &str) -> Result<Uncomment, AliError> {
     let parts = shlex::split(hook_cmd);
     if parts.is_none() {
         return Err(AliError::BadHookCmd(format!(
-            "{UNCOMMENT}: bad cmd {hook_cmd}"
+            "{KEY_UNCOMMENT}: bad cmd {hook_cmd}"
         )));
     }
 
     let parts = parts.unwrap();
     if parts.len() < 3 {
         return Err(AliError::BadHookCmd(format!(
-            "{UNCOMMENT}: expect at least 2 arguments"
+            "{KEY_UNCOMMENT}: expect at least 2 arguments"
         )));
     }
 
     let cmd = parts.first().unwrap();
 
     let mode = match cmd.as_str() {
-        UNCOMMENT | UNCOMMENT_PRINT => Mode::Once,
-        UNCOMMENT_ALL | UNCOMMENT_ALL_PRINT => Mode::All,
+        KEY_UNCOMMENT | KEY_UNCOMMENT_PRINT => Mode::Once,
+        KEY_UNCOMMENT_ALL | KEY_UNCOMMENT_ALL_PRINT => Mode::All,
         _ => {
             return Err(AliError::AliRsBug(format!("got bad hook cmd: {cmd}")))
         }
     };
 
     let print_only =
-        matches!(cmd.as_str(), UNCOMMENT_PRINT | UNCOMMENT_ALL_PRINT);
+        matches!(cmd.as_str(), KEY_UNCOMMENT_PRINT | KEY_UNCOMMENT_ALL_PRINT);
 
     let l = parts.len();
     match l {
@@ -234,7 +235,7 @@ fn parse_uncomment(hook_cmd: &str) -> Result<Uncomment, AliError> {
         5 => {
             if parts[2] != "marker" {
                 return Err(AliError::BadHookCmd(format!(
-                    "{UNCOMMENT}: unexpected argument {}, expecting 2nd argument to be `marker`",
+                    "{KEY_UNCOMMENT}: unexpected argument {}, expecting 2nd argument to be `marker`",
                     parts[2],
                 )));
             }
@@ -249,7 +250,7 @@ fn parse_uncomment(hook_cmd: &str) -> Result<Uncomment, AliError> {
         }
         _ => {
             Err(AliError::BadHookCmd(format!(
-                "{UNCOMMENT}: bad cmd parts: {l}"
+                "{KEY_UNCOMMENT}: bad cmd parts: {l}"
             )))
         }
     }

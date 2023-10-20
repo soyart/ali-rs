@@ -1,16 +1,16 @@
 pub mod hook_keys {
-    pub const WRAPPER_MNT: &str = "@mnt";
-    pub const WRAPPER_NO_MNT: &str = "@no-mnt";
-    pub const QUICKNET: &str = "@quicknet";
-    pub const QUICKNET_PRINT: &str = "@quicknet-print";
-    pub const MKINITCPIO: &str = "@mkinitcpio";
-    pub const MKINITCPIO_PRINT: &str = "@mkinitcpio-print";
-    pub const UNCOMMENT: &str = "@uncomment";
-    pub const UNCOMMENT_PRINT: &str = "@uncomment-print";
-    pub const UNCOMMENT_ALL: &str = "@uncomment-all";
-    pub const UNCOMMENT_ALL_PRINT: &str = "@uncomment-all-print";
-    pub const REPLACE_TOKEN: &str = "@replace-token";
-    pub const REPLACE_TOKEN_PRINT: &str = "@replace-token-print";
+    pub const KEY_WRAPPER_MNT: &str = "@mnt";
+    pub const KEY_WRAPPER_NO_MNT: &str = "@no-mnt";
+    pub const KEY_QUICKNET: &str = "@quicknet";
+    pub const KEY_QUICKNET_PRINT: &str = "@quicknet-print";
+    pub const KEY_MKINITCPIO: &str = "@mkinitcpio";
+    pub const KEY_MKINITCPIO_PRINT: &str = "@mkinitcpio-print";
+    pub const KEY_UNCOMMENT: &str = "@uncomment";
+    pub const KEY_UNCOMMENT_PRINT: &str = "@uncomment-print";
+    pub const KEY_UNCOMMENT_ALL: &str = "@uncomment-all";
+    pub const KEY_UNCOMMENT_ALL_PRINT: &str = "@uncomment-all-print";
+    pub const KEY_REPLACE_TOKEN: &str = "@replace-token";
+    pub const KEY_REPLACE_TOKEN_PRINT: &str = "@replace-token-print";
 }
 
 pub mod quicknet {

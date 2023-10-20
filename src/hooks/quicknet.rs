@@ -6,11 +6,10 @@ use super::constants::quicknet::*;
 use super::{
     ActionHook,
     Caller,
-    Hook,
     HookWrapper,
     ModeHook,
-    QUICKNET,
-    QUICKNET_PRINT,
+    KEY_QUICKNET,
+    KEY_QUICKNET_PRINT,
 };
 use crate::errors::AliError;
 use crate::utils::shell;
@@ -31,8 +30,8 @@ pub(super) fn new(key: &str) -> Box<dyn HookWrapper> {
     Box::new(MetaQuickNet {
         qn: None,
         mode_hook: match key {
-            QUICKNET => ModeHook::Normal,
-            QUICKNET_PRINT => ModeHook::Print,
+            KEY_QUICKNET => ModeHook::Normal,
+            KEY_QUICKNET_PRINT => ModeHook::Print,
             key => panic!("unexpected key {key}"),
         },
     })
@@ -40,7 +39,7 @@ pub(super) fn new(key: &str) -> Box<dyn HookWrapper> {
 
 impl super::HookWrapper for MetaQuickNet {
     fn base_key(&self) -> &'static str {
-        QUICKNET
+        KEY_QUICKNET
     }
 
     /// @quicknet [dns <DNS_UPSTREAM>] <INTERFACE>
@@ -86,7 +85,7 @@ impl super::HookWrapper for MetaQuickNet {
     }
 }
 
-impl Hook for QuickNet {
+impl QuickNet {
     fn run(
         &self,
         _caller: &Caller,
@@ -98,13 +97,13 @@ impl Hook for QuickNet {
 
 fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
     let (key, parts) = super::extract_key_and_parts(cmd)?;
-    if !matches!(key.as_str(), QUICKNET | QUICKNET_PRINT,) {
+    if !matches!(key.as_str(), KEY_QUICKNET | KEY_QUICKNET_PRINT,) {
         return Err(AliError::BadHookCmd(format!(
-            "{QUICKNET}: bad cmd: 1st part does not start with \"@quicknet\""
+            "{KEY_QUICKNET}: bad cmd: 1st part does not start with \"@quicknet\""
         )));
     }
 
-    let print_only = key.as_str() == QUICKNET_PRINT;
+    let print_only = key.as_str() == KEY_QUICKNET_PRINT;
     let l = parts.len();
 
     match l {
@@ -112,7 +111,7 @@ fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
             let interface = parts.get(1).unwrap();
             if interface == "dns" {
                 return Err(AliError::BadHookCmd(format!(
-                    "{QUICKNET}: got only keyword `dns`"
+                    "{KEY_QUICKNET}: got only keyword `dns`"
                 )));
             }
 
@@ -135,7 +134,7 @@ fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
 
             if dns_keyword_idx.is_none() {
                 return Err(AliError::BadHookCmd(format!(
-                    "{QUICKNET}: missing argument keyword \"dns\""
+                    "{KEY_QUICKNET}: missing argument keyword \"dns\""
                 )));
             }
             // #cmd dns upstream inf  1
@@ -148,7 +147,7 @@ fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
                     1
                 } else {
                     return Err(AliError::BadHookCmd(format!(
-                        "{QUICKNET}: \"dns\" keyword in bad position: {dns_keyword_idx}"
+                        "{KEY_QUICKNET}: \"dns\" keyword in bad position: {dns_keyword_idx}"
                     )));
                 }
             };
@@ -162,7 +161,7 @@ fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
 
         _ => {
             Err(AliError::BadHookCmd(format!(
-                "{QUICKNET}: unexpected cmd parts length: {l}"
+                "{KEY_QUICKNET}: unexpected cmd parts length: {l}"
             )))
         }
     }

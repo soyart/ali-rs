@@ -124,15 +124,6 @@ trait HookWrapper {
     ) -> Result<ActionHook, AliError>;
 }
 
-/// Hook represents the real hook action to be performed.
-trait Hook {
-    fn run(
-        &self,
-        caller: &Caller,
-        root_location: &str,
-    ) -> Result<ActionHook, AliError>;
-}
-
 /// Parses hook_cmd from manifest or CLI to hooks,
 /// into some HookWrapper, and validates it before finally
 /// executing the hook.
@@ -189,31 +180,42 @@ fn parse_validate(
 
     let key = *hook_parts.first().unwrap();
 
-    let mut hook_meta = hook_metadata(key)?;
+    let mut h = init_blank_hook(key)?;
 
-    if let Err(err) = hook_meta.try_parse(cmd) {
-        hook_meta.help();
+    if let Err(err) = h.try_parse(cmd) {
+        h.help();
         return Err(err);
     }
 
-    if hook_meta.should_chroot() {
-        handle_no_mountpoint(hook_meta.as_ref(), caller, root_location)?;
+    if h.should_chroot() {
+        handle_no_mountpoint(h.as_ref(), caller, root_location)?;
     }
 
-    Ok(hook_meta)
+    Ok(h)
 }
 
-fn hook_metadata(k: &str) -> Result<Box<dyn HookWrapper>, AliError> {
+fn init_blank_hook(k: &str) -> Result<Box<dyn HookWrapper>, AliError> {
     match k {
-        QUICKNET | QUICKNET_PRINT => Ok(quicknet::new(k)),
-
-        REPLACE_TOKEN | REPLACE_TOKEN_PRINT => Ok(replace_token::new(k)),
-
-        MKINITCPIO | MKINITCPIO_PRINT => Ok(mkinitcpio::new(k)),
-
-        UNCOMMENT | UNCOMMENT_PRINT | UNCOMMENT_ALL | UNCOMMENT_ALL_PRINT => {
-            Ok(uncomment::new(k))
+        KEY_WRAPPER_MNT | KEY_WRAPPER_NO_MNT => {
+            Ok(wrappers::new(k)) //
         }
+
+        KEY_QUICKNET | KEY_QUICKNET_PRINT => {
+            Ok(quicknet::new(k)) //
+        }
+
+        KEY_MKINITCPIO | KEY_MKINITCPIO_PRINT => {
+            Ok(mkinitcpio::new(k)) //
+        }
+
+        KEY_REPLACE_TOKEN | KEY_REPLACE_TOKEN_PRINT => {
+            Ok(replace_token::new(k))
+        }
+
+        KEY_UNCOMMENT
+        | KEY_UNCOMMENT_PRINT
+        | KEY_UNCOMMENT_ALL
+        | KEY_UNCOMMENT_ALL_PRINT => Ok(uncomment::new(k)),
 
         key => Err(AliError::BadArgs(format!("unknown hook key: {key}"))),
     }
