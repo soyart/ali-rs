@@ -3,7 +3,7 @@ use crate::hooks::{
     self,
     ActionHook,
     Caller,
-    HookMetadata,
+    HookWrapper,
     ModeHook,
     WRAPPER_MNT,
     WRAPPER_NO_MNT,
@@ -11,12 +11,12 @@ use crate::hooks::{
 
 #[derive(Default)]
 struct Wrapper {
-    inner: Option<Box<dyn HookMetadata>>,
+    inner: Option<Box<dyn HookWrapper>>,
 }
 
 impl Wrapper {
     #[inline(always)]
-    fn unwrap_inner(&self) -> &dyn HookMetadata {
+    fn unwrap_inner(&self) -> &dyn HookWrapper {
         self.inner.as_ref().unwrap().as_ref()
     }
 }
@@ -29,7 +29,7 @@ struct WrapperMnt(Wrapper, String);
 #[derive(Default)]
 struct WrapperNoMnt(Wrapper);
 
-impl HookMetadata for WrapperMnt {
+impl HookWrapper for WrapperMnt {
     fn base_key(&self) -> &'static str {
         WRAPPER_MNT
     }
@@ -58,7 +58,7 @@ impl HookMetadata for WrapperMnt {
         parse_wrapper_mnt(self, s)
     }
 
-    fn commit(
+    fn run_hook(
         &self,
         caller: &Caller,
         root_location: &str,
@@ -88,11 +88,11 @@ impl HookMetadata for WrapperMnt {
             ));
         }
 
-        self.unwrap_inner().commit(caller, &self.1)
+        self.unwrap_inner().run_hook(caller, &self.1)
     }
 }
 
-impl HookMetadata for WrapperNoMnt {
+impl HookWrapper for WrapperNoMnt {
     fn base_key(&self) -> &'static str {
         WRAPPER_NO_MNT
     }
@@ -121,12 +121,12 @@ impl HookMetadata for WrapperNoMnt {
         parse_wrapper_no_mnt(self, s)
     }
 
-    fn commit(
+    fn run_hook(
         &self,
         caller: &Caller,
         _root_location: &str,
     ) -> Result<ActionHook, AliError> {
-        self.unwrap_inner().commit(caller, "/")
+        self.unwrap_inner().run_hook(caller, "/")
     }
 }
 
@@ -245,9 +245,9 @@ mod tests {
         WrapperMnt,
         WrapperNoMnt,
     };
-    use crate::hooks::HookMetadata;
+    use crate::hooks::HookWrapper;
 
-    fn test_parse<T: HookMetadata>(
+    fn test_parse<T: HookWrapper>(
         f: fn() -> T,
         should_pass: Vec<&str>,
         should_err: Vec<&str>,

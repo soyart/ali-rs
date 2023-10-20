@@ -10,14 +10,14 @@ use super::{
     ActionHook,
     Caller,
     Hook,
-    HookMetadata,
+    HookWrapper,
     ModeHook,
     MKINITCPIO,
     MKINITCPIO_PRINT,
 };
 use crate::errors::AliError;
 
-pub(super) fn new(key: &str) -> Box<dyn HookMetadata> {
+pub(super) fn new(key: &str) -> Box<dyn HookWrapper> {
     Box::new(MetaMkinitcpio {
         conf: None,
         mode_hook: match key {
@@ -41,7 +41,7 @@ struct MetaMkinitcpio {
     mode_hook: ModeHook,
 }
 
-impl HookMetadata for MetaMkinitcpio {
+impl HookWrapper for MetaMkinitcpio {
     fn base_key(&self) -> &'static str {
         MKINITCPIO
     }
@@ -73,17 +73,17 @@ impl HookMetadata for MetaMkinitcpio {
         Ok(())
     }
 
-    fn commit(
+    fn run_hook(
         &self,
         caller: &Caller,
         root_location: &str,
     ) -> Result<ActionHook, AliError> {
-        self.conf.as_ref().unwrap().exec(caller, root_location)
+        self.conf.as_ref().unwrap().run(caller, root_location)
     }
 }
 
 impl Hook for Mkinitcpio {
-    fn exec(
+    fn run(
         &self,
         caller: &Caller,
         root_location: &str,

@@ -47,20 +47,20 @@ enum ModeHook {
     Print,
 }
 
-/// HookMetadata provides this module with per-hook information that
-/// this module needs in order to validate hooks and helps with control flow.
+/// HookWrapper wraps an inner hook, and provides this module with per-hook information
+/// which this module needs in order to validate hooks and helps with control flow.
 ///
-/// By convention, a new HookMetadata is created via with a _key_ string -
-/// this allows HookMetadata to determine [`ModeHook`](ModeHook), which
+/// By convention, a new HookWrapper is created via with a _key_ string -
+/// this allows HookWrapper to determine [`ModeHook`](ModeHook), which
 /// is later accessed via [`mode()`](Self::mode), as with [`quicknet::new`](crate::hooks::quicknet::new).
 ///
-/// The newly created HookMetadata is then fed a command string
+/// The newly created HookWrapper is then fed a command string
 /// via [`try_parse`](Self::try_parse).
 ///
-/// HookMetadata is responsible for parsing the hook command string
+/// HookWrapper is responsible for parsing the hook command string
 /// and returning the [Hook](Hook) implementation via [`Self::advance`](Self::advanced),
 /// populating any information the Hook implementation might require.
-trait HookMetadata {
+trait HookWrapper {
     /// (Default) Prints help to output
     fn help(&self) {
         println!(
@@ -113,10 +113,11 @@ trait HookMetadata {
     /// Implementation should use this chance to populate parsed data
     /// (hence `&mut self`) so that we only parse once.
     ///
-    /// Nonetheless, implementation may parse s later with Self.advance,
+    /// Nonetheless, implementation may parse s later with Self.try_parse,
     fn try_parse(&mut self, s: &str) -> Result<(), AliError>;
 
-    fn commit(
+    /// Runs the inner hook
+    fn run_hook(
         &self,
         caller: &Caller,
         root_location: &str,
@@ -125,7 +126,7 @@ trait HookMetadata {
 
 /// Hook represents the real hook action to be performed.
 trait Hook {
-    fn exec(
+    fn run(
         &self,
         caller: &Caller,
         root_location: &str,
@@ -133,15 +134,15 @@ trait Hook {
 }
 
 /// Parses hook_cmd from manifest or CLI to hooks,
-/// into some HookMetadata, and validates it before finally
+/// into some HookWrapper, and validates it before finally
 /// executing the hook.
 pub fn apply_hook(
     cmd: &str,
     caller: Caller,
     root_location: &str,
 ) -> Result<ActionHook, AliError> {
-    let hook_meta = parse_validate_meta(cmd, &caller, root_location)?;
-    hook_meta.commit(&caller, root_location)
+    let hook_meta = parse_validate(cmd, &caller, root_location)?;
+    hook_meta.run_hook(&caller, root_location)
 }
 
 /// Validates if hook_cmd is valid for its caller and mountpoint
@@ -150,7 +151,7 @@ pub fn validate_hook(
     caller: &Caller,
     root_location: &str,
 ) -> Result<(), AliError> {
-    _ = parse_validate_meta(cmd, caller, root_location)?;
+    _ = parse_validate(cmd, caller, root_location)?;
 
     Ok(())
 }
@@ -175,11 +176,11 @@ pub fn extract_key_and_parts(
     ))
 }
 
-fn parse_validate_meta(
+fn parse_validate(
     cmd: &str,
     caller: &Caller,
     root_location: &str,
-) -> Result<Box<dyn HookMetadata>, AliError> {
+) -> Result<Box<dyn HookWrapper>, AliError> {
     let hook_parts = cmd.split_whitespace().collect::<Vec<_>>();
 
     if hook_parts.is_empty() {
@@ -202,7 +203,7 @@ fn parse_validate_meta(
     Ok(hook_meta)
 }
 
-fn hook_metadata(k: &str) -> Result<Box<dyn HookMetadata>, AliError> {
+fn hook_metadata(k: &str) -> Result<Box<dyn HookWrapper>, AliError> {
     match k {
         QUICKNET | QUICKNET_PRINT => Ok(quicknet::new(k)),
 
@@ -241,7 +242,7 @@ fn all_callers() -> HashSet<Caller> {
 }
 
 fn handle_no_mountpoint(
-    hook: &dyn HookMetadata,
+    hook: &dyn HookWrapper,
     caller: &Caller,
     mountpoint: &str,
 ) -> Result<(), AliError> {

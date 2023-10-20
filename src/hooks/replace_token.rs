@@ -6,7 +6,7 @@ use super::{
     ActionHook,
     Caller,
     Hook,
-    HookMetadata,
+    HookWrapper,
     ModeHook,
     REPLACE_TOKEN,
     REPLACE_TOKEN_PRINT,
@@ -26,7 +26,7 @@ struct MetaReplaceToken {
     mode_hook: ModeHook,
 }
 
-pub(super) fn new(key: &str) -> Box<dyn HookMetadata> {
+pub(super) fn new(key: &str) -> Box<dyn HookWrapper> {
     Box::new(MetaReplaceToken {
         rp: None,
         mode_hook: match key {
@@ -37,7 +37,7 @@ pub(super) fn new(key: &str) -> Box<dyn HookMetadata> {
     })
 }
 
-impl HookMetadata for MetaReplaceToken {
+impl HookWrapper for MetaReplaceToken {
     fn base_key(&self) -> &'static str {
         REPLACE_TOKEN
     }
@@ -69,17 +69,17 @@ impl HookMetadata for MetaReplaceToken {
         Ok(())
     }
 
-    fn commit(
+    fn run_hook(
         &self,
         caller: &Caller,
         root_location: &str,
     ) -> Result<ActionHook, AliError> {
-        self.rp.as_ref().unwrap().exec(caller, root_location)
+        self.rp.as_ref().unwrap().run(caller, root_location)
     }
 }
 
 impl Hook for ReplaceToken {
-    fn exec(
+    fn run(
         &self,
         _caller: &Caller,
         root_location: &str,

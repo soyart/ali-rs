@@ -7,7 +7,7 @@ use super::{
     ActionHook,
     Caller,
     Hook,
-    HookMetadata,
+    HookWrapper,
     ModeHook,
     QUICKNET,
     QUICKNET_PRINT,
@@ -27,7 +27,7 @@ struct MetaQuickNet {
     mode_hook: ModeHook,
 }
 
-pub(super) fn new(key: &str) -> Box<dyn HookMetadata> {
+pub(super) fn new(key: &str) -> Box<dyn HookWrapper> {
     Box::new(MetaQuickNet {
         qn: None,
         mode_hook: match key {
@@ -38,7 +38,7 @@ pub(super) fn new(key: &str) -> Box<dyn HookMetadata> {
     })
 }
 
-impl super::HookMetadata for MetaQuickNet {
+impl super::HookWrapper for MetaQuickNet {
     fn base_key(&self) -> &'static str {
         QUICKNET
     }
@@ -77,17 +77,17 @@ impl super::HookMetadata for MetaQuickNet {
         Ok(())
     }
 
-    fn commit(
+    fn run_hook(
         &self,
         caller: &Caller,
         root_location: &str,
     ) -> Result<ActionHook, AliError> {
-        self.qn.as_ref().unwrap().exec(caller, root_location)
+        self.qn.as_ref().unwrap().run(caller, root_location)
     }
 }
 
 impl Hook for QuickNet {
-    fn exec(
+    fn run(
         &self,
         _caller: &Caller,
         root_location: &str,

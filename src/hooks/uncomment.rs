@@ -4,7 +4,7 @@ use super::{
     ActionHook,
     Caller,
     Hook,
-    HookMetadata,
+    HookWrapper,
     ModeHook,
     UNCOMMENT,
     UNCOMMENT_ALL,
@@ -33,7 +33,7 @@ struct MetaUncomment {
     uc: Option<Uncomment>,
 }
 
-pub(super) fn new(key: &str) -> Box<dyn HookMetadata> {
+pub(super) fn new(key: &str) -> Box<dyn HookWrapper> {
     Box::new(MetaUncomment {
         uc: None,
         mode_hook: match key {
@@ -44,7 +44,7 @@ pub(super) fn new(key: &str) -> Box<dyn HookMetadata> {
     })
 }
 
-impl HookMetadata for MetaUncomment {
+impl HookWrapper for MetaUncomment {
     fn base_key(&self) -> &'static str {
         super::UNCOMMENT
     }
@@ -76,17 +76,17 @@ impl HookMetadata for MetaUncomment {
         Ok(())
     }
 
-    fn commit(
+    fn run_hook(
         &self,
         caller: &Caller,
         root_location: &str,
     ) -> Result<ActionHook, AliError> {
-        self.uc.as_ref().unwrap().exec(caller, root_location)
+        self.uc.as_ref().unwrap().run(caller, root_location)
     }
 }
 
 impl Hook for Uncomment {
-    fn exec(
+    fn run(
         &self,
         caller: &Caller,
         root_location: &str,
