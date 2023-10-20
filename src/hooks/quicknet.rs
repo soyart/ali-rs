@@ -1,12 +1,10 @@
-use std::collections::HashSet;
-
 use serde_json::json;
 
 use super::constants::quicknet::*;
 use super::{
     ActionHook,
     Caller,
-    HookWrapper,
+    Hook,
     ModeHook,
     KEY_QUICKNET,
     KEY_QUICKNET_PRINT,
@@ -18,16 +16,15 @@ use crate::utils::shell;
 struct QuickNet {
     interface: String,
     dns_upstream: Option<String>,
-    print_only: bool,
 }
 
-struct MetaQuickNet {
+struct HookQuickNet {
     qn: Option<QuickNet>,
     mode_hook: ModeHook,
 }
 
-pub(super) fn new(key: &str) -> Box<dyn HookWrapper> {
-    Box::new(MetaQuickNet {
+pub(super) fn init_from_key(key: &str) -> Box<dyn Hook> {
+    Box::new(HookQuickNet {
         qn: None,
         mode_hook: match key {
             KEY_QUICKNET => ModeHook::Normal,
@@ -37,18 +34,26 @@ pub(super) fn new(key: &str) -> Box<dyn HookWrapper> {
     })
 }
 
-impl super::HookWrapper for MetaQuickNet {
+impl super::Hook for HookQuickNet {
     fn base_key(&self) -> &'static str {
         KEY_QUICKNET
     }
 
-    /// @quicknet [dns <DNS_UPSTREAM>] <INTERFACE>
-    /// Examples:
-    /// @quicknet ens3
-    /// => Setup simple DHCP for ens3
+    /// `@quicknet [dns <DNS_UPSTREAM>] <INTERFACE>`
     ///
+    /// Examples:
+    ///
+    /// 1. Setup simple DHCP for ens3
+    ///
+    /// ```txt
+    /// @quicknet ens3
+    /// ```
+    ///
+    /// 2. Setup simple DHCP and DNS upstream 1.1.1.1 for ens3
+    ///
+    /// ```txt
     /// @quicknet dns 1.1.1.1 ens3
-    /// => Setup simple DHCP and DNS upstream 1.1.1.1 for ens3
+    /// ```
     fn usage(&self) -> &'static str {
         "interface [dns <DNS_STREAM>]"
     }
@@ -61,16 +66,16 @@ impl super::HookWrapper for MetaQuickNet {
         true
     }
 
-    fn preferred_callers(&self) -> HashSet<Caller> {
-        HashSet::from([Caller::ManifestChroot, Caller::Cli])
+    fn prefer_caller(&self, caller: &Caller) -> bool {
+        matches!(caller, Caller::ManifestChroot | Caller::Cli)
     }
 
     fn abort_if_no_mount(&self) -> bool {
-        false
+        true
     }
 
-    fn try_parse(&mut self, s: &str) -> Result<(), AliError> {
-        let result = parse_quicknet(s)?;
+    fn parse_cmd(&mut self, s: &str) -> Result<(), AliError> {
+        let result = parse_quicknet(&self.hook_key(), s)?;
         self.qn = Some(result);
 
         Ok(())
@@ -78,47 +83,38 @@ impl super::HookWrapper for MetaQuickNet {
 
     fn run_hook(
         &self,
-        caller: &Caller,
-        root_location: &str,
-    ) -> Result<ActionHook, AliError> {
-        self.qn.as_ref().unwrap().run(caller, root_location)
-    }
-}
-
-impl QuickNet {
-    fn run(
-        &self,
         _caller: &Caller,
         root_location: &str,
     ) -> Result<ActionHook, AliError> {
-        apply_quicknet(self, root_location)
+        apply_quicknet(
+            &self.hook_key(),
+            &self.mode_hook,
+            self.qn.as_ref().unwrap(),
+            root_location,
+        )
     }
 }
 
-fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
+fn parse_quicknet(hook_key: &str, cmd: &str) -> Result<QuickNet, AliError> {
     let (key, parts) = super::extract_key_and_parts(cmd)?;
     if !matches!(key.as_str(), KEY_QUICKNET | KEY_QUICKNET_PRINT,) {
         return Err(AliError::BadHookCmd(format!(
-            "{KEY_QUICKNET}: bad cmd: 1st part does not start with \"@quicknet\""
+            "{hook_key}: bad cmd: 1st part does not start with \"@quicknet\""
         )));
     }
 
-    let print_only = key.as_str() == KEY_QUICKNET_PRINT;
-    let l = parts.len();
-
-    match l {
+    match parts.len() {
         2 => {
             let interface = parts.get(1).unwrap();
             if interface == "dns" {
                 return Err(AliError::BadHookCmd(format!(
-                    "{KEY_QUICKNET}: got only keyword `dns`"
+                    "{hook_key}: got only keyword `dns`"
                 )));
             }
 
             Ok(QuickNet {
                 interface: interface.to_string(),
                 dns_upstream: None,
-                print_only,
             })
         }
 
@@ -134,7 +130,7 @@ fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
 
             if dns_keyword_idx.is_none() {
                 return Err(AliError::BadHookCmd(format!(
-                    "{KEY_QUICKNET}: missing argument keyword \"dns\""
+                    "{hook_key}: missing argument keyword \"dns\""
                 )));
             }
             // #cmd dns upstream inf  1
@@ -147,7 +143,7 @@ fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
                     1
                 } else {
                     return Err(AliError::BadHookCmd(format!(
-                        "{KEY_QUICKNET}: \"dns\" keyword in bad position: {dns_keyword_idx}"
+                        "{hook_key}: \"dns\" keyword in bad position: {dns_keyword_idx}"
                     )));
                 }
             };
@@ -155,13 +151,12 @@ fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
             Ok(QuickNet {
                 interface: parts[interface_idx].to_string(),
                 dns_upstream: Some(parts[dns_keyword_idx + 1].to_string()),
-                print_only,
             })
         }
 
-        _ => {
+        l => {
             Err(AliError::BadHookCmd(format!(
-                "{KEY_QUICKNET}: unexpected cmd parts length: {l}"
+                "{hook_key}: unexpected cmd parts length: {l}"
             )))
         }
     }
@@ -170,24 +165,32 @@ fn parse_quicknet(cmd: &str) -> Result<QuickNet, AliError> {
 /// Creates directory "{root_location}/etc/systemd/network/"
 /// and write networkd quicknet config file for it
 fn apply_quicknet(
+    hook_key: &str,
+    mode_hook: &ModeHook,
     qn: &QuickNet,
     root_location: &str,
 ) -> Result<ActionHook, AliError> {
     // Formats filename and string output
     let filename = FILENAME_TPL.replace(TOKEN_INTERFACE, &qn.interface);
     let filename = format!("{root_location}/{filename}");
-    let result = qn.encode_to_string();
+    let conf_str = qn.encode_to_string();
 
-    if qn.print_only {
-        println!("{}", result);
-    } else {
-        // Extends to include systemd path
-        let root_location = format!("{root_location}/etc/systemd/network");
-        shell::exec("mkdir", &["-p", &root_location])?;
+    match mode_hook {
+        ModeHook::Print => {
+            println!("{conf_str}");
+        }
+        ModeHook::Normal => {
+            // Extends to include systemd path
+            let root_location = format!("{root_location}/etc/systemd/network");
+            shell::exec("mkdir", &["-p", &root_location])?;
 
-        std::fs::write(&filename, result).map_err(|err| {
-            AliError::FileError(err, format!("writing file {filename}"))
-        })?;
+            std::fs::write(&filename, conf_str).map_err(|err| {
+                AliError::FileError(
+                    err,
+                    format!("{hook_key}: writing file {filename}"),
+                )
+            })?;
+        }
     }
 
     Ok(ActionHook::QuickNet(qn.to_string()))
@@ -234,14 +237,14 @@ fn test_parse_quicknet() {
     ];
 
     for cmd in should_pass {
-        let result = parse_quicknet(cmd);
+        let result = parse_quicknet(KEY_QUICKNET, cmd);
         if let Err(err) = result {
             panic!("got error from cmd {cmd}: {err}");
         }
     }
 
     for cmd in should_err {
-        let result = parse_quicknet(cmd);
+        let result = parse_quicknet(KEY_QUICKNET, cmd);
         if let Ok(qn) = result {
             panic!("got ok result from bad arg {cmd}: {}", qn.to_string());
         }
@@ -292,7 +295,7 @@ DNS=8.8.8.8
     ]);
 
     for (cmd, expected) in tests {
-        let qn = parse_quicknet(cmd).unwrap();
+        let qn = parse_quicknet(KEY_QUICKNET, cmd).unwrap();
         let s = qn.encode_to_string();
 
         assert_eq!(expected, s);

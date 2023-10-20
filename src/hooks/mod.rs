@@ -7,8 +7,6 @@ mod wrappers;
 
 pub use self::constants::hook_keys::*;
 
-use std::collections::HashSet;
-
 use colored::Colorize;
 use serde::{
     Deserialize,
@@ -47,20 +45,24 @@ enum ModeHook {
     Print,
 }
 
-/// HookWrapper wraps an inner hook, and provides this module with per-hook information
-/// which this module needs in order to validate hooks and helps with control flow.
+/// A hook is an action parsed from a hook command.
 ///
-/// By convention, a new HookWrapper is created via with a _key_ string -
-/// this allows HookWrapper to determine [`ModeHook`](ModeHook), which
-/// is later accessed via [`mode()`](Self::mode), as with [`quicknet::new`](crate::hooks::quicknet::new).
+/// A hook command is like a shell command - it is made of
+/// 2 main parts: (1) the hook key, and (2) the command body
+/// Hook key is always the first word of the hook command.
 ///
-/// The newly created HookWrapper is then fed a command string
-/// via [`try_parse`](Self::try_parse).
+/// This module handles hook in this fashion:
 ///
-/// HookWrapper is responsible for parsing the hook command string
-/// and returning the [Hook](Hook) implementation via [`Self::advance`](Self::advanced),
-/// populating any information the Hook implementation might require.
-trait HookWrapper {
+/// 1. A hook key is matched with known hook key,
+/// [creating an _empty hook_](init_blank_hook).
+///
+/// 2. If (1) was successful, we check if the hook key
+/// is being called correctly (with `caller` and `root_location`).
+///
+/// 3. If (2) was successful, we pass the hook command to the
+/// hook implementation to parse the rest of the hook command,
+/// yielding a full, populated hook
+trait Hook {
     /// (Default) Prints help to output
     fn help(&self) {
         println!(
@@ -103,7 +105,7 @@ trait HookWrapper {
     fn should_chroot(&self) -> bool;
 
     /// Returns a set of callers the hook expects to be called from
-    fn preferred_callers(&self) -> HashSet<Caller>;
+    fn prefer_caller(&self, caller: &Caller) -> bool;
 
     /// Returns if we should abort if no mountpoint is found
     /// (i.e. root_location or mountpoint == /)
@@ -114,9 +116,9 @@ trait HookWrapper {
     /// (hence `&mut self`) so that we only parse once.
     ///
     /// Nonetheless, implementation may parse s later with Self.try_parse,
-    fn try_parse(&mut self, s: &str) -> Result<(), AliError>;
+    fn parse_cmd(&mut self, s: &str) -> Result<(), AliError>;
 
-    /// Runs the inner hook
+    /// Runs the inner hook once hook cmd is parsed
     fn run_hook(
         &self,
         caller: &Caller,
@@ -125,7 +127,7 @@ trait HookWrapper {
 }
 
 /// Parses hook_cmd from manifest or CLI to hooks,
-/// into some HookWrapper, and validates it before finally
+/// into some Hook, and validates it before finally
 /// executing the hook.
 pub fn apply_hook(
     cmd: &str,
@@ -171,18 +173,11 @@ fn parse_validate(
     cmd: &str,
     caller: &Caller,
     root_location: &str,
-) -> Result<Box<dyn HookWrapper>, AliError> {
-    let hook_parts = cmd.split_whitespace().collect::<Vec<_>>();
+) -> Result<Box<dyn Hook>, AliError> {
+    let (key, _) = extract_key_and_parts(cmd)?;
+    let mut h = init_blank_hook(&key)?;
 
-    if hook_parts.is_empty() {
-        return Err(AliError::BadManifest("empty hook".to_string()));
-    }
-
-    let key = *hook_parts.first().unwrap();
-
-    let mut h = init_blank_hook(key)?;
-
-    if let Err(err) = h.try_parse(cmd) {
+    if let Err(err) = h.parse_cmd(cmd) {
         h.help();
         return Err(err);
     }
@@ -194,28 +189,28 @@ fn parse_validate(
     Ok(h)
 }
 
-fn init_blank_hook(k: &str) -> Result<Box<dyn HookWrapper>, AliError> {
+fn init_blank_hook(k: &str) -> Result<Box<dyn Hook>, AliError> {
     match k {
         KEY_WRAPPER_MNT | KEY_WRAPPER_NO_MNT => {
-            Ok(wrappers::new(k)) //
+            Ok(wrappers::init_from_key(k)) //
         }
 
         KEY_QUICKNET | KEY_QUICKNET_PRINT => {
-            Ok(quicknet::new(k)) //
+            Ok(quicknet::init_from_key(k)) //
         }
 
         KEY_MKINITCPIO | KEY_MKINITCPIO_PRINT => {
-            Ok(mkinitcpio::new(k)) //
+            Ok(mkinitcpio::init_from_key(k)) //
         }
 
         KEY_REPLACE_TOKEN | KEY_REPLACE_TOKEN_PRINT => {
-            Ok(replace_token::new(k))
+            Ok(replace_token::init_from_key(k))
         }
 
         KEY_UNCOMMENT
         | KEY_UNCOMMENT_PRINT
         | KEY_UNCOMMENT_ALL
-        | KEY_UNCOMMENT_ALL_PRINT => Ok(uncomment::new(k)),
+        | KEY_UNCOMMENT_ALL_PRINT => Ok(uncomment::init_from_key(k)),
 
         key => Err(AliError::BadArgs(format!("unknown hook key: {key}"))),
     }
@@ -224,33 +219,26 @@ fn init_blank_hook(k: &str) -> Result<Box<dyn HookWrapper>, AliError> {
 impl std::fmt::Display for Caller {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::ManifestChroot => write!(f, "manifest key `chroot`"),
+            Self::ManifestChroot => {
+                write!(f, "manifest key `chroot`") //
+            }
             Self::ManifestPostInstall => {
-                write!(f, "manifest key `postinstall`")
+                write!(f, "manifest key `postinstall`") //
             }
             Self::Cli => {
-                write!(f, "subcommand `hooks`")
+                write!(f, "subcommand `hooks`") //
             }
         }
     }
 }
 
-fn all_callers() -> HashSet<Caller> {
-    HashSet::from([
-        Caller::ManifestChroot,
-        Caller::ManifestPostInstall,
-        Caller::Cli,
-    ])
-}
-
 fn handle_no_mountpoint(
-    hook: &dyn HookWrapper,
+    hook: &dyn Hook,
     caller: &Caller,
     mountpoint: &str,
 ) -> Result<(), AliError> {
     if mountpoint == "/" {
         hook.eprintln_warn("got / as mountpoint");
-
         match caller {
             Caller::Cli => {
                 hook.eprintln_warn(
@@ -273,8 +261,7 @@ fn handle_no_mountpoint(
         }
     }
 
-    let preferred_callers = hook.preferred_callers();
-    if !preferred_callers.contains(caller) {
+    if !hook.prefer_caller(caller) {
         hook.eprintln_warn("non-preferred caller {caller}");
         hook.eprintln_warn("preferred callers: {preferred_callers:?}");
     }

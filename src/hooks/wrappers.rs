@@ -3,7 +3,7 @@ use crate::hooks::{
     self,
     ActionHook,
     Caller,
-    HookWrapper,
+    Hook,
     ModeHook,
     KEY_WRAPPER_MNT,
     KEY_WRAPPER_NO_MNT,
@@ -11,12 +11,12 @@ use crate::hooks::{
 
 #[derive(Default)]
 struct Wrapper {
-    inner: Option<Box<dyn HookWrapper>>,
+    inner: Option<Box<dyn Hook>>,
 }
 
 impl Wrapper {
     #[inline(always)]
-    fn unwrap_inner(&self) -> &dyn HookWrapper {
+    fn unwrap_inner(&self) -> &dyn Hook {
         self.inner.as_ref().unwrap().as_ref()
     }
 }
@@ -29,15 +29,15 @@ struct WrapperMnt(Wrapper, Option<String>);
 #[derive(Default)]
 struct WrapperNoMnt(Wrapper);
 
-pub(super) fn new(key: &str) -> Box<dyn HookWrapper> {
+pub(super) fn init_from_key(key: &str) -> Box<dyn Hook> {
     match key {
-        KEY_WRAPPER_MNT => Box::new(WrapperMnt::default()),
-        KEY_WRAPPER_NO_MNT => Box::new(WrapperNoMnt::default()),
+        KEY_WRAPPER_MNT => Box::<WrapperMnt>::default(),
+        KEY_WRAPPER_NO_MNT => Box::<WrapperNoMnt>::default(),
         _ => panic!("unknown key {key}"),
     }
 }
 
-impl HookWrapper for WrapperMnt {
+impl Hook for WrapperMnt {
     fn base_key(&self) -> &'static str {
         KEY_WRAPPER_MNT
     }
@@ -54,15 +54,15 @@ impl HookWrapper for WrapperMnt {
         self.unwrap_inner().should_chroot()
     }
 
-    fn preferred_callers(&self) -> std::collections::HashSet<Caller> {
-        self.unwrap_inner().preferred_callers()
+    fn prefer_caller(&self, _caller: &Caller) -> bool {
+        true
     }
 
     fn abort_if_no_mount(&self) -> bool {
         self.unwrap_inner().abort_if_no_mount()
     }
 
-    fn try_parse(&mut self, s: &str) -> Result<(), AliError> {
+    fn parse_cmd(&mut self, s: &str) -> Result<(), AliError> {
         parse_wrapper_mnt(self, s)
     }
 
@@ -106,7 +106,7 @@ impl HookWrapper for WrapperMnt {
     }
 }
 
-impl HookWrapper for WrapperNoMnt {
+impl Hook for WrapperNoMnt {
     fn base_key(&self) -> &'static str {
         KEY_WRAPPER_NO_MNT
     }
@@ -123,15 +123,15 @@ impl HookWrapper for WrapperNoMnt {
         self.unwrap_inner().should_chroot()
     }
 
-    fn preferred_callers(&self) -> std::collections::HashSet<Caller> {
-        self.unwrap_inner().preferred_callers()
+    fn prefer_caller(&self, _caller: &Caller) -> bool {
+        true
     }
 
     fn abort_if_no_mount(&self) -> bool {
         self.unwrap_inner().abort_if_no_mount()
     }
 
-    fn try_parse(&mut self, s: &str) -> Result<(), AliError> {
+    fn parse_cmd(&mut self, s: &str) -> Result<(), AliError> {
         parse_wrapper_no_mnt(self, s)
     }
 
@@ -181,7 +181,7 @@ fn parse_wrapper_mnt(w: &mut WrapperMnt, cmd: &str) -> Result<(), AliError> {
     let (inner_key, _) = hooks::extract_key_and_parts(&inner_cmd)?;
     let mut inner_meta = hooks::init_blank_hook(&inner_key)?;
 
-    inner_meta.try_parse(&inner_cmd)?;
+    inner_meta.parse_cmd(&inner_cmd)?;
 
     w.inner = Some(inner_meta);
     w.1 = Some(mountpoint.to_owned());
@@ -218,7 +218,7 @@ fn parse_wrapper_no_mnt(w: &mut WrapperNoMnt, s: &str) -> Result<(), AliError> {
     }
 
     let mut inner_meta = hooks::init_blank_hook(inner_key.unwrap())?;
-    inner_meta.try_parse(&inner_cmd)?;
+    inner_meta.parse_cmd(&inner_cmd)?;
 
     w.inner = Some(inner_meta);
 
@@ -259,16 +259,16 @@ mod tests {
         WrapperMnt,
         WrapperNoMnt,
     };
-    use crate::hooks::HookWrapper;
+    use crate::hooks::Hook;
 
-    fn test_parse<T: HookWrapper>(
+    fn test_parse<T: Hook>(
         f: fn() -> T,
         should_pass: Vec<&str>,
         should_err: Vec<&str>,
     ) {
         for s in should_pass {
             let mut w = f();
-            let result = w.try_parse(s);
+            let result = w.parse_cmd(s);
 
             if let Err(err) = result {
                 eprintln!("got error from {s}");
@@ -278,7 +278,7 @@ mod tests {
 
         for s in should_err {
             let mut w = f();
-            let result = w.try_parse(s);
+            let result = w.parse_cmd(s);
 
             if result.is_ok() {
                 eprintln!("unexpected ok result from {s}");
@@ -292,6 +292,7 @@ mod tests {
         let should_pass = vec![
             "@mnt /mnt @quicknet ens3 dns 1.1.1.1",
             "@mnt /foo @uncomment PORT /etc/ssh",
+            "@mnt /foo @uncomment-print PORT /etc/ssh",
         ];
 
         let should_err = vec![

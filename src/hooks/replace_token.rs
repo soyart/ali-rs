@@ -5,7 +5,7 @@ use crate::errors::AliError;
 use super::{
     ActionHook,
     Caller,
-    HookWrapper,
+    Hook,
     ModeHook,
     KEY_REPLACE_TOKEN,
     KEY_REPLACE_TOKEN_PRINT,
@@ -17,16 +17,15 @@ struct ReplaceToken {
     value: String,
     template: String,
     output: String,
-    print_only: bool,
 }
 
-struct MetaReplaceToken {
+struct HookReplaceToken {
     rp: Option<ReplaceToken>,
     mode_hook: ModeHook,
 }
 
-pub(super) fn new(key: &str) -> Box<dyn HookWrapper> {
-    Box::new(MetaReplaceToken {
+pub(super) fn init_from_key(key: &str) -> Box<dyn Hook> {
+    Box::new(HookReplaceToken {
         rp: None,
         mode_hook: match key {
             KEY_REPLACE_TOKEN => ModeHook::Normal,
@@ -36,7 +35,7 @@ pub(super) fn new(key: &str) -> Box<dyn HookWrapper> {
     })
 }
 
-impl HookWrapper for MetaReplaceToken {
+impl Hook for HookReplaceToken {
     fn base_key(&self) -> &'static str {
         KEY_REPLACE_TOKEN
     }
@@ -53,15 +52,15 @@ impl HookWrapper for MetaReplaceToken {
         false
     }
 
-    fn preferred_callers(&self) -> std::collections::HashSet<super::Caller> {
-        super::all_callers()
+    fn prefer_caller(&self, _c: &Caller) -> bool {
+        true
     }
 
     fn abort_if_no_mount(&self) -> bool {
         false
     }
 
-    fn try_parse(&mut self, s: &str) -> Result<(), AliError> {
+    fn parse_cmd(&mut self, s: &str) -> Result<(), AliError> {
         let rp = parse_replace_token(s)?;
         self.rp = Some(rp);
 
@@ -70,20 +69,15 @@ impl HookWrapper for MetaReplaceToken {
 
     fn run_hook(
         &self,
-        caller: &Caller,
-        root_location: &str,
-    ) -> Result<ActionHook, AliError> {
-        self.rp.as_ref().unwrap().run(caller, root_location)
-    }
-}
-
-impl ReplaceToken {
-    fn run(
-        &self,
         _caller: &Caller,
         root_location: &str,
     ) -> Result<ActionHook, AliError> {
-        replace_token(self, root_location)
+        apply_replace_token(
+            &self.hook_key(),
+            &self.mode_hook,
+            self.rp.as_ref().unwrap(),
+            root_location,
+        )
     }
 }
 
@@ -97,34 +91,38 @@ impl ReplaceToken {
 ///
 /// @replace-token PORT 2222 /etc_templates/ssh/sshd_config /etc/ssh/sshd_config
 /// => Replace key PORT value with "2222", using /etc_templates/ssh/sshd_config as template and writes output to /etc/ssh/sshd_config
-fn replace_token(
+fn apply_replace_token(
+    hook_key: &str,
+    mode_hook: &ModeHook,
     r: &ReplaceToken,
     root_location: &str,
 ) -> Result<ActionHook, AliError> {
     // @TODO: Read from remote template, e.g. with https or ssh
     let template = std::fs::read_to_string(&r.template).map_err(|err| {
         AliError::HookError(format!(
-            "{KEY_REPLACE_TOKEN}: read template {}: {err}",
+            "{hook_key}: read template {}: {err}",
             r.template
         ))
     })?;
 
     let result = r.replace(&template)?;
+    match mode_hook {
+        ModeHook::Print => {
+            println!("{}", result);
+        }
+        ModeHook::Normal => {
+            let output_location = match root_location {
+                "/" => r.output.clone(),
+                _ => format!("/{root_location}/{}", r.output),
+            };
 
-    if r.print_only {
-        println!("{}", result);
-    } else {
-        let output_location = match root_location {
-            "/" => r.output.clone(),
-            _ => format!("/{root_location}/{}", r.output),
-        };
-
-        std::fs::write(output_location, result).map_err(|err| {
-            AliError::HookError(format!(
-                "{KEY_REPLACE_TOKEN}: failed to write to output to {}: {err}",
-                r.output
-            ))
-        })?;
+            std::fs::write(output_location, result).map_err(|err| {
+                AliError::HookError(format!(
+                    "{hook_key}: failed to write to output to {}: {err}",
+                    r.output
+                ))
+            })?;
+        }
     }
 
     Ok(ActionHook::ReplaceToken(r.to_string()))
@@ -171,14 +169,11 @@ fn parse_replace_token(cmd: &str) -> Result<ReplaceToken, AliError> {
         .map(|s| s.to_owned())
         .unwrap_or(template.clone());
 
-    let print_only = parts[0].as_str() == KEY_REPLACE_TOKEN_PRINT;
-
     Ok(ReplaceToken {
         token,
         value,
         template,
         output,
-        print_only,
     })
 }
 
@@ -251,7 +246,6 @@ fn test_parse_replace_token() {
                 value: String::from("3322"),
                 template: String::from("/etc/ssh/sshd"),
                 output: String::from("/etc/ssh/sshd"),
-                print_only: true,
             }
         ),
         (
@@ -261,7 +255,6 @@ fn test_parse_replace_token() {
                 value: String::from("loglevel=3 quiet root=/dev/archvg/archlv ro"),
                 template: String::from("/etc/default/grub"),
                 output: String::from("/etc/default/grub"),
-                print_only: false,
             },
         ),
         (
@@ -271,7 +264,6 @@ fn test_parse_replace_token() {
                 value: String::from("loglevel=3 quiet root=/dev/archvg/archlv ro"),
                 template: String::from("/some/template"),
                 output: String::from("/etc/default/grub"),
-                print_only: true,
             },
         ),
     ]);
@@ -287,7 +279,6 @@ fn test_parse_replace_token() {
 fn test_uncomment() {
     use std::collections::HashMap;
 
-    let print_only = true;
     let tests = HashMap::from([
         (
             ReplaceToken {
@@ -295,7 +286,6 @@ fn test_uncomment() {
                 value: String::from("3322"),
                 template: String::from("/etc/ssh/sshd"),
                 output: String::from("/etc/ssh/sshd"),
-                print_only,
             },
             ("{{ PORT }} foo bar {{PORT}}", "3322 foo bar {{PORT}}"),
         ),
@@ -305,7 +295,6 @@ fn test_uncomment() {
                 value: String::from("bar"),
                 template: String::from("/etc/ssh/sshd"),
                 output: String::from("/etc/ssh/sshd"),
-                print_only,
             },
             (
                 "{{ bar }} {{ foo }} {{ bar }} foo <{{ foo }}>",

@@ -3,7 +3,7 @@ use serde_json::json;
 use super::{
     ActionHook,
     Caller,
-    HookWrapper,
+    Hook,
     ModeHook,
     KEY_UNCOMMENT,
     KEY_UNCOMMENT_ALL,
@@ -23,18 +23,22 @@ struct Uncomment {
     marker: String,
     pattern: String,
     file: String,
-    mode: Mode,
-    print_only: bool,
 }
 
-struct MetaUncomment {
+struct HookUncomment {
     mode_hook: ModeHook,
+    mode: Mode,
     uc: Option<Uncomment>,
 }
 
-pub(super) fn new(key: &str) -> Box<dyn HookWrapper> {
-    Box::new(MetaUncomment {
+pub(super) fn init_from_key(key: &str) -> Box<dyn Hook> {
+    Box::new(HookUncomment {
         uc: None,
+        mode: match key {
+            KEY_UNCOMMENT | KEY_UNCOMMENT_PRINT => Mode::Once,
+            KEY_UNCOMMENT_ALL | KEY_UNCOMMENT_ALL_PRINT => Mode::All,
+            key => panic!("unexpected key {key}"),
+        },
         mode_hook: match key {
             KEY_UNCOMMENT | KEY_UNCOMMENT_ALL => ModeHook::Normal,
             KEY_UNCOMMENT_PRINT | KEY_UNCOMMENT_ALL_PRINT => ModeHook::Print,
@@ -43,7 +47,7 @@ pub(super) fn new(key: &str) -> Box<dyn HookWrapper> {
     })
 }
 
-impl HookWrapper for MetaUncomment {
+impl Hook for HookUncomment {
     fn base_key(&self) -> &'static str {
         super::KEY_UNCOMMENT
     }
@@ -60,15 +64,15 @@ impl HookWrapper for MetaUncomment {
         false
     }
 
-    fn preferred_callers(&self) -> std::collections::HashSet<Caller> {
-        super::all_callers()
+    fn prefer_caller(&self, _c: &Caller) -> bool {
+        true
     }
 
     fn abort_if_no_mount(&self) -> bool {
         false
     }
 
-    fn try_parse(&mut self, s: &str) -> Result<(), AliError> {
+    fn parse_cmd(&mut self, s: &str) -> Result<(), AliError> {
         let uc = parse_uncomment(s)?;
         self.uc = Some(uc);
 
@@ -80,21 +84,21 @@ impl HookWrapper for MetaUncomment {
         caller: &Caller,
         root_location: &str,
     ) -> Result<ActionHook, AliError> {
-        self.uc.as_ref().unwrap().run(caller, root_location)
+        apply_uncomment(
+            &self.hook_key(),
+            &self.mode_hook,
+            &self.mode,
+            self.uc.as_ref().unwrap(),
+            caller,
+            root_location,
+        )
     }
 }
 
-impl Uncomment {
-    fn run(
-        &self,
-        caller: &Caller,
-        root_location: &str,
-    ) -> Result<ActionHook, AliError> {
-        uncomment(self, caller, root_location)
-    }
-}
-
-fn uncomment(
+fn apply_uncomment(
+    hook_key: &str,
+    mode_hook: &ModeHook,
+    mode: &Mode,
     uc: &Uncomment,
     caller: &Caller,
     root_location: &str,
@@ -113,26 +117,24 @@ fn uncomment(
     let original = std::fs::read_to_string(&target).map_err(|err| {
         AliError::FileError(
             err,
-            format!(
-                "{KEY_UNCOMMENT}: read original file to uncomment: {target}"
-            ),
+            format!("{hook_key}: read original file to uncomment: {target}"),
         )
     })?;
 
-    let uncommented = match uc.mode {
+    let uncommented = match mode {
         Mode::All => uncomment_text_all(&original, &uc.marker, &uc.pattern),
         Mode::Once => uncomment_text_once(&original, &uc.marker, &uc.pattern),
     }?;
 
-    match uc.print_only {
-        true => {
+    match mode_hook {
+        ModeHook::Print => {
             println!("{}", uncommented);
         }
-        false => {
+        ModeHook::Normal => {
             std::fs::write(&target, uncommented).map_err(|err| {
                 AliError::FileError(
                     err,
-                    format!("{KEY_UNCOMMENT} write uncommented to {target}"),
+                    format!("{hook_key} write uncommented to {target}"),
                 )
             })?;
         }
@@ -208,19 +210,6 @@ fn parse_uncomment(hook_cmd: &str) -> Result<Uncomment, AliError> {
         )));
     }
 
-    let cmd = parts.first().unwrap();
-
-    let mode = match cmd.as_str() {
-        KEY_UNCOMMENT | KEY_UNCOMMENT_PRINT => Mode::Once,
-        KEY_UNCOMMENT_ALL | KEY_UNCOMMENT_ALL_PRINT => Mode::All,
-        _ => {
-            return Err(AliError::AliRsBug(format!("got bad hook cmd: {cmd}")))
-        }
-    };
-
-    let print_only =
-        matches!(cmd.as_str(), KEY_UNCOMMENT_PRINT | KEY_UNCOMMENT_ALL_PRINT);
-
     let l = parts.len();
     match l {
         3 => {
@@ -228,8 +217,6 @@ fn parse_uncomment(hook_cmd: &str) -> Result<Uncomment, AliError> {
                 marker: "#".to_string(),
                 pattern: parts[1].to_string(),
                 file: parts[2].to_string(),
-                mode,
-                print_only,
             })
         }
         5 => {
@@ -244,8 +231,6 @@ fn parse_uncomment(hook_cmd: &str) -> Result<Uncomment, AliError> {
                 pattern: parts[1].clone(),
                 marker: parts[3].clone(),
                 file: parts.last().unwrap().clone(),
-                mode,
-                print_only,
             })
         }
         _ => {
