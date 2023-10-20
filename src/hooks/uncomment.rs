@@ -99,7 +99,7 @@ impl TryFrom<&str> for HookUncomment {
     type Error = AliError;
 
     fn try_from(s: &str) -> Result<Self, Self::Error> {
-        let (hook_key, _) = super::extract_key_and_parts(s)?;
+        let (hook_key, parts) = super::extract_key_and_parts_shlex(s)?;
         let mut hook = HookUncomment {
             uc: None,
             mode: match hook_key.as_str() {
@@ -116,14 +116,6 @@ impl TryFrom<&str> for HookUncomment {
             },
         };
 
-        let parts = shlex::split(s);
-        if parts.is_none() {
-            return Err(AliError::BadHookCmd(format!(
-                "{hook_key}: bad cmd {s}"
-            )));
-        }
-
-        let parts = parts.unwrap();
         if parts.len() < 3 {
             return Err(AliError::BadHookCmd(format!(
                 "{hook_key}: expect at least 2 arguments"

@@ -161,12 +161,23 @@ pub fn extract_key_and_parts(
         return Err(AliError::AliRsBug("@mnt: got 0 part".to_string()));
     }
 
-    let key = parts.first().unwrap();
-
     Ok((
-        key.to_string(),
+        parts.first().unwrap().to_string(),
         parts.into_iter().map(|s| s.to_string()).collect(),
     ))
+}
+
+pub fn extract_key_and_parts_shlex(
+    cmd: &str,
+) -> Result<(String, Vec<String>), AliError> {
+    let (key, _) = extract_key_and_parts(cmd)?;
+
+    let parts = shlex::split(cmd);
+    if parts.is_none() {
+        return Err(AliError::BadHookCmd("bad argument format".to_string()));
+    }
+
+    Ok((key, parts.unwrap()))
 }
 
 fn parse_validate(

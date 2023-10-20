@@ -88,7 +88,7 @@ impl TryFrom<&str> for HookMkinitcpio {
     type Error = AliError;
 
     fn try_from(s: &str) -> Result<Self, Self::Error> {
-        let (hook_key, _) = super::extract_key_and_parts(s)?;
+        let (hook_key, parts) = super::extract_key_and_parts_shlex(s)?;
         let mut hook = HookMkinitcpio {
             conf: None,
             mode_hook: match hook_key.as_str() {
@@ -98,7 +98,6 @@ impl TryFrom<&str> for HookMkinitcpio {
             },
         };
 
-        let parts = shlex::split(s).unwrap();
         if parts.len() < 2 {
             return Err(AliError::BadHookCmd(format!(
                 "{hook_key}: need at least 1 argument"
