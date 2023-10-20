@@ -81,6 +81,62 @@ impl Hook for HookReplaceToken {
     }
 }
 
+impl TryFrom<&str> for HookReplaceToken {
+    type Error = AliError;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        let (hook_key, _) = super::extract_key_and_parts(s)?;
+        let mut hook = HookReplaceToken {
+            rp: None,
+            mode_hook: match hook_key.as_str() {
+                KEY_REPLACE_TOKEN => ModeHook::Normal,
+                KEY_REPLACE_TOKEN_PRINT => ModeHook::Print,
+                key => panic!("unexpected key {key}"),
+            },
+        };
+
+        // shlex will return empty array if 1st word starts with '#'
+        let parts = shlex::split(s);
+        if parts.is_none() {
+            return Err(AliError::BadHookCmd(format!(
+                "{hook_key}: bad cmd: {s}"
+            )));
+        }
+
+        let parts = parts.unwrap();
+        if parts.len() < 3 {
+            return Err(AliError::BadHookCmd(format!(
+                "{hook_key}: expect at least 2 arguments"
+            )));
+        }
+
+        let l = parts.len();
+        if l != 4 && l != 5 {
+            return Err(AliError::BadHookCmd(format!(
+                "{hook_key}: bad cmd parts (expecting 3-4): {l}"
+            )));
+        }
+
+        let (token, value, template) =
+            (parts[1].clone(), parts[2].clone(), parts[3].clone());
+
+        // If not given, then use template as output
+        let output = parts
+            .last()
+            .map(|s| s.to_owned())
+            .unwrap_or(template.clone());
+
+        hook.rp = Some(ReplaceToken {
+            token,
+            value,
+            template,
+            output,
+        });
+
+        Ok(hook)
+    }
+}
+
 /// @replace-token <TOKEN> <VALUE> <TEMPLATE> [OUTPUT]
 /// TOKEN must exist in TEMPLATE file, as {{ TOKEN }},
 /// e.g. TOKEN=foo, then there exists {{ foo }} in TEMPLATE file

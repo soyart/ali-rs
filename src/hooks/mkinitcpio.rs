@@ -84,6 +84,76 @@ impl Hook for HookMkinitcpio {
     }
 }
 
+impl TryFrom<&str> for HookMkinitcpio {
+    type Error = AliError;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        let (hook_key, _) = super::extract_key_and_parts(s)?;
+        let mut hook = HookMkinitcpio {
+            conf: None,
+            mode_hook: match hook_key.as_str() {
+                KEY_MKINITCPIO => ModeHook::Normal,
+                KEY_MKINITCPIO_PRINT => ModeHook::Print,
+                key => panic!("unexpected key {key}"),
+            },
+        };
+
+        let parts = shlex::split(s).unwrap();
+        if parts.len() < 2 {
+            return Err(AliError::BadHookCmd(format!(
+                "{hook_key}: need at least 1 argument"
+            )));
+        }
+
+        let args = &parts[1..];
+        let keys_vals = args
+            .iter()
+            .filter_map(|arg| arg.split_once('='))
+            .collect::<Vec<_>>();
+
+        let mut mkinitcpio = Mkinitcpio::default();
+        let mut dups = std::collections::HashSet::new();
+
+        for (k, v) in keys_vals {
+            let duplicate_key = !dups.insert(k);
+            if duplicate_key {
+                return Err(AliError::AliRsBug(format!(
+                    "{hook_key}: duplicate key {k}"
+                )));
+            }
+
+            match k {
+                "boot_hook" => {
+                    let boot_hook = decide_boot_hooks(&hook_key, v)?;
+                    mkinitcpio.boot_hook = Some(boot_hook);
+
+                    continue;
+                }
+                "binaries" => {
+                    let binaries = split_whitespace_to_strings(v);
+                    mkinitcpio.binaries = Some(binaries);
+
+                    continue;
+                }
+                "hooks" => {
+                    let hooks = split_whitespace_to_strings(v);
+                    mkinitcpio.hooks = Some(hooks);
+                }
+                _ => continue,
+            }
+        }
+
+        if mkinitcpio.boot_hook.is_some() && mkinitcpio.hooks.is_some() {
+            return Err(AliError::BadHookCmd(format!(
+                "{hook_key}: boot_hook and hooks are mutually exclusive, but found both"
+            )));
+        }
+
+        hook.conf = Some(mkinitcpio);
+        Ok(hook)
+    }
+}
+
 fn apply_mkinitcpio(
     hook_key: &str,
     mode_hook: &ModeHook,

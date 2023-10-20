@@ -144,6 +144,90 @@ impl Hook for WrapperNoMnt {
     }
 }
 
+impl TryFrom<&str> for WrapperMnt {
+    type Error = AliError;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        let (hook_key, parts) = super::extract_key_and_parts(s)?;
+        if hook_key != KEY_WRAPPER_MNT {
+            return Err(AliError::AliRsBug(format!(
+                "{KEY_WRAPPER_MNT}: bad key {hook_key}",
+            )));
+        }
+
+        let l = parts.len();
+        if l < 3 {
+            return Err(AliError::BadHookCmd(format!(
+                "{hook_key}: expected at least 2 arguments, got {l}",
+            )));
+        }
+
+        let mountpoint = parts.get(1).unwrap();
+
+        if !mountpoint.starts_with('/') {
+            return Err(AliError::BadHookCmd(format!(
+            "{hook_key}: mountpoint must be absolute, got relative path {mountpoint}",
+        )));
+        }
+        if hooks::is_hook(mountpoint) {
+            return Err(AliError::BadHookCmd(format!(
+                "{hook_key}: expected mountpoint, found hook key {mountpoint}",
+            )));
+        }
+
+        let inner_cmd = parts[2..].join(" ");
+
+        let (inner_key, _) = hooks::extract_key_and_parts(&inner_cmd)?;
+        let mut inner_hook = hooks::init_blank_hook(&inner_key)?;
+
+        inner_hook.parse_cmd(&inner_cmd)?;
+
+        Ok(WrapperMnt(
+            Wrapper {
+                inner: Some(inner_hook),
+            },
+            Some(mountpoint.to_string()),
+        ))
+    }
+}
+
+impl TryFrom<&str> for WrapperNoMnt {
+    type Error = AliError;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        let (hook_key, parts) = hooks::extract_key_and_parts(s)?;
+        if hook_key.as_str() != KEY_WRAPPER_NO_MNT {
+            return Err(AliError::AliRsBug(format!(
+                "{KEY_WRAPPER_MNT}: bad key {hook_key}",
+            )));
+        }
+
+        let l = parts.len();
+        if l < 1 {
+            return Err(AliError::AliRsBug(format!(
+                "{hook_key}: got no inner hook",
+            )));
+        }
+
+        let inner_cmd_parts = &parts[1..];
+        let inner_cmd = parts[1..].join(" ");
+        let inner_key = inner_cmd_parts.first();
+
+        if inner_key.is_none() {
+            return Err(AliError::BadHookCmd(format!(
+                "{hook_key}: missing inner hook key",
+            )));
+        }
+
+        let mut inner_hook = hooks::init_blank_hook(inner_key.unwrap())?;
+        inner_hook.parse_cmd(&inner_cmd)?;
+
+        Ok(WrapperNoMnt(Wrapper {
+            inner: Some(inner_hook),
+        }))
+    }
+}
+
 fn parse_wrapper_mnt(w: &mut WrapperMnt, cmd: &str) -> Result<(), AliError> {
     let (key, parts) = hooks::extract_key_and_parts(cmd)?;
     if key != KEY_WRAPPER_MNT {

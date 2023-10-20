@@ -2,6 +2,7 @@ use serde_json::json;
 
 use super::constants::quicknet::*;
 use super::{
+    extract_key_and_parts,
     ActionHook,
     Caller,
     Hook,
@@ -92,6 +93,83 @@ impl super::Hook for HookQuickNet {
             self.qn.as_ref().unwrap(),
             root_location,
         )
+    }
+}
+
+impl TryFrom<&str> for HookQuickNet {
+    type Error = AliError;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        let (hook_key, parts) = extract_key_and_parts(s)?;
+        let mut hook = HookQuickNet {
+            qn: None,
+            mode_hook: match hook_key.as_str() {
+                KEY_QUICKNET => ModeHook::Normal,
+                KEY_QUICKNET_PRINT => ModeHook::Print,
+                key => panic!("unexpected key {key}"),
+            },
+        };
+
+        let qn = match parts.len() {
+            2 => {
+                let interface = parts.get(1).unwrap();
+                if interface == "dns" {
+                    return Err(AliError::BadHookCmd(format!(
+                        "{hook_key}: got only keyword `dns`"
+                    )));
+                }
+
+                QuickNet {
+                    interface: interface.to_string(),
+                    dns_upstream: None,
+                }
+            }
+
+            4 => {
+                let mut dns_keyword_idx = None;
+                for (i, word) in parts.iter().enumerate() {
+                    if *word == "dns" {
+                        dns_keyword_idx = Some(i);
+
+                        break;
+                    }
+                }
+
+                if dns_keyword_idx.is_none() {
+                    return Err(AliError::BadHookCmd(format!(
+                        "{hook_key}: missing argument keyword \"dns\""
+                    )));
+                }
+                // #cmd dns upstream inf  1
+                // #cmd inf dns upstream  2
+                let dns_keyword_idx = dns_keyword_idx.unwrap();
+                let interface_idx = {
+                    if dns_keyword_idx == 1 {
+                        3
+                    } else if dns_keyword_idx == 2 {
+                        1
+                    } else {
+                        return Err(AliError::BadHookCmd(format!(
+                        "{hook_key}: \"dns\" keyword in bad position: {dns_keyword_idx}"
+                    )));
+                    }
+                };
+
+                QuickNet {
+                    interface: parts[interface_idx].to_string(),
+                    dns_upstream: Some(parts[dns_keyword_idx + 1].to_string()),
+                }
+            }
+
+            l => {
+                return Err(AliError::BadHookCmd(format!(
+                    "{hook_key}: unexpected cmd parts length: {l}"
+                )));
+            }
+        };
+
+        hook.qn = Some(qn);
+        Ok(hook)
     }
 }
 
