@@ -13,10 +13,7 @@ the Aux Linarch Installer.
 
 ## ALI manifest validation
 
-ali-rs to apply an ALI manifest usually involves 2 separate
-steps, namely (1) manifest validation, and (2) manifest application.
-
-It is intended to be safe to use, so it validates the manifest
+ali-rs is intended to be safe to use, so it validates the manifest
 before attempting to change anything on-disk.
 
 If a manifest instruction suggests it might wipe an existing
