@@ -45,23 +45,16 @@ enum ModeHook {
     Print,
 }
 
-/// A hook is an action parsed from a hook command.
+/// Hook represents a parsed, ready to use hook.
 ///
-/// A hook command is like a shell command - it is made of
-/// 2 main parts: (1) the hook key, and (2) the command body
-/// Hook key is always the first word of the hook command.
+/// @TODO: Because we currently use Hook as a trait object,
+/// all of its method has `self` receiver, so before
+/// we can successfully parse a hook, we have 0 information
+/// about it, and `help` is therefore pretty useless.
 ///
-/// This module handles hook in this fashion:
-///
-/// 1. A hook key is matched with known hook key,
-/// [creating an _empty hook_](init_blank_hook).
-///
-/// 2. If (1) was successful, we check if the hook key
-/// is being called correctly (with `caller` and `root_location`).
-///
-/// 3. If (2) was successful, we pass the hook command to the
-/// hook implementation to parse the rest of the hook command,
-/// yielding a full, populated hook
+/// Other than [`run_hook`](Self::run_hook), which
+/// actually executes the hook, this trait also defines
+/// many methods for validating user calls to hooks.
 trait Hook {
     /// (Default) Prints help to output
     fn help(&self) {
@@ -70,6 +63,7 @@ trait Hook {
             format!("{}: {}", self.hook_key(), self.usage()).green(),
         );
     }
+
     /// (Default) Prints yellow warning text to output
     fn eprintln_warn(&self, msg: &str) {
         eprintln!(
@@ -111,14 +105,7 @@ trait Hook {
     /// (i.e. root_location or mountpoint == /)
     fn abort_if_no_mount(&self) -> bool;
 
-    /// Tries parsing `s` and returns error if any
-    /// Implementation should use this chance to populate parsed data
-    /// (hence `&mut self`) so that we only parse once.
-    ///
-    /// Nonetheless, implementation may parse s later with Self.try_parse,
-    fn parse_cmd(&mut self, s: &str) -> Result<(), AliError>;
-
-    /// Runs the inner hook once hook cmd is parsed
+    /// Executes hook once parsed
     fn run_hook(
         &self,
         caller: &Caller,
@@ -126,16 +113,13 @@ trait Hook {
     ) -> Result<ActionHook, AliError>;
 }
 
-/// Parses hook_cmd from manifest or CLI to hooks,
-/// into some Hook, and validates it before finally
-/// executing the hook.
 pub fn apply_hook(
     cmd: &str,
     caller: Caller,
     root_location: &str,
 ) -> Result<ActionHook, AliError> {
-    let hook_meta = parse_validate(cmd, &caller, root_location)?;
-    hook_meta.run_hook(&caller, root_location)
+    let h = parse_validate_caller(cmd, &caller, root_location)?;
+    h.run_hook(&caller, root_location)
 }
 
 /// Validates if hook_cmd is valid for its caller and mountpoint
@@ -144,7 +128,7 @@ pub fn validate_hook(
     caller: &Caller,
     root_location: &str,
 ) -> Result<(), AliError> {
-    _ = parse_validate(cmd, caller, root_location)?;
+    _ = parse_validate_caller(cmd, caller, root_location)?;
 
     Ok(())
 }
@@ -180,67 +164,48 @@ pub fn extract_key_and_parts_shlex(
     Ok((key, parts.unwrap()))
 }
 
-fn parse_validate(
-    cmd: &str,
-    caller: &Caller,
-    root_location: &str,
-) -> Result<Box<dyn Hook>, AliError> {
-    let (key, _) = extract_key_and_parts(cmd)?;
-    let mut h = init_blank_hook(&key)?;
-
-    if let Err(err) = h.parse_cmd(cmd) {
-        h.help();
-        return Err(err);
-    }
-
-    if h.should_chroot() {
-        handle_no_mountpoint(h.as_ref(), caller, root_location)?;
-    }
-
-    Ok(h)
-}
-
-fn init_blank_hook(k: &str) -> Result<Box<dyn Hook>, AliError> {
+fn parse_hook(k: &str, cmd: &str) -> Result<Box<dyn Hook>, AliError> {
     match k {
         KEY_WRAPPER_MNT | KEY_WRAPPER_NO_MNT => {
-            Ok(wrappers::init_from_key(k)) //
+            wrappers::parse(k, cmd) //
         }
 
         KEY_QUICKNET | KEY_QUICKNET_PRINT => {
-            Ok(quicknet::init_from_key(k)) //
+            quicknet::parse(k, cmd) //
         }
 
         KEY_MKINITCPIO | KEY_MKINITCPIO_PRINT => {
-            Ok(mkinitcpio::init_from_key(k)) //
+            mkinitcpio::parse(k, cmd) //
         }
 
         KEY_REPLACE_TOKEN | KEY_REPLACE_TOKEN_PRINT => {
-            Ok(replace_token::init_from_key(k))
+            replace_token::parse(k, cmd)
         }
 
         KEY_UNCOMMENT
         | KEY_UNCOMMENT_PRINT
         | KEY_UNCOMMENT_ALL
-        | KEY_UNCOMMENT_ALL_PRINT => Ok(uncomment::init_from_key(k)),
+        | KEY_UNCOMMENT_ALL_PRINT => {
+            uncomment::parse(k, cmd) //
+        }
 
         key => Err(AliError::BadArgs(format!("unknown hook key: {key}"))),
     }
 }
 
-impl std::fmt::Display for Caller {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::ManifestChroot => {
-                write!(f, "manifest key `chroot`") //
-            }
-            Self::ManifestPostInstall => {
-                write!(f, "manifest key `postinstall`") //
-            }
-            Self::Cli => {
-                write!(f, "subcommand `hooks`") //
-            }
-        }
+fn parse_validate_caller(
+    cmd: &str,
+    caller: &Caller,
+    root_location: &str,
+) -> Result<Box<dyn Hook>, AliError> {
+    let (key, _) = extract_key_and_parts(cmd)?;
+    let hook = parse_hook(&key, cmd)?;
+
+    if hook.should_chroot() {
+        handle_no_mountpoint(hook.as_ref(), caller, root_location)?;
     }
+
+    Ok(hook)
 }
 
 fn handle_no_mountpoint(
@@ -278,6 +243,22 @@ fn handle_no_mountpoint(
     }
 
     Ok(())
+}
+
+impl std::fmt::Display for Caller {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ManifestChroot => {
+                write!(f, "manifest key `chroot`") //
+            }
+            Self::ManifestPostInstall => {
+                write!(f, "manifest key `postinstall`") //
+            }
+            Self::Cli => {
+                write!(f, "subcommand `hooks`") //
+            }
+        }
+    }
 }
 
 #[test]

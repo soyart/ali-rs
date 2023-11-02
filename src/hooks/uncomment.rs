@@ -28,23 +28,24 @@ struct Uncomment {
 struct HookUncomment {
     mode_hook: ModeHook,
     mode: Mode,
-    uc: Option<Uncomment>,
+    uc: Uncomment,
 }
 
-pub(super) fn init_from_key(key: &str) -> Box<dyn Hook> {
-    Box::new(HookUncomment {
-        uc: None,
-        mode: match key {
-            KEY_UNCOMMENT | KEY_UNCOMMENT_PRINT => Mode::Once,
-            KEY_UNCOMMENT_ALL | KEY_UNCOMMENT_ALL_PRINT => Mode::All,
-            key => panic!("unexpected key {key}"),
-        },
-        mode_hook: match key {
-            KEY_UNCOMMENT | KEY_UNCOMMENT_ALL => ModeHook::Normal,
-            KEY_UNCOMMENT_PRINT | KEY_UNCOMMENT_ALL_PRINT => ModeHook::Print,
-            key => panic!("unexpected key {key}"),
-        },
-    })
+pub(super) fn parse(k: &str, cmd: &str) -> Result<Box<dyn Hook>, AliError> {
+    if matches!(
+        k,
+        KEY_UNCOMMENT
+            | KEY_UNCOMMENT_PRINT
+            | KEY_UNCOMMENT_ALL
+            | KEY_UNCOMMENT_ALL_PRINT
+    ) {
+        match HookUncomment::try_from(cmd) {
+            Err(err) => Err(err),
+            Ok(hook) => Ok(Box::new(hook)),
+        }
+    } else {
+        panic!("unknown key {k}");
+    }
 }
 
 impl Hook for HookUncomment {
@@ -72,13 +73,6 @@ impl Hook for HookUncomment {
         false
     }
 
-    fn parse_cmd(&mut self, s: &str) -> Result<(), AliError> {
-        let uc = parse_uncomment(&self.hook_key(), s)?;
-        self.uc = Some(uc);
-
-        Ok(())
-    }
-
     fn run_hook(
         &self,
         caller: &Caller,
@@ -88,32 +82,39 @@ impl Hook for HookUncomment {
             &self.hook_key(),
             &self.mode_hook,
             &self.mode,
-            self.uc.as_ref().unwrap(),
+            &self.uc,
             caller,
             root_location,
         )
     }
 }
 
+/// @uncomment <PATTERN> [marker <COMMENT_MARKER="#">] FILE
+/// Uncomments lines starting with PATTERN in FILE. Default comment marker is "#",
+/// although alternative marker can be provided after keyword `marker`, e.g. "//", "--", or "!".
+///
+/// Examples:
+/// @uncomment PubkeyAuthentication /etc/ssh/sshd_config
+/// => Uncomments key PubkeyAuthentication in /etc/ssh/sshd_config
 impl TryFrom<&str> for HookUncomment {
     type Error = AliError;
 
     fn try_from(s: &str) -> Result<Self, Self::Error> {
         let (hook_key, parts) = super::extract_key_and_parts_shlex(s)?;
-        let mut hook = HookUncomment {
-            uc: None,
-            mode: match hook_key.as_str() {
-                KEY_UNCOMMENT | KEY_UNCOMMENT_PRINT => Mode::Once,
-                KEY_UNCOMMENT_ALL | KEY_UNCOMMENT_ALL_PRINT => Mode::All,
-                key => panic!("unexpected key {key}"),
-            },
-            mode_hook: match hook_key.as_str() {
-                KEY_UNCOMMENT | KEY_UNCOMMENT_ALL => ModeHook::Normal,
-                KEY_UNCOMMENT_PRINT | KEY_UNCOMMENT_ALL_PRINT => {
-                    ModeHook::Print
-                }
-                key => panic!("unexpected key {key}"),
-            },
+
+        let mode_uncomment = match hook_key.as_str() {
+            KEY_UNCOMMENT | KEY_UNCOMMENT_PRINT => Mode::Once,
+            KEY_UNCOMMENT_ALL | KEY_UNCOMMENT_ALL_PRINT => Mode::All,
+            key => {
+                return Err(AliError::BadHookCmd(format!(
+                    "unexpected key {key}"
+                )));
+            }
+        };
+        let mode_hook = match hook_key.as_str() {
+            KEY_UNCOMMENT | KEY_UNCOMMENT_ALL => ModeHook::Normal,
+            KEY_UNCOMMENT_PRINT | KEY_UNCOMMENT_ALL_PRINT => ModeHook::Print,
+            key => panic!("unexpected key {key}"),
         };
 
         if parts.len() < 3 {
@@ -133,9 +134,9 @@ impl TryFrom<&str> for HookUncomment {
             5 => {
                 if parts[2] != "marker" {
                     return Err(AliError::BadHookCmd(format!(
-                    "{hook_key}: unexpected argument {}, expecting 2nd argument to be `marker`",
-                    parts[2],
-                )));
+                        "{hook_key}: unexpected argument {}, expecting 2nd argument to be `marker`",
+                        parts[2],
+                    )));
                 }
 
                 Uncomment {
@@ -151,8 +152,11 @@ impl TryFrom<&str> for HookUncomment {
             }
         };
 
-        hook.uc = Some(uc);
-        Ok(hook)
+        Ok(HookUncomment {
+            mode_hook,
+            mode: mode_uncomment,
+            uc,
+        })
     }
 }
 
@@ -253,61 +257,6 @@ fn uncomment_text_once(
     Err(AliError::HookError(format!(
         "{hook_key}: no such comment pattern '{marker} {key}'"
     )))
-}
-
-/// @uncomment <PATTERN> [marker <COMMENT_MARKER="#">] FILE
-/// Uncomments lines starting with PATTERN in FILE. Default comment marker is "#",
-/// although alternative marker can be provided after keyword `marker`, e.g. "//", "--", or "!".
-///
-/// Examples:
-/// @uncomment PubkeyAuthentication /etc/ssh/sshd_config
-/// => Uncomments key PubkeyAuthentication in /etc/ssh/sshd_config
-fn parse_uncomment(
-    hook_key: &str,
-    hook_cmd: &str,
-) -> Result<Uncomment, AliError> {
-    let parts = shlex::split(hook_cmd);
-    if parts.is_none() {
-        return Err(AliError::BadHookCmd(format!(
-            "{hook_key}: bad cmd {hook_cmd}"
-        )));
-    }
-
-    let parts = parts.unwrap();
-    if parts.len() < 3 {
-        return Err(AliError::BadHookCmd(format!(
-            "{hook_key}: expect at least 2 arguments"
-        )));
-    }
-
-    match parts.len() {
-        3 => {
-            Ok(Uncomment {
-                marker: "#".to_string(),
-                pattern: parts[1].to_string(),
-                file: parts[2].to_string(),
-            })
-        }
-        5 => {
-            if parts[2] != "marker" {
-                return Err(AliError::BadHookCmd(format!(
-                    "{hook_key}: unexpected argument {}, expecting 2nd argument to be `marker`",
-                    parts[2],
-                )));
-            }
-
-            Ok(Uncomment {
-                pattern: parts[1].clone(),
-                marker: parts[3].clone(),
-                file: parts.last().unwrap().clone(),
-            })
-        }
-        l => {
-            Err(AliError::BadHookCmd(format!(
-                "{hook_key}: bad cmd parts: {l}"
-            )))
-        }
-    }
 }
 
 impl ToString for Uncomment {
