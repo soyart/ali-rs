@@ -45,6 +45,7 @@ enum ModeHook {
     Print,
 }
 
+#[derive(Debug)]
 struct ParseError {
     error: AliError,
     help_msg: String,
@@ -168,8 +169,8 @@ fn print_help(hook_key: &str, usage: &str) {
     println!("{}", format!("{}: {}", hook_key, usage).green());
 }
 
-fn parse_hook(k: &str, cmd: &str) -> Result<Box<dyn Hook>, AliError> {
-    let result = match k {
+fn parse_hook(k: &str, cmd: &str) -> Result<Box<dyn Hook>, ParseError> {
+    match k {
         KEY_WRAPPER_MNT | KEY_WRAPPER_NO_MNT => {
             wrappers::parse(k, cmd) //
         }
@@ -199,15 +200,6 @@ fn parse_hook(k: &str, cmd: &str) -> Result<Box<dyn Hook>, AliError> {
                 help_msg: "Use `--help` to see help".to_string(),
             })
         }
-    };
-
-    match result {
-        Err(ParseError { error, help_msg }) => {
-            print_help(k, &help_msg);
-            Err(error)
-        }
-
-        Ok(hook) => Ok(hook),
     }
 }
 
@@ -217,8 +209,14 @@ fn parse_validate_caller(
     root_location: &str,
 ) -> Result<Box<dyn Hook>, AliError> {
     let (key, _) = extract_key_and_parts(cmd)?;
-    let hook = parse_hook(&key, cmd)?;
+    let result = parse_hook(&key, cmd);
 
+    if let Err(ParseError { error, help_msg }) = result {
+        print_help(&key, &help_msg);
+        return Err(error);
+    }
+
+    let hook = result.unwrap();
     if hook.should_chroot() {
         handle_no_mountpoint(hook.as_ref(), caller, root_location)?;
     }
