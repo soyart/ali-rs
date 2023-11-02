@@ -5,20 +5,25 @@ use serde::{
 
 use super::constants::mkinitcpio::*;
 use super::{
+    wrap_bad_hook_cmd,
     ActionHook,
     Caller,
     Hook,
     ModeHook,
+    ParseError,
     KEY_MKINITCPIO,
     KEY_MKINITCPIO_PRINT,
 };
 use crate::errors::AliError;
 
-pub(super) fn parse(k: &str, cmd: &str) -> Result<Box<dyn Hook>, AliError> {
+const USAGE: &str =
+    "[boot_hook=<BOOT_HOOK_PRESET>] [hooks=<HOOKS>] [binaries=BINARIES]";
+
+pub(super) fn parse(k: &str, cmd: &str) -> Result<Box<dyn Hook>, ParseError> {
     match k {
         KEY_MKINITCPIO | KEY_MKINITCPIO_PRINT => {
             match HookMkinitcpio::try_from(cmd) {
-                Err(err) => Err(err),
+                Err(err) => Err(wrap_bad_hook_cmd(err, USAGE)),
                 Ok(hook) => Ok(Box::new(hook)),
             }
         }
@@ -45,7 +50,7 @@ impl Hook for HookMkinitcpio {
     }
 
     fn usage(&self) -> &'static str {
-        "[boot_hook=<BOOT_HOOK_PRESET>] [hooks=<HOOKS>] [binaries=BINARIES]"
+        USAGE
     }
 
     fn mode(&self) -> ModeHook {

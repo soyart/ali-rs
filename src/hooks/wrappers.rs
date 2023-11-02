@@ -1,3 +1,4 @@
+use super::wrap_bad_hook_cmd;
 use crate::errors::AliError;
 use crate::hooks::{
     self,
@@ -5,9 +6,13 @@ use crate::hooks::{
     Caller,
     Hook,
     ModeHook,
+    ParseError,
     KEY_WRAPPER_MNT,
     KEY_WRAPPER_NO_MNT,
 };
+
+const USAGE_MNT: &str = "<MOUNTPOINT> <HOOK_CMD>";
+const USAGE_NO_MNT: &str = "<HOOK_CMD>";
 
 struct Wrapper {
     inner: Box<dyn Hook>,
@@ -26,19 +31,19 @@ struct WrapperMnt(Wrapper, String);
 /// Force mountpoint value to "/"
 struct WrapperNoMnt(Wrapper);
 
-pub(super) fn parse(k: &str, cmd: &str) -> Result<Box<dyn Hook>, AliError> {
+pub(super) fn parse(k: &str, cmd: &str) -> Result<Box<dyn Hook>, ParseError> {
     match k {
         KEY_WRAPPER_MNT => {
             match WrapperMnt::try_from(cmd) {
                 Ok(hook) => Ok(Box::new(hook)),
-                Err(err) => Err(err),
+                Err(err) => Err(wrap_bad_hook_cmd(err, USAGE_MNT)),
             }
         }
 
         KEY_WRAPPER_NO_MNT => {
             match WrapperNoMnt::try_from(cmd) {
                 Ok(hook) => Ok(Box::new(hook)),
-                Err(err) => Err(err),
+                Err(err) => Err(wrap_bad_hook_cmd(err, USAGE_NO_MNT)),
             }
         }
 
@@ -52,7 +57,7 @@ impl Hook for WrapperMnt {
     }
 
     fn usage(&self) -> &'static str {
-        "<MOUNTPOINT> <HOOK_CMD>"
+        USAGE_MNT
     }
 
     fn mode(&self) -> ModeHook {

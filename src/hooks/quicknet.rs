@@ -3,15 +3,19 @@ use serde_json::json;
 use super::constants::quicknet::*;
 use super::{
     extract_key_and_parts,
+    wrap_bad_hook_cmd,
     ActionHook,
     Caller,
     Hook,
     ModeHook,
+    ParseError,
     KEY_QUICKNET,
     KEY_QUICKNET_PRINT,
 };
 use crate::errors::AliError;
 use crate::utils::shell;
+
+const USAGE: &str = "interface [dns <DNS_STREAM>]";
 
 #[derive(Debug, Clone, PartialEq)]
 struct QuickNet {
@@ -24,11 +28,11 @@ struct HookQuickNet {
     mode_hook: ModeHook,
 }
 
-pub(super) fn parse(k: &str, cmd: &str) -> Result<Box<dyn Hook>, AliError> {
+pub(super) fn parse(k: &str, cmd: &str) -> Result<Box<dyn Hook>, ParseError> {
     match k {
         KEY_QUICKNET | KEY_QUICKNET_PRINT => {
             match HookQuickNet::try_from(cmd) {
-                Err(err) => Err(err),
+                Err(err) => Err(wrap_bad_hook_cmd(err, USAGE)),
                 Ok(hook) => Ok(Box::new(hook)),
             }
         }
@@ -58,7 +62,7 @@ impl super::Hook for HookQuickNet {
     /// @quicknet dns 1.1.1.1 ens3
     /// ```
     fn usage(&self) -> &'static str {
-        "interface [dns <DNS_STREAM>]"
+        USAGE
     }
 
     fn mode(&self) -> ModeHook {

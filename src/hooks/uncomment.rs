@@ -1,16 +1,20 @@
 use serde_json::json;
 
 use super::{
+    wrap_bad_hook_cmd,
     ActionHook,
     Caller,
     Hook,
     ModeHook,
+    ParseError,
     KEY_UNCOMMENT,
     KEY_UNCOMMENT_ALL,
     KEY_UNCOMMENT_ALL_PRINT,
     KEY_UNCOMMENT_PRINT,
 };
 use crate::errors::AliError;
+
+const USAGE: &str = "<PATTERN> [marker <COMMENT_MARKER=\"#\">] FILE";
 
 #[derive(Clone)]
 pub(super) enum Mode {
@@ -31,7 +35,7 @@ struct HookUncomment {
     uc: Uncomment,
 }
 
-pub(super) fn parse(k: &str, cmd: &str) -> Result<Box<dyn Hook>, AliError> {
+pub(super) fn parse(k: &str, cmd: &str) -> Result<Box<dyn Hook>, ParseError> {
     if matches!(
         k,
         KEY_UNCOMMENT
@@ -40,7 +44,7 @@ pub(super) fn parse(k: &str, cmd: &str) -> Result<Box<dyn Hook>, AliError> {
             | KEY_UNCOMMENT_ALL_PRINT
     ) {
         match HookUncomment::try_from(cmd) {
-            Err(err) => Err(err),
+            Err(err) => Err(wrap_bad_hook_cmd(err, USAGE)),
             Ok(hook) => Ok(Box::new(hook)),
         }
     } else {
@@ -54,7 +58,7 @@ impl Hook for HookUncomment {
     }
 
     fn usage(&self) -> &'static str {
-        "<PATTERN> [marker <COMMENT_MARKER=\"#\">] FILE"
+        USAGE
     }
 
     fn mode(&self) -> ModeHook {

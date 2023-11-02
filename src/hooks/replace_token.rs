@@ -1,15 +1,18 @@
 use serde_json::json;
 
-use crate::errors::AliError;
-
 use super::{
+    wrap_bad_hook_cmd,
     ActionHook,
     Caller,
     Hook,
     ModeHook,
+    ParseError,
     KEY_REPLACE_TOKEN,
     KEY_REPLACE_TOKEN_PRINT,
 };
+use crate::errors::AliError;
+
+const USAGE: &str = "<TOKEN> <VALUE> <TEMPLATE> [OUTPUT]";
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct ReplaceToken {
@@ -24,11 +27,11 @@ struct HookReplaceToken {
     mode_hook: ModeHook,
 }
 
-pub(super) fn parse(k: &str, cmd: &str) -> Result<Box<dyn Hook>, AliError> {
+pub(super) fn parse(k: &str, cmd: &str) -> Result<Box<dyn Hook>, ParseError> {
     match k {
         KEY_REPLACE_TOKEN | KEY_REPLACE_TOKEN_PRINT => {
             match HookReplaceToken::try_from(cmd) {
-                Err(err) => Err(err),
+                Err(err) => Err(wrap_bad_hook_cmd(err, USAGE)),
                 Ok(hook) => Ok(Box::new(hook)),
             }
         }

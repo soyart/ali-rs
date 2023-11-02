@@ -45,25 +45,17 @@ enum ModeHook {
     Print,
 }
 
+struct ParseError {
+    error: AliError,
+    help_msg: String,
+}
+
 /// Hook represents a parsed, ready to use hook.
-///
-/// @TODO: Because we currently use Hook as a trait object,
-/// all of its method has `self` receiver, so before
-/// we can successfully parse a hook, we have 0 information
-/// about it, and `help` is therefore pretty useless.
 ///
 /// Other than [`run_hook`](Self::run_hook), which
 /// actually executes the hook, this trait also defines
 /// many methods for validating user calls to hooks.
 trait Hook {
-    /// (Default) Prints help to output
-    fn help(&self) {
-        println!(
-            "{}",
-            format!("{}: {}", self.hook_key(), self.usage()).green(),
-        );
-    }
-
     /// (Default) Prints yellow warning text to output
     fn eprintln_warn(&self, msg: &str) {
         eprintln!(
@@ -164,8 +156,20 @@ pub fn extract_key_and_parts_shlex(
     Ok((key, parts.unwrap()))
 }
 
+fn wrap_bad_hook_cmd(err: AliError, help_msg: &str) -> ParseError {
+    ParseError {
+        error: err,
+        help_msg: help_msg.to_string(),
+    }
+}
+
+/// (Default) Prints help to output
+fn print_help(hook_key: &str, usage: &str) {
+    println!("{}", format!("{}: {}", hook_key, usage).green());
+}
+
 fn parse_hook(k: &str, cmd: &str) -> Result<Box<dyn Hook>, AliError> {
-    match k {
+    let result = match k {
         KEY_WRAPPER_MNT | KEY_WRAPPER_NO_MNT => {
             wrappers::parse(k, cmd) //
         }
@@ -189,7 +193,21 @@ fn parse_hook(k: &str, cmd: &str) -> Result<Box<dyn Hook>, AliError> {
             uncomment::parse(k, cmd) //
         }
 
-        key => Err(AliError::BadArgs(format!("unknown hook key: {key}"))),
+        key => {
+            Err(ParseError {
+                error: AliError::BadHookCmd(format!("unknown hook key {key}")),
+                help_msg: "Use `--help` to see help".to_string(),
+            })
+        }
+    };
+
+    match result {
+        Err(ParseError { error, help_msg }) => {
+            print_help(k, &help_msg);
+            Err(error)
+        }
+
+        Ok(hook) => Ok(hook),
     }
 }
 
@@ -258,6 +276,20 @@ impl std::fmt::Display for Caller {
                 write!(f, "subcommand `hooks`") //
             }
         }
+    }
+}
+
+impl From<ParseError> for AliError {
+    fn from(value: ParseError) -> Self {
+        value.error
+    }
+}
+
+impl std::ops::Deref for ParseError {
+    type Target = AliError;
+
+    fn deref(&self) -> &Self::Target {
+        &self.error
     }
 }
 
