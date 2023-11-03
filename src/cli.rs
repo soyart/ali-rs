@@ -72,9 +72,23 @@ pub struct ArgsHooks {
     #[arg(num_args(0..))]
     pub hooks: Vec<String>,
 
+    /// Read hooks from manifest file
+    #[arg(long = "manifest")]
+    pub use_manifest: bool,
+
     /// Mountpoints of new system (required in some hooks)
     #[arg(short = 'm', long = "mountpoint")]
     pub mountpoint: Option<String>,
+
+    /// Dry-run, ali-rs will not commit any changes to disks,
+    /// and will just print steps to be performed
+    #[arg(
+        global = true,
+        short = 'n',
+        long = "dry-run",
+        default_value_t = false
+    )]
+    pub dry_run: bool,
 }
 
 fn validate_filename(name: &str) -> Result<String, AliError> {

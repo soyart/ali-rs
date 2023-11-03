@@ -18,6 +18,8 @@ pub fn run(cli_args: cli::Cli) -> Result<(), AliError> {
                 Ok(report) => Ok(println!("{}", report.to_json_string())),
             }
         }
-        Some(cli::Commands::Hooks(args_hooks)) => hooks::run(args_hooks),
+        Some(cli::Commands::Hooks(args_hooks)) => {
+            hooks::run(&cli_args.manifest, args_hooks)
+        }
     }
 }

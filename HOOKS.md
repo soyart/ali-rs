@@ -5,6 +5,8 @@ Hooks are special commands starting with `@<HOOK_NAME>`.
 Users register hooks inside manifest keys [`chroot`](https://github.com/soyart/ali/blob/master/ALI.md#key-chroot)
 and [`postinstall`](https://github.com/soyart/ali/blob/master/ALI.md#key-chroot).
 
+## Subcommand `hooks`
+
 Hooks can also be invoked separately via ali-rs `hooks` subcommand:
 
 ```shell
@@ -16,6 +18,28 @@ ali-rs hooks "@hook-1 foo bar" "@hook-2 baz 'hello, world!'"
 
 # Run 1 hook, in chroot to mountpoint /mnt
 ali-rs hooks "@hook-1 foo bar" --mountpoint "/mnt"
+```
+
+The `hooks` subcommand can also read hooks from manifest files
+with `--manifest` flags:
+
+```shell
+ali-rs hooks --manifest -f path/to/manifest.yaml
+```
+
+If `--manifest` flag is used, only hooks in manifest file is
+executed, otherwise, only the hook CLI strings are used.
+
+Normally, hooks are validated before being executed, and the
+`hooks` subcommand also comes with `--dry-run` flag which will
+only validates the hook but does not execute it.
+
+```shell
+# Validates "@hook-1 foo bar" with mountpoint /mnt
+ali-rs hooks --dry-run "@hook-1 foo bar" --mountpoint "/mnt"
+
+# Validates hooks in manifest file
+ali-rs hooks --dry-run --manifest -f path/to/manifest.yaml
 ```
 
 ## Print hooks
