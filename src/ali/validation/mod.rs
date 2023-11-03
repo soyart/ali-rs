@@ -13,6 +13,7 @@ use crate::utils::shell;
 
 pub fn validate(
     manifest: &Manifest,
+    install_location: &str,
     overwrite: bool,
 ) -> Result<ValidationReport, AliError> {
     let block_devs = blk::validate(manifest, overwrite)?;
@@ -48,7 +49,7 @@ pub fn validate(
         }
     }
 
-    hooks::validate(manifest)?;
+    hooks::validate(manifest, install_location)?;
 
     // Check timezone file in local installer
     let zone_info = format!(

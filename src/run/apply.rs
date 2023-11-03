@@ -1,5 +1,4 @@
 use std::collections::HashSet;
-use std::env;
 
 use crate::ali::{
     apply,
@@ -8,16 +7,13 @@ use crate::ali::{
     Manifest,
 };
 use crate::cli;
-use crate::constants::{
-    self,
-    defaults,
-};
 use crate::entity::report::Report;
 use crate::entity::stage;
 use crate::errors::AliError;
 
 pub(super) fn run(
     manifest_file: &str,
+    install_location: &str,
     args: cli::ArgsApply,
 ) -> Result<Report, AliError> {
     let start = std::time::Instant::now();
@@ -56,14 +52,14 @@ pub(super) fn run(
     let mut manifest = Manifest::from_yaml(&manifest_yaml)?;
 
     if !args.no_validate {
-        validation::validate(&manifest, args.overwrite)?;
+        validation::validate(&manifest, install_location, args.overwrite)?;
     }
 
     // Update manifest in some cases
     update_manifest(&mut manifest);
 
     // Apply manifest to location
-    let location = install_location();
+    let location = super::install_location();
     let stages_applied =
         apply::apply_manifest(&manifest, &location, skip_stages)?;
 
@@ -72,11 +68,6 @@ pub(super) fn run(
         summary: stages_applied,
         duration: start.elapsed(),
     })
-}
-
-fn install_location() -> String {
-    env::var(constants::ENV_ALI_LOC)
-        .unwrap_or(defaults::INSTALL_LOCATION.to_string())
 }
 
 // Update manifest to suit the manifest

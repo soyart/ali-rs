@@ -21,24 +21,20 @@ pub fn validate(
     overwrite: bool,
 ) -> Result<BlockDevPaths, AliError> {
     // Validate no duplicate mountpoints
-    if let Some(ref filesystems) = manifest.filesystems {
-        let mut known_mountpoints = HashSet::new();
-        for fs in filesystems {
-            if fs.mnt.is_none() {
-                continue;
-            }
-
-            let mnt = fs.mnt.clone().unwrap();
-            if mnt.as_str() == "/" {
+    if let Some(ref mountpoints) = manifest.mountpoints {
+        let mut dups = HashSet::new();
+        for mnt in mountpoints {
+            if mnt.dest.as_str() == "/" {
                 return Err(AliError::BadManifest(format!(
                     "bad mountpoint / for non-rootfs {}",
-                    fs.device,
+                    mnt.device,
                 )));
             }
 
-            if !known_mountpoints.insert(mnt.clone()) {
+            if !dups.insert(mnt.dest.as_str()) {
                 return Err(AliError::BadManifest(format!(
-                    "duplicate mountpoints {mnt}"
+                    "duplicate mountpoints {}",
+                    mnt.dest,
                 )));
             }
         }
@@ -385,14 +381,14 @@ mod tests {
                     location: None,
                     disks: None,
                     device_mappers: None,
-                    rootfs: ManifestRootFs(ManifestFs {
+                    rootfs: ManifestRootFs{
                         device: "/dev/fda1".into(),
-                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
-                    }),
+                    },
                     filesystems: None,
+                    mountpoints: None,
                     swap: Some(vec!["/dev/fake1p2".into()]),
                     pacstraps: None,
                     chroot: None,
@@ -433,14 +429,14 @@ mod tests {
                     location: None,
                     disks: None,
                     device_mappers: None,
-                    rootfs: ManifestRootFs(ManifestFs {
+                    rootfs: ManifestRootFs{
                         device: "/dev/myvg/mylv".into(),
-                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
-                    }),
+                    },
                     filesystems: None,
+                    mountpoints: None,
                     swap: Some(vec!["/dev/fake1p2".into()]),
                     pacstraps: None,
                     chroot: None,
@@ -486,14 +482,14 @@ mod tests {
                             name:  "cryptroot".into(),
                         }),
                     ]),
-                    rootfs: ManifestRootFs(ManifestFs {
+                    rootfs: ManifestRootFs{
                         device: "/dev/mapper/cryptroot".into(),
-                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
-                    }),
+                    },
                     filesystems: None,
+                    mountpoints: None,
                     swap: Some(vec!["/dev/myvg/mylv".into()]),
                     pacstraps: None,
                     chroot: None,
@@ -559,14 +555,14 @@ mod tests {
                             name:  "cryptswap".into(),
                         })
                     ]),
-                    rootfs: ManifestRootFs(ManifestFs {
+                    rootfs: ManifestRootFs {
                         device: "/dev/mapper/cryptroot".into(),
-                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
-                    }),
+                    },
                     filesystems: None,
+                    mountpoints: None,
                     swap: Some(vec!["/dev/mapper/cryptswap".into()]),
                     pacstraps: None,
                     chroot: None,
@@ -631,14 +627,14 @@ mod tests {
                             name:  "cryptswap".into(),
                         })
                     ]),
-                    rootfs: ManifestRootFs(ManifestFs {
+                    rootfs: ManifestRootFs{
                         device: "/dev/mapper/cryptroot".into(),
-                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
-                    }),
+                    },
                     filesystems: None,
+                    mountpoints: None,
                     swap: Some(vec!["/dev/mapper/cryptswap".into()]),
                     pacstraps: None,
                     chroot: None,
@@ -679,14 +675,14 @@ mod tests {
                     location: None,
                     disks: None,
                     device_mappers: None,
-                    rootfs: ManifestRootFs(ManifestFs {
+                    rootfs: ManifestRootFs{
                         device: "/dev/myvg/mylv".into(),
-                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
-                    }),
+                    },
                     filesystems: None,
+                    mountpoints: None,
                     swap: Some(vec!["/dev/fake1p2".into()]),
                     pacstraps: None,
                     chroot: None,
@@ -731,14 +727,14 @@ mod tests {
                             size: None,
                         }]),
                     })]),
-                    rootfs: ManifestRootFs(ManifestFs {
+                    rootfs: ManifestRootFs{
                         device: "/dev/myvg/mylv".into(),
-                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
-                    }),
+                    },
                     filesystems: None,
+                    mountpoints: None,
                     swap: Some(vec!["/dev/fake1p2".into()]),
                     pacstraps: None,
                     chroot: None,
@@ -774,14 +770,14 @@ mod tests {
                                 size: None,
                             }]),
                         })]),
-                        rootfs: ManifestRootFs(ManifestFs {
+                        rootfs: ManifestRootFs{
                             device: "/dev/myvg/mylv".into(),
-                            mnt: None,
                             fs_type: "btrfs".into(),
                             fs_opts: None,
                             mnt_opts: None,
-                        }),
+                        },
                         filesystems: None,
+                        mountpoints: None,
                         swap: Some(vec!["/dev/fake1p2".into()]),
                         pacstraps: None,
                         chroot: None,
@@ -831,14 +827,14 @@ mod tests {
                                 size: None,
                             }]),
                         })]),
-                        rootfs: ManifestRootFs(ManifestFs {
+                        rootfs: ManifestRootFs{
                             device: "/dev/myvg/mylv".into(),
-                            mnt: None,
                             fs_type: "btrfs".into(),
                             fs_opts: None,
                             mnt_opts: None,
-                        }),
+                        },
                         filesystems: None,
+                        mountpoints: None,
                         swap: Some(vec!["/dev/fake1p2".into()]),
                         pacstraps: None,
                         chroot: None,
@@ -897,14 +893,14 @@ mod tests {
                                 size: None,
                             }]),
                         })]),
-                        rootfs: ManifestRootFs(ManifestFs {
+                        rootfs: ManifestRootFs{
                             device: "/dev/myvg/mylv".into(),
-                            mnt: None,
                             fs_type: "btrfs".into(),
                             fs_opts: None,
                             mnt_opts:None,
-                        }),
+                        },
                         filesystems: None,
+                        mountpoints: None,
                         swap: Some(vec!["/dev/fake1p2".into()]),
                         pacstraps: None,
                         chroot: None,
@@ -976,14 +972,14 @@ mod tests {
                                 size: None,
                             }]),
                         })]),
-                        rootfs: ManifestRootFs(ManifestFs {
+                        rootfs: ManifestRootFs{
                             device: "/dev/myvg/mylv".into(),
-                            mnt: None,
                             fs_type: "btrfs".into(),
                             fs_opts: None,
                             mnt_opts: None,
-                        }),
+                        },
                         filesystems: None,
+                        mountpoints: None,
                         swap: Some(vec!["/dev/fake1p1".into()]),
                         pacstraps: None,
                         chroot: None,
@@ -1062,14 +1058,14 @@ mod tests {
                                 },
                             ]),
                         })]),
-                        rootfs: ManifestRootFs(ManifestFs {
+                        rootfs: ManifestRootFs{
                             device: "/dev/myvg/mylv".into(),
-                            mnt: None,
                             fs_type: "btrfs".into(),
                             fs_opts: None,
                             mnt_opts: None,
-                        }),
+                        },
                         filesystems: None,
+                        mountpoints: None,
                         swap: Some(vec!["/dev/myvg/myswap".into()]),
                         pacstraps: None,
                         chroot: None,
@@ -1155,14 +1151,14 @@ mod tests {
                                 }
                             ]),
                         })]),
-                        rootfs: ManifestRootFs(ManifestFs {
+                        rootfs: ManifestRootFs{
                             device: "/dev/myvg/mylv".into(),
-                            mnt: None,
                             fs_type: "btrfs".into(),
                             fs_opts: None,
                             mnt_opts: None,
-                        }),
+                        },
                         filesystems: None,
+                        mountpoints: None,
                         swap: Some(vec!["/dev/myvg/myswap".into()]),
                         pacstraps: None,
                         chroot: None,
@@ -1252,18 +1248,20 @@ mod tests {
                             },
                         ]),
                     })]),
-                    rootfs: ManifestRootFs(ManifestFs {
+                    rootfs: ManifestRootFs{
                         device: "/dev/mysatavg/rootlv".into(),
-                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
-                    }),
+                    },
                     filesystems: Some(vec![ManifestFs {
                         device: "/dev/mysatavg/datalv".into(),
-                        mnt: Some("/opt/data".into()),
                         fs_type: "xfs".into(),
                         fs_opts: None,
+                    }]),
+                    mountpoints: Some(vec![ManifestMountpoint {
+                        device: "/dev/mysatavg/datalv".into(),
+                        dest: "/opt/data".into(),
                         mnt_opts: None,
                     }]),
                     swap: Some(vec!["/dev/mynvmevg/myswap".into()]),
@@ -1289,14 +1287,14 @@ mod tests {
                     location: None,
                     disks: None,
                     device_mappers: None,
-                    rootfs: ManifestRootFs(ManifestFs {
+                    rootfs: ManifestRootFs {
                         device: "/dev/fda1".into(),
-                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
-                    }),
+                    },
                     filesystems: None,
+                    mountpoints: None,
                     swap: Some(vec!["/dev/fake1p2".into()]),
                     pacstraps: None,
                     chroot: None,
@@ -1321,14 +1319,14 @@ mod tests {
                     location: None,
                     disks: None,
                     device_mappers: None,
-                    rootfs: ManifestRootFs(ManifestFs {
+                    rootfs: ManifestRootFs{
                         device: "/dev/fda1".into(),
-                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
-                    }),
+                    },
                     filesystems: None,
+                    mountpoints: None,
                     swap: Some(vec!["/dev/fake1p2".into()]),
                     pacstraps: None,
                     chroot: None,
@@ -1374,14 +1372,14 @@ mod tests {
                             name:  "cryptroot".into(),
                         }),
                     ]),
-                    rootfs: ManifestRootFs(ManifestFs {
+                    rootfs: ManifestRootFs{
                         device: "/dev/mapper/cryptroot".into(),
-                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
-                    }),
+                    },
                     filesystems: None,
+                    mountpoints: None,
                     swap: Some(vec!["/dev/fake1p2".into()]),
                     pacstraps: None,
                     chroot: None,
@@ -1443,14 +1441,14 @@ mod tests {
                             name:  "cryptroot".into(),
                         }),
                     ]),
-                    rootfs: ManifestRootFs(ManifestFs {
+                    rootfs: ManifestRootFs{
                         device: "/dev/mapper/cryptroot".into(),
-                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
-                    }),
+                    },
                     filesystems: None,
+                    mountpoints: None,
                     swap: Some(vec!["/dev/myvg/mylv".into()]),
                     pacstraps: None,
                     chroot: None,
@@ -1500,14 +1498,14 @@ mod tests {
                         }]),
                         lvs: None,
                     })]),
-                    rootfs: ManifestRootFs(ManifestFs {
+                    rootfs: ManifestRootFs{
                         device: "/dev/myvg/mylv".into(),
-                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
-                    }),
+                    },
                     filesystems: None,
+                    mountpoints: None,
                     swap: Some(vec!["/dev/fake1p2".into()]),
                     pacstraps: None,
                     chroot: None,
@@ -1568,14 +1566,14 @@ mod tests {
                             },
                         ]),
                     })]),
-                    rootfs: ManifestRootFs(ManifestFs {
+                    rootfs: ManifestRootFs{
                         device: "/dev/myvg/mylv".into(),
-                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
-                    }),
+                    },
                     filesystems: None,
+                    mountpoints: None,
                     swap: Some(vec!["/dev/fake1p2".into()]),
                     pacstraps: None,
                     chroot: None,
@@ -1636,14 +1634,14 @@ mod tests {
                             },
                         ]),
                     })]),
-                    rootfs: ManifestRootFs(ManifestFs {
+                    rootfs: ManifestRootFs{
                         device: "/dev/myvg/mylv".into(),
-                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
-                    }),
+                    },
                     filesystems: None,
+                    mountpoints: None,
                     swap: Some(vec!["/dev/fake1p2".into()]),
                     pacstraps: None,
                     chroot: None,
@@ -1704,14 +1702,14 @@ mod tests {
                             },
                         ]),
                     })]),
-                    rootfs: ManifestRootFs(ManifestFs {
+                    rootfs: ManifestRootFs{
                         device: "/dev/myvg/mylv".into(),
-                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
-                    }),
+                    },
                     filesystems: None,
+                    mountpoints: None,
                     swap: Some(vec!["/dev/fake1p2".into()]),
                     pacstraps: None,
                     chroot: None,
@@ -1772,14 +1770,14 @@ mod tests {
                             },
                         ]),
                     })]),
-                    rootfs: ManifestRootFs(ManifestFs {
+                    rootfs: ManifestRootFs{
                         device: "/dev/myvg/mylv".into(),
-                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
-                    }),
+                    },
                     filesystems: None,
+                    mountpoints: None,
                     swap: Some(vec!["/dev/fake1p2".into()]),
                     pacstraps: None,
                     chroot: None,
@@ -1840,14 +1838,14 @@ mod tests {
                             },
                         ]),
                     })]),
-                    rootfs: ManifestRootFs(ManifestFs {
+                    rootfs: ManifestRootFs{
                         device: "/dev/myvg/mylv".into(),
-                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
-                    }),
+                    },
                     filesystems: None,
+                    mountpoints: None,
                     swap: Some(vec!["/dev/fake1p2".into()]),
                     pacstraps: None,
                     chroot: None,
@@ -1908,14 +1906,14 @@ mod tests {
                             },
                         ]),
                     })]),
-                    rootfs: ManifestRootFs(ManifestFs {
+                    rootfs: ManifestRootFs{
                         device: "/dev/myvg/mylv".into(),
-                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
-                    }),
+                    },
                     filesystems: None,
+                    mountpoints: None,
                     swap: Some(vec!["/dev/fake1p2".into()]),
                     pacstraps: None,
                     chroot: None,
@@ -1969,14 +1967,14 @@ mod tests {
                         ]),
                         lvs: None,
                     })]),
-                    rootfs: ManifestRootFs(ManifestFs {
+                    rootfs: ManifestRootFs{
                         device: "/dev/myvg/mylv".into(),
-                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
-                    }),
+                    },
                     filesystems: None,
+                    mountpoints: None,
                     swap: Some(vec!["/dev/fake1p2".into()]),
                     pacstraps: None,
                     chroot: None,
@@ -2031,21 +2029,25 @@ mod tests {
                             },
                         ]),
                     })]),
-                    rootfs: ManifestRootFs(ManifestFs {
+                    rootfs: ManifestRootFs{
                         device: "/dev/myvg/mylv".into(),
-                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
-                    }),
+                    },
                     filesystems: Some(vec![
                         ManifestFs {
-                            device: "/dev/myvg.mylv".into(),
-                            mnt: Some("/data".into()),
+                            device: "/dev/myvg/mylv".into(),
                             fs_type: "btrfs".into(),
                             fs_opts: None,
-                            mnt_opts: None,
                         },
+                    ]),
+                    mountpoints: Some(vec![
+                        ManifestMountpoint{
+                            device: "/dev/myvg/mylv".into(),
+                            dest: "/data".into(),
+                            mnt_opts: None,
+                        }
                     ]),
                     swap: Some(vec!["/dev/fake1p2".into()]),
                     pacstraps: None,
@@ -2116,14 +2118,14 @@ mod tests {
                             size: None,
                         }]),
                     })]),
-                    rootfs: ManifestRootFs(ManifestFs {
+                    rootfs: ManifestRootFs{
                         device: "/dev/myvg/mylv".into(),
-                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
-                    }),
+                    },
                     filesystems: None,
+                    mountpoints: None,
                     swap: Some(vec!["/dev/fake1p2".into()]), // Was already used as manifest PV
                     pacstraps: None,
                     chroot: None,
@@ -2191,14 +2193,14 @@ mod tests {
                             size: None,
                         }]),
                     })]),
-                    rootfs: ManifestRootFs(ManifestFs {
+                    rootfs: ManifestRootFs{
                         device: "/dev/myvg/mylv".into(),
-                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
-                    }),
+                    },
                     filesystems: None,
+                    mountpoints: None,
                     swap: Some(vec!["/dev/fake1p1".into()]),
                     pacstraps: None,
                     chroot: None,
@@ -2279,14 +2281,14 @@ mod tests {
                             size: None,
                         }]),
                     })]),
-                    rootfs: ManifestRootFs(ManifestFs {
+                    rootfs: ManifestRootFs{
                         device: "/dev/myvg/mylv".into(),
-                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
-                    }),
+                    },
                     filesystems: None,
+                    mountpoints: None,
                     swap: Some(vec!["/dev/myvg/myswap".into()]),
                     pacstraps: None,
                     chroot: None,
@@ -2374,14 +2376,14 @@ mod tests {
                             size: None,
                         }]),
                     })]),
-                    rootfs: ManifestRootFs(ManifestFs {
+                    rootfs: ManifestRootFs{
                         device: "/dev/myvg/mylv".into(),
-                        mnt: None,
                         fs_type: "btrfs".into(),
                         fs_opts: None,
                         mnt_opts: None,
-                    }),
+                    },
                     filesystems: None,
+                    mountpoints: None,
                     swap: Some(vec!["/dev/myvg/myswap".into()]),
                     pacstraps: None,
                     chroot: None,

@@ -32,6 +32,9 @@ pub struct Manifest {
     #[serde(alias = "fs", alias = "filesystem")]
     pub filesystems: Option<Vec<ManifestFs>>,
 
+    #[serde(alias = "mountpoint", alias = "mnt")]
+    pub mountpoints: Option<Vec<ManifestMountpoint>>,
+
     pub swap: Option<Vec<String>>,
 
     #[serde(
@@ -96,25 +99,33 @@ pub struct ManifestFs {
     #[serde(alias = "fstype", alias = "filesystem")]
     pub fs_type: String,
 
+    #[serde(alias = "fsopts", alias = "filesystem_options")]
+    pub fs_opts: Option<String>,
+}
+
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+pub struct ManifestMountpoint {
+    pub device: String,
+
     #[serde(alias = "mount", alias = "mount_point", alias = "location")]
-    pub mnt: Option<String>,
+    pub dest: String,
+
+    #[serde(alias = "mntopts", alias = "mount_options")]
+    pub mnt_opts: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ManifestRootFs {
+    pub device: String,
+
+    #[serde(alias = "fstype", alias = "filesystem")]
+    pub fs_type: String,
 
     #[serde(alias = "fsopts", alias = "filesystem_options")]
     pub fs_opts: Option<String>,
 
     #[serde(alias = "mntopts", alias = "mount_options")]
     pub mnt_opts: Option<String>,
-}
-
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
-pub struct ManifestRootFs(pub ManifestFs);
-
-impl std::ops::Deref for ManifestRootFs {
-    type Target = ManifestFs;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -151,6 +162,26 @@ pub enum Dm {
 
     #[serde(rename = "lvm")]
     Lvm(ManifestLvm),
+}
+
+impl From<ManifestRootFs> for ManifestFs {
+    fn from(rootfs: ManifestRootFs) -> Self {
+        ManifestFs {
+            device: rootfs.device,
+            fs_type: rootfs.fs_type,
+            fs_opts: rootfs.fs_opts,
+        }
+    }
+}
+
+impl From<ManifestRootFs> for ManifestMountpoint {
+    fn from(rootfs: ManifestRootFs) -> Self {
+        ManifestMountpoint {
+            device: rootfs.device,
+            dest: "/".to_string(),
+            mnt_opts: rootfs.mnt_opts,
+        }
+    }
 }
 
 #[inline]
