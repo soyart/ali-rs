@@ -3,6 +3,7 @@ mod mkinitcpio;
 mod quicknet;
 mod replace_token;
 mod uncomment;
+mod utils;
 mod wrappers;
 
 pub use self::constants::hook_keys::*;
