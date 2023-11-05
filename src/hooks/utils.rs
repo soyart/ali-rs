@@ -1,3 +1,5 @@
+use serde_json::json;
+
 use crate::errors::AliError;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -20,6 +22,18 @@ impl ReplaceToken {
         }
 
         Ok(s.replace(token, &self.value))
+    }
+}
+
+impl ToString for ReplaceToken {
+    fn to_string(&self) -> String {
+        json!({
+            "token": self.token,
+            "value": self.value,
+            "template": self.template,
+            "output": self.output,
+        })
+        .to_string()
     }
 }
 

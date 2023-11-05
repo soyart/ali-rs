@@ -1,7 +1,5 @@
-use serde_json::json;
-
-use super::utils::ReplaceToken;
 use super::{
+    utils,
     wrap_bad_hook_cmd,
     ActionHook,
     Caller,
@@ -16,7 +14,7 @@ use crate::errors::AliError;
 const USAGE: &str = "<TOKEN> <VALUE> <TEMPLATE> [OUTPUT]";
 
 struct HookReplaceToken {
-    rp: ReplaceToken,
+    rp: utils::ReplaceToken,
     mode_hook: ModeHook,
 }
 
@@ -111,7 +109,7 @@ impl TryFrom<&str> for HookReplaceToken {
 
         Ok(HookReplaceToken {
             mode_hook,
-            rp: ReplaceToken {
+            rp: utils::ReplaceToken {
                 token,
                 value,
                 template,
@@ -134,7 +132,7 @@ impl TryFrom<&str> for HookReplaceToken {
 fn apply_replace_token(
     hook_key: &str,
     mode_hook: &ModeHook,
-    r: &ReplaceToken,
+    r: &utils::ReplaceToken,
     root_location: &str,
 ) -> Result<ActionHook, AliError> {
     // @TODO: Read from remote template, e.g. with https or ssh
@@ -166,18 +164,6 @@ fn apply_replace_token(
     }
 
     Ok(ActionHook::ReplaceToken(r.to_string()))
-}
-
-impl ToString for ReplaceToken {
-    fn to_string(&self) -> String {
-        json!({
-            "token": self.token,
-            "value": self.value,
-            "template": self.template,
-            "output": self.output,
-        })
-        .to_string()
-    }
 }
 
 #[test]
@@ -221,7 +207,7 @@ fn test_parse_replace_token() {
     let tests = HashMap::from([
         (
             "@replace-token-print PORT 3322 /etc/ssh/sshd",
-            ReplaceToken{
+            utils::ReplaceToken{
                 token: String::from("PORT"),
                 value: String::from("3322"),
                 template: String::from("/etc/ssh/sshd"),
@@ -230,7 +216,7 @@ fn test_parse_replace_token() {
         ),
         (
             "@replace-token linux_boot \"loglevel=3 quiet root=/dev/archvg/archlv ro\" /etc/default/grub",
-            ReplaceToken{
+            utils::ReplaceToken{
                 token: String::from("linux_boot"),
                 value: String::from("loglevel=3 quiet root=/dev/archvg/archlv ro"),
                 template: String::from("/etc/default/grub"),
@@ -239,7 +225,7 @@ fn test_parse_replace_token() {
         ),
         (
             "@replace-token-print \"linux boot\" \"loglevel=3 quiet root=/dev/archvg/archlv ro\" /some/template /etc/default/grub",
-            ReplaceToken{
+            utils::ReplaceToken{
                 token: String::from("linux boot"),
                 value: String::from("loglevel=3 quiet root=/dev/archvg/archlv ro"),
                 template: String::from("/some/template"),
