@@ -277,7 +277,7 @@ fn test_parse_replace_token() {
 }
 
 #[test]
-fn test_uncomment() {
+fn test_replace_token() {
     use std::collections::HashMap;
 
     let tests = HashMap::from([
@@ -285,8 +285,8 @@ fn test_uncomment() {
             ReplaceToken {
                 token: String::from("PORT"),
                 value: String::from("3322"),
-                template: String::from("/etc/ssh/sshd"),
-                output: String::from("/etc/ssh/sshd"),
+                template: String::from("dummy.conf"),
+                output: String::from("dummy.conf"),
             },
             ("{{ PORT }} foo bar {{PORT}}", "3322 foo bar {{PORT}}"),
         ),
@@ -294,12 +294,24 @@ fn test_uncomment() {
             ReplaceToken {
                 token: String::from("foo"),
                 value: String::from("bar"),
-                template: String::from("/etc/ssh/sshd"),
-                output: String::from("/etc/ssh/sshd"),
+                template: String::from("dummy.conf"),
+                output: String::from("dummy.conf"),
             },
             (
                 "{{ bar }} {{ foo }} {{ bar }} foo <{{ foo }}>",
                 "{{ bar }} bar {{ bar }} foo <bar>",
+            ),
+        ),
+        (
+            ReplaceToken {
+                token: String::from("foo"),
+                value: String::from("bar"),
+                template: String::from("dummy.conf"),
+                output: String::from("dummy.conf"),
+            },
+            (
+                "{ foo } {{ foo }} {{ foo }_} foo bar {{{ foo }}} {{ foo {{ foo }}}}",
+                "{ foo } bar {{ foo }_} foo bar {bar} {{ foo bar}}",
             ),
         ),
     ]);
