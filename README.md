@@ -4,9 +4,12 @@
 ![Maintenance](https://img.shields.io/badge/maintenance-activly--developed-brightgreen.svg)
 
 ```text
-┏━┓╻  ╻   ┏━┓┏━┓
-┣━┫┃  ┃╺━╸┣┳┛┗━┓
-╹ ╹┗━╸╹   ╹┗╸┗━┛
+       .__  .__                         
+_____  |  | |__|         _______  ______
+\__  \ |  | |  |  ______ \_  __ \/  ___/
+ / __ \|  |_|  | /_____/  |  | \/\___ \ 
+(____  /____/__|          |__|  /____  >
+     \/                              \/ 
 ```
 
 Rust implementation of [ALI](https://github.com/soyart/ali),
