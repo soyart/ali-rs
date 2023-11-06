@@ -13,9 +13,12 @@ use crate::errors::AliError;
 
 const USAGE: &str = "<TOKEN> <VALUE> <TEMPLATE> [OUTPUT]";
 
+#[derive(Debug, PartialEq)]
 struct HookReplaceToken {
-    rp: utils::ReplaceToken,
     mode_hook: ModeHook,
+    output: String,
+    rp: utils::ReplaceToken,
+    template: String,
 }
 
 pub(super) fn parse(k: &str, cmd: &str) -> Result<Box<dyn Hook>, ParseError> {
@@ -66,6 +69,8 @@ impl Hook for HookReplaceToken {
             &self.mode_hook,
             &self.rp,
             root_location,
+            &self.template,
+            &self.output,
         )
     }
 }
@@ -109,12 +114,9 @@ impl TryFrom<&str> for HookReplaceToken {
 
         Ok(HookReplaceToken {
             mode_hook,
-            rp: utils::ReplaceToken {
-                token,
-                value,
-                template,
-                output,
-            },
+            template,
+            output,
+            rp: utils::ReplaceToken { token, value },
         })
     }
 }
@@ -134,30 +136,32 @@ fn apply_replace_token(
     mode_hook: &ModeHook,
     r: &utils::ReplaceToken,
     root_location: &str,
+    template: &str,
+    output: &str,
 ) -> Result<ActionHook, AliError> {
     // @TODO: Read from remote template, e.g. with https or ssh
-    let template = std::fs::read_to_string(&r.template).map_err(|err| {
+    let template = std::fs::read_to_string(template).map_err(|err| {
         AliError::HookError(format!(
             "{hook_key}: read template {}: {err}",
-            r.template
+            template
         ))
     })?;
 
     let result = r.replace(&template)?;
     match mode_hook {
         ModeHook::Print => {
-            println!("{}", result);
+            println!("{result}")
         }
+
         ModeHook::Normal => {
             let output_location = match root_location {
-                "/" => r.output.clone(),
-                _ => format!("/{root_location}/{}", r.output),
+                "/" => output.to_string(),
+                _ => format!("/{root_location}/{output}"),
             };
 
             std::fs::write(output_location, result).map_err(|err| {
                 AliError::HookError(format!(
-                    "{hook_key}: failed to write to output to {}: {err}",
-                    r.output
+                    "{hook_key}: failed to write to output to {output}: {err}",
                 ))
             })?;
         }
@@ -195,11 +199,7 @@ fn test_parse_replace_token() {
 
     for cmd in should_err {
         let result = HookReplaceToken::try_from(cmd);
-        if let Ok(HookReplaceToken {
-            rp: qn,
-            mode_hook: _,
-        }) = result
-        {
+        if let Ok(HookReplaceToken { rp: qn, .. }) = result {
             panic!("got ok result from bad arg {cmd}: {}", qn.to_string());
         }
     }
@@ -207,35 +207,44 @@ fn test_parse_replace_token() {
     let tests = HashMap::from([
         (
             "@replace-token-print PORT 3322 /etc/ssh/sshd",
-            utils::ReplaceToken{
-                token: String::from("PORT"),
-                value: String::from("3322"),
-                template: String::from("/etc/ssh/sshd"),
-                output: String::from("/etc/ssh/sshd"),
+            HookReplaceToken {
+                mode_hook: ModeHook::Print,
+                template: "/etc/ssh/sshd".to_string(),
+                output: "/etc/ssh/sshd".to_string(),
+                rp: utils::ReplaceToken {
+                    token: "PORT".to_string(),
+                    value: "3322".to_string(),
+                },
             }
         ),
         (
             "@replace-token linux_boot \"loglevel=3 quiet root=/dev/archvg/archlv ro\" /etc/default/grub",
-            utils::ReplaceToken{
-                token: String::from("linux_boot"),
-                value: String::from("loglevel=3 quiet root=/dev/archvg/archlv ro"),
-                template: String::from("/etc/default/grub"),
-                output: String::from("/etc/default/grub"),
-            },
+            HookReplaceToken {
+                mode_hook: ModeHook::Normal,
+                template: "/etc/default/grub".to_string(),
+                output: "/etc/default/grub".to_string(),
+                rp: utils::ReplaceToken {
+                    token: "linux_boot".to_string(),
+                    value: "loglevel=3 quiet root=/dev/archvg/archlv ro".to_string(),
+                },
+            }
         ),
         (
-            "@replace-token-print \"linux boot\" \"loglevel=3 quiet root=/dev/archvg/archlv ro\" /some/template /etc/default/grub",
-            utils::ReplaceToken{
-                token: String::from("linux boot"),
-                value: String::from("loglevel=3 quiet root=/dev/archvg/archlv ro"),
-                template: String::from("/some/template"),
-                output: String::from("/etc/default/grub"),
-            },
+            "@replace-token-print \"linux_boot\" \"loglevel=3 quiet root=/dev/archvg/archlv ro\" /some/template /etc/default/grub",
+            HookReplaceToken {
+                mode_hook: ModeHook::Print,
+                template: "/some/template".to_string(),
+                output: "/etc/default/grub".to_string(),
+                rp: utils::ReplaceToken {
+                    token: "linux_boot".to_string(),
+                    value: "loglevel=3 quiet root=/dev/archvg/archlv ro".to_string(),
+                },
+            }
         ),
     ]);
 
     for (cmd, expected) in tests {
         let actual = HookReplaceToken::try_from(cmd).unwrap();
-        assert_eq!(expected, actual.rp);
+        assert_eq!(expected, actual);
     }
 }

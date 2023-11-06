@@ -38,7 +38,7 @@ pub enum Caller {
 }
 
 /// ModeHook represents whether this hook command is print-only
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 enum ModeHook {
     /// May write changes to disk
     Normal,
@@ -289,6 +289,21 @@ impl std::ops::Deref for ParseError {
 
     fn deref(&self) -> &Self::Target {
         &self.error
+    }
+}
+
+impl std::fmt::Display for ModeHook {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Normal => write!(f, "hookmode-normal"),
+            Self::Print => write!(f, "hookmode-print"),
+        }
+    }
+}
+
+impl std::fmt::Debug for ModeHook {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        <Self as std::fmt::Display>::fmt(self, f)
     }
 }
 

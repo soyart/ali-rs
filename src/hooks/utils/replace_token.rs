@@ -4,20 +4,20 @@ use crate::errors::AliError;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct ReplaceToken {
+    /// Token to find and replace
+    /// If `token` is `foo` then it gets expanded to `{{ foo }}`
     pub token: String,
+    /// Value to be replaced with
     pub value: String,
-    pub template: String,
-    pub output: String,
 }
 
 impl ReplaceToken {
-    pub fn replace(&self, s: &str) -> Result<String, AliError> {
+    pub(crate) fn replace(&self, s: &str) -> Result<String, AliError> {
         let token = &format!("{} {} {}", "{{", self.token, "}}");
 
         if !s.contains(token) {
             return Err(AliError::BadHookCmd(format!(
-                "template {} does not contains token \"{token}\"",
-                self.template
+                "template does not contains token \"{token}\"",
             )));
         }
 
@@ -30,8 +30,6 @@ impl ToString for ReplaceToken {
         json!({
             "token": self.token,
             "value": self.value,
-            "template": self.template,
-            "output": self.output,
         })
         .to_string()
     }
@@ -46,8 +44,6 @@ fn test_replace_token() {
             ReplaceToken {
                 token: String::from("PORT"),
                 value: String::from("3322"),
-                template: String::from("dummy.conf"),
-                output: String::from("dummy.conf"),
             },
             ("{{ PORT }} foo bar {{PORT}}", "3322 foo bar {{PORT}}"),
         ),
@@ -55,8 +51,6 @@ fn test_replace_token() {
             ReplaceToken {
                 token: String::from("foo"),
                 value: String::from("bar"),
-                template: String::from("dummy.conf"),
-                output: String::from("dummy.conf"),
             },
             (
                 "{{ bar }} {{ foo }} {{ bar }} foo <{{ foo }}>",
@@ -67,8 +61,6 @@ fn test_replace_token() {
             ReplaceToken {
                 token: String::from("foo"),
                 value: String::from("bar"),
-                template: String::from("dummy.conf"),
-                output: String::from("dummy.conf"),
             },
             (
                 "{ foo } {{ foo }} {{ foo }_} foo bar {{{ foo }}} {{ foo {{ foo }}}}",
