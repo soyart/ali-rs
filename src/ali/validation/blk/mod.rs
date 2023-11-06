@@ -20,26 +20,6 @@ pub fn validate(
     manifest: &Manifest,
     overwrite: bool,
 ) -> Result<BlockDevPaths, AliError> {
-    // Validate no duplicate mountpoints
-    if let Some(ref mountpoints) = manifest.mountpoints {
-        let mut dups = HashSet::new();
-        for mnt in mountpoints {
-            if mnt.dest.as_str() == "/" {
-                return Err(AliError::BadManifest(format!(
-                    "bad mountpoint / for non-rootfs {}",
-                    mnt.device,
-                )));
-            }
-
-            if !dups.insert(mnt.dest.as_str()) {
-                return Err(AliError::BadManifest(format!(
-                    "duplicate mountpoints {}",
-                    mnt.dest,
-                )));
-            }
-        }
-    }
-
     let paths = match overwrite {
         true => {
             // Overwrite disk devices - we don't need to trace any existing devices,
@@ -84,6 +64,26 @@ fn validate_blk(
     mut sys_fs_ready_devs: HashMap<String, BlockDevType>, /* Maps fs-ready devs to their types (e.g. partition) */
     mut sys_lvms: HashMap<String, BlockDevPaths>, /* Maps pv path to all possible LV paths */
 ) -> Result<BlockDevPaths, AliError> {
+    // Validate no duplicate mountpoints
+    if let Some(ref mountpoints) = manifest.mountpoints {
+        let mut dups = HashSet::new();
+        for mnt in mountpoints {
+            if mnt.dest.as_str() == "/" {
+                return Err(AliError::BadManifest(format!(
+                    "bad mountpoint / for non-rootfs {}",
+                    mnt.device,
+                )));
+            }
+
+            if !dups.insert(mnt.dest.as_str()) {
+                return Err(AliError::BadManifest(format!(
+                    "duplicate mountpoints {}",
+                    mnt.dest,
+                )));
+            }
+        }
+    }
+
     // valids collects all valid known devices to be created in the manifest
     let mut valids = BlockDevPaths::new();
 
@@ -277,11 +277,15 @@ fn validate_blk(
         )));
     }
 
-    // Remove used up fs-ready device
+    // Remove used up fs-ready device (rootfs)
     fs_ready_devs.remove(&manifest.rootfs.device);
 
+    let mut fs_devs = HashSet::new();
+
+    // Validate that we will only create fs on fs_ready_devs
     if let Some(filesystems) = &manifest.filesystems {
         msg = "fs validation failed";
+
         for (i, fs) in filesystems.iter().enumerate() {
             if !fs_ready_devs.contains(&fs.device) {
                 return Err(AliError::BadManifest(format!(
@@ -294,6 +298,37 @@ fn validate_blk(
 
             // Remove used up fs-ready device
             fs_ready_devs.remove(&fs.device);
+
+            // Collect this fs to fs devices to later validate mountpoints
+            fs_devs.insert(&fs.device);
+        }
+    }
+
+    if let Some(mountpoints) = &manifest.mountpoints {
+        msg = "fs mount validation failed";
+
+        // Collect all system's FS
+        for dev in sys_fs_devs.keys() {
+            if fs_devs.insert(dev) {
+                continue;
+            }
+
+            return Err(AliError::AliRsBug(format!(
+                "duplicate fs-devs: {dev}"
+            )));
+        }
+
+        for (i, mnt) in mountpoints.iter().enumerate() {
+            if fs_devs.contains(&mnt.device) {
+                continue;
+            }
+
+            return Err(AliError::BadManifest(format!(
+                "{msg}: mountpoint {} for device #{} ({}) is not fs-ready",
+                mnt.dest,
+                i + 1,
+                mnt.device,
+            )));
         }
     }
 
