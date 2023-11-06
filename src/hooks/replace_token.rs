@@ -1,5 +1,8 @@
+use super::utils::{
+    self,
+    download,
+};
 use super::{
-    utils,
     wrap_bad_hook_cmd,
     ActionHook,
     Caller,
@@ -139,18 +142,26 @@ fn apply_replace_token(
     template: &str,
     output: &str,
 ) -> Result<ActionHook, AliError> {
-    // @TODO: Read from remote template, e.g. with https or ssh
-    let template = std::fs::read_to_string(template).map_err(|err| {
-        AliError::HookError(format!(
-            "{hook_key}: read template {}: {err}",
-            template
-        ))
-    })?;
+    let template_string =
+        // If the template is a valid remote URL, download it
+        if let Ok(downloader) = download::Downloader::new_from_url(template) {
+            downloader.download()
 
-    let result = r.replace(&template)?;
+        // Otherwise read from file
+        } else {
+            std::fs::read_to_string(template).map_err(|err| {
+                AliError::HookError(format!(
+                    "{hook_key}: read template {}: {err}",
+                    template
+                ))
+            })
+        }?;
+
+    let replaced = r.replace(&template_string)?;
+
     match mode_hook {
         ModeHook::Print => {
-            println!("{result}")
+            println!("{replaced}")
         }
 
         ModeHook::Normal => {
@@ -159,7 +170,7 @@ fn apply_replace_token(
                 _ => format!("/{root_location}/{output}"),
             };
 
-            std::fs::write(output_location, result).map_err(|err| {
+            std::fs::write(output_location, replaced).map_err(|err| {
                 AliError::HookError(format!(
                     "{hook_key}: failed to write to output to {output}: {err}",
                 ))
