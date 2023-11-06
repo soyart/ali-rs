@@ -228,3 +228,28 @@ files are written to the correct path under the mountpoint.
     - `lvm-on-luks` for booting to rootfs on LVM-on-LUKS
 
     - `luks-on-lvm` for booting to rootfs on LUKS-on-LVM
+
+### `@download`
+
+  Download a file from remote resource
+
+  Synopsis:
+
+  ```
+  @download <URL> <OUTFILE>
+  ```
+
+  Examples:
+
+  - Download using HTTPS to `/tmp/foo`
+
+    ```
+    @download https://example.com/foo /tmp/foo
+    ```
+    
+  - Download using SCP from host `bar` to `/tmp/foo`, where `bar` is a configured
+    host in `ssh.conf`.
+
+    ```
+    @download scp://bar:~/some/path /tmp/foo
+    ```
