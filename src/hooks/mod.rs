@@ -1,4 +1,5 @@
 mod constants;
+mod download;
 mod mkinitcpio;
 mod quicknet;
 mod replace_token;
@@ -26,6 +27,7 @@ pub enum ActionHook {
     ReplaceToken(String),
     Uncomment(String),
     Mkinitcpio(String),
+    Download(String),
 }
 
 /// Entrypoint for hooks.
@@ -187,6 +189,8 @@ fn parse_hook(k: &str, cmd: &str) -> Result<Box<dyn Hook>, ParseError> {
         KEY_REPLACE_TOKEN | KEY_REPLACE_TOKEN_PRINT => {
             replace_token::parse(k, cmd)
         }
+
+        KEY_DOWNLOAD | KEY_DOWNLOAD_PRINT => download::parse(k, cmd),
 
         KEY_UNCOMMENT
         | KEY_UNCOMMENT_PRINT
