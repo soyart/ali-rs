@@ -1,3 +1,4 @@
+use super::wrap_bad_hook_cmd;
 use crate::errors::AliError;
 use crate::hooks::{
     self,
@@ -5,35 +6,48 @@ use crate::hooks::{
     Caller,
     Hook,
     ModeHook,
+    ParseError,
     KEY_WRAPPER_MNT,
     KEY_WRAPPER_NO_MNT,
 };
 
-#[derive(Default)]
+const USAGE_MNT: &str = "<MOUNTPOINT> <HOOK_CMD>";
+const USAGE_NO_MNT: &str = "<HOOK_CMD>";
+
 struct Wrapper {
-    inner: Option<Box<dyn Hook>>,
+    inner: Box<dyn Hook>,
 }
 
 impl Wrapper {
     #[inline(always)]
     fn unwrap_inner(&self) -> &dyn Hook {
-        self.inner.as_ref().unwrap().as_ref()
+        self.inner.as_ref()
     }
 }
 
 /// Wraps another HookMetadata and enforce mountpoint to manifest mountpoint
-#[derive(Default)]
-struct WrapperMnt(Wrapper, Option<String>);
+struct WrapperMnt(Wrapper, String);
 
 /// Force mountpoint value to "/"
-#[derive(Default)]
 struct WrapperNoMnt(Wrapper);
 
-pub(super) fn init_from_key(key: &str) -> Box<dyn Hook> {
-    match key {
-        KEY_WRAPPER_MNT => Box::<WrapperMnt>::default(),
-        KEY_WRAPPER_NO_MNT => Box::<WrapperNoMnt>::default(),
-        _ => panic!("unknown key {key}"),
+pub(super) fn parse(k: &str, cmd: &str) -> Result<Box<dyn Hook>, ParseError> {
+    match k {
+        KEY_WRAPPER_MNT => {
+            match WrapperMnt::try_from(cmd) {
+                Ok(hook) => Ok(Box::new(hook)),
+                Err(err) => Err(wrap_bad_hook_cmd(err, USAGE_MNT)),
+            }
+        }
+
+        KEY_WRAPPER_NO_MNT => {
+            match WrapperNoMnt::try_from(cmd) {
+                Ok(hook) => Ok(Box::new(hook)),
+                Err(err) => Err(wrap_bad_hook_cmd(err, USAGE_NO_MNT)),
+            }
+        }
+
+        key => panic!("unknown key {key}"),
     }
 }
 
@@ -43,7 +57,7 @@ impl Hook for WrapperMnt {
     }
 
     fn usage(&self) -> &'static str {
-        "<MOUNTPOINT> <HOOK_CMD>"
+        USAGE_MNT
     }
 
     fn mode(&self) -> ModeHook {
@@ -62,20 +76,12 @@ impl Hook for WrapperMnt {
         self.unwrap_inner().abort_if_no_mount()
     }
 
-    fn parse_cmd(&mut self, s: &str) -> Result<(), AliError> {
-        parse_wrapper_mnt(self, s)
-    }
-
     fn run_hook(
         &self,
         caller: &Caller,
         root_location: &str,
     ) -> Result<ActionHook, AliError> {
-        if self.1.is_none() {
-            panic!("none mountpoint for WrapperMnt")
-        }
-
-        let mnt = self.1.clone().unwrap();
+        let mnt = self.1.clone();
 
         if mnt == "/" {
             self.eprintln_warn(&format!(
@@ -131,10 +137,6 @@ impl Hook for WrapperNoMnt {
         self.unwrap_inner().abort_if_no_mount()
     }
 
-    fn parse_cmd(&mut self, s: &str) -> Result<(), AliError> {
-        parse_wrapper_no_mnt(self, s)
-    }
-
     fn run_hook(
         &self,
         caller: &Caller,
@@ -144,85 +146,81 @@ impl Hook for WrapperNoMnt {
     }
 }
 
-fn parse_wrapper_mnt(w: &mut WrapperMnt, cmd: &str) -> Result<(), AliError> {
-    let (key, parts) = hooks::extract_key_and_parts(cmd)?;
-    if key != KEY_WRAPPER_MNT {
-        return Err(AliError::AliRsBug(format!(
-            "{}: bad key {key}",
-            w.base_key()
+impl TryFrom<&str> for WrapperMnt {
+    type Error = AliError;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        let (hook_key, parts) = super::extract_key_and_parts(s)?;
+        if hook_key != KEY_WRAPPER_MNT {
+            return Err(AliError::AliRsBug(format!(
+                "{KEY_WRAPPER_MNT}: bad key {hook_key}",
+            )));
+        }
+
+        let l = parts.len();
+        if l < 3 {
+            return Err(AliError::BadHookCmd(format!(
+                "{hook_key}: expected at least 2 arguments, got {l}",
+            )));
+        }
+
+        let mountpoint = parts.get(1).unwrap();
+
+        if !mountpoint.starts_with('/') {
+            return Err(AliError::BadHookCmd(format!(
+            "{hook_key}: mountpoint must be absolute, got relative path {mountpoint}",
         )));
+        }
+        if hooks::is_hook(mountpoint) {
+            return Err(AliError::BadHookCmd(format!(
+                "{hook_key}: expected mountpoint, found hook key {mountpoint}",
+            )));
+        }
+
+        let inner_cmd = parts[2..].join(" ");
+
+        let (inner_key, _) = hooks::extract_key_and_parts(&inner_cmd)?;
+        let inner_hook = hooks::parse_hook(&inner_key, &inner_cmd)?;
+
+        Ok(WrapperMnt(
+            Wrapper { inner: inner_hook },
+            mountpoint.to_string(),
+        ))
     }
-
-    let l = parts.len();
-    if l < 3 {
-        return Err(AliError::BadHookCmd(format!(
-            "{}: expected at least 2 arguments, got {l}",
-            w.base_key()
-        )));
-    }
-
-    let mountpoint = parts.get(1).unwrap();
-
-    if !mountpoint.starts_with('/') {
-        return Err(AliError::BadHookCmd(format!(
-            "{}: mountpoint must be absolute, got relative path {mountpoint}",
-            w.base_key()
-        )));
-    }
-    if hooks::is_hook(mountpoint) {
-        return Err(AliError::BadHookCmd(format!(
-            "{}: expected mountpoint, found hook key {mountpoint}",
-            w.base_key()
-        )));
-    }
-
-    let inner_cmd = parts[2..].join(" ");
-
-    let (inner_key, _) = hooks::extract_key_and_parts(&inner_cmd)?;
-    let mut inner_meta = hooks::init_blank_hook(&inner_key)?;
-
-    inner_meta.parse_cmd(&inner_cmd)?;
-
-    w.inner = Some(inner_meta);
-    w.1 = Some(mountpoint.to_owned());
-
-    Ok(())
 }
 
-fn parse_wrapper_no_mnt(w: &mut WrapperNoMnt, s: &str) -> Result<(), AliError> {
-    let (key, parts) = hooks::extract_key_and_parts(s)?;
-    if key.as_str() != KEY_WRAPPER_NO_MNT {
-        return Err(AliError::AliRsBug(format!(
-            "{}: bad key {key}",
-            w.base_key()
-        )));
+impl TryFrom<&str> for WrapperNoMnt {
+    type Error = AliError;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        let (hook_key, parts) = hooks::extract_key_and_parts(s)?;
+        if hook_key.as_str() != KEY_WRAPPER_NO_MNT {
+            return Err(AliError::AliRsBug(format!(
+                "{KEY_WRAPPER_MNT}: bad key {hook_key}",
+            )));
+        }
+
+        let l = parts.len();
+        if l < 1 {
+            return Err(AliError::AliRsBug(format!(
+                "{hook_key}: got no inner hook",
+            )));
+        }
+
+        let inner_cmd_parts = &parts[1..];
+        let inner_cmd = parts[1..].join(" ");
+        let inner_key = inner_cmd_parts.first();
+
+        if inner_key.is_none() {
+            return Err(AliError::BadHookCmd(format!(
+                "{hook_key}: missing inner hook key",
+            )));
+        }
+
+        let inner_hook = hooks::parse_hook(inner_key.unwrap(), &inner_cmd)?;
+
+        Ok(WrapperNoMnt(Wrapper { inner: inner_hook }))
     }
-
-    let l = parts.len();
-    if l < 1 {
-        return Err(AliError::AliRsBug(format!(
-            "{}: got no inner hook",
-            w.base_key()
-        )));
-    }
-
-    let inner_cmd_parts = &parts[1..];
-    let inner_cmd = parts[1..].join(" ");
-    let inner_key = inner_cmd_parts.first();
-
-    if inner_key.is_none() {
-        return Err(AliError::BadHookCmd(format!(
-            "{}: missing inner hook key",
-            w.base_key()
-        )));
-    }
-
-    let mut inner_meta = hooks::init_blank_hook(inner_key.unwrap())?;
-    inner_meta.parse_cmd(&inner_cmd)?;
-
-    w.inner = Some(inner_meta);
-
-    Ok(())
 }
 
 impl std::ops::Deref for WrapperMnt {
@@ -259,26 +257,24 @@ mod tests {
         WrapperMnt,
         WrapperNoMnt,
     };
+    use crate::errors::AliError;
     use crate::hooks::Hook;
 
-    fn test_parse<T: Hook>(
-        f: fn() -> T,
-        should_pass: Vec<&str>,
-        should_err: Vec<&str>,
+    fn test_parse<'a, T: Hook + TryFrom<&'a str, Error = AliError>>(
+        should_pass: Vec<&'a str>,
+        should_err: Vec<&'a str>,
     ) {
         for s in should_pass {
-            let mut w = f();
-            let result = w.parse_cmd(s);
+            let w = T::try_from(s);
 
-            if let Err(err) = result {
+            if let Err(err) = w {
                 eprintln!("got error from {s}");
-                panic!("unexpected error: {err}");
+                panic!("unexpected error: {err:?}");
             }
         }
 
         for s in should_err {
-            let mut w = f();
-            let result = w.parse_cmd(s);
+            let result = T::try_from(s);
 
             if result.is_ok() {
                 eprintln!("unexpected ok result from {s}");
@@ -302,7 +298,7 @@ mod tests {
             "@mnt /mnt @quicknet", // Bad inner hook
         ];
 
-        test_parse(WrapperMnt::default, should_pass, should_err);
+        test_parse::<WrapperMnt>(should_pass, should_err);
     }
 
     #[test]
@@ -320,6 +316,6 @@ mod tests {
             "@no-mnt @uncomment /mnt/etc/sshd_conf", // Bad @uncomment arg
         ];
 
-        test_parse(WrapperNoMnt::default, should_pass, should_err);
+        test_parse::<WrapperNoMnt>(should_pass, should_err);
     }
 }

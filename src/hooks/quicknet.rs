@@ -2,36 +2,43 @@ use serde_json::json;
 
 use super::constants::quicknet::*;
 use super::{
+    extract_key_and_parts,
+    wrap_bad_hook_cmd,
     ActionHook,
     Caller,
     Hook,
     ModeHook,
+    ParseError,
     KEY_QUICKNET,
     KEY_QUICKNET_PRINT,
 };
 use crate::errors::AliError;
 use crate::utils::shell;
 
-#[derive(Clone)]
+const USAGE: &str = "interface [dns <DNS_STREAM>]";
+
+#[derive(Debug, Clone, PartialEq)]
 struct QuickNet {
     interface: String,
     dns_upstream: Option<String>,
 }
 
 struct HookQuickNet {
-    qn: Option<QuickNet>,
+    qn: QuickNet,
     mode_hook: ModeHook,
 }
 
-pub(super) fn init_from_key(key: &str) -> Box<dyn Hook> {
-    Box::new(HookQuickNet {
-        qn: None,
-        mode_hook: match key {
-            KEY_QUICKNET => ModeHook::Normal,
-            KEY_QUICKNET_PRINT => ModeHook::Print,
-            key => panic!("unexpected key {key}"),
-        },
-    })
+pub(super) fn parse(k: &str, cmd: &str) -> Result<Box<dyn Hook>, ParseError> {
+    match k {
+        KEY_QUICKNET | KEY_QUICKNET_PRINT => {
+            match HookQuickNet::try_from(cmd) {
+                Err(err) => Err(wrap_bad_hook_cmd(err, USAGE)),
+                Ok(hook) => Ok(Box::new(hook)),
+            }
+        }
+
+        key => panic!("unknown key {key}"),
+    }
 }
 
 impl super::Hook for HookQuickNet {
@@ -55,7 +62,7 @@ impl super::Hook for HookQuickNet {
     /// @quicknet dns 1.1.1.1 ens3
     /// ```
     fn usage(&self) -> &'static str {
-        "interface [dns <DNS_STREAM>]"
+        USAGE
     }
 
     fn mode(&self) -> ModeHook {
@@ -74,13 +81,6 @@ impl super::Hook for HookQuickNet {
         true
     }
 
-    fn parse_cmd(&mut self, s: &str) -> Result<(), AliError> {
-        let result = parse_quicknet(&self.hook_key(), s)?;
-        self.qn = Some(result);
-
-        Ok(())
-    }
-
     fn run_hook(
         &self,
         _caller: &Caller,
@@ -89,76 +89,82 @@ impl super::Hook for HookQuickNet {
         apply_quicknet(
             &self.hook_key(),
             &self.mode_hook,
-            self.qn.as_ref().unwrap(),
+            &self.qn,
             root_location,
         )
     }
 }
 
-fn parse_quicknet(hook_key: &str, cmd: &str) -> Result<QuickNet, AliError> {
-    let (key, parts) = super::extract_key_and_parts(cmd)?;
-    if !matches!(key.as_str(), KEY_QUICKNET | KEY_QUICKNET_PRINT,) {
-        return Err(AliError::BadHookCmd(format!(
-            "{hook_key}: bad cmd: 1st part does not start with \"@quicknet\""
-        )));
-    }
+impl TryFrom<&str> for HookQuickNet {
+    type Error = AliError;
 
-    match parts.len() {
-        2 => {
-            let interface = parts.get(1).unwrap();
-            if interface == "dns" {
-                return Err(AliError::BadHookCmd(format!(
-                    "{hook_key}: got only keyword `dns`"
-                )));
-            }
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        let (hook_key, parts) = extract_key_and_parts(s)?;
+        let mode_hook = match hook_key.as_str() {
+            KEY_QUICKNET => ModeHook::Normal,
+            KEY_QUICKNET_PRINT => ModeHook::Print,
+            key => panic!("unexpected key {key}"),
+        };
 
-            Ok(QuickNet {
-                interface: interface.to_string(),
-                dns_upstream: None,
-            })
-        }
-
-        4 => {
-            let mut dns_keyword_idx = None;
-            for (i, word) in parts.iter().enumerate() {
-                if *word == "dns" {
-                    dns_keyword_idx = Some(i);
-
-                    break;
-                }
-            }
-
-            if dns_keyword_idx.is_none() {
-                return Err(AliError::BadHookCmd(format!(
-                    "{hook_key}: missing argument keyword \"dns\""
-                )));
-            }
-            // #cmd dns upstream inf  1
-            // #cmd inf dns upstream  2
-            let dns_keyword_idx = dns_keyword_idx.unwrap();
-            let interface_idx = {
-                if dns_keyword_idx == 1 {
-                    3
-                } else if dns_keyword_idx == 2 {
-                    1
-                } else {
+        let qn = match parts.len() {
+            2 => {
+                let interface = parts.get(1).unwrap();
+                if interface == "dns" {
                     return Err(AliError::BadHookCmd(format!(
-                        "{hook_key}: \"dns\" keyword in bad position: {dns_keyword_idx}"
+                        "{hook_key}: got only keyword `dns`"
                     )));
                 }
-            };
 
-            Ok(QuickNet {
-                interface: parts[interface_idx].to_string(),
-                dns_upstream: Some(parts[dns_keyword_idx + 1].to_string()),
-            })
-        }
+                QuickNet {
+                    interface: interface.to_string(),
+                    dns_upstream: None,
+                }
+            }
 
-        l => {
-            Err(AliError::BadHookCmd(format!(
-                "{hook_key}: unexpected cmd parts length: {l}"
-            )))
-        }
+            4 => {
+                let mut dns_keyword_idx = None;
+                for (i, word) in parts.iter().enumerate() {
+                    if *word == "dns" {
+                        dns_keyword_idx = Some(i);
+
+                        break;
+                    }
+                }
+
+                if dns_keyword_idx.is_none() {
+                    return Err(AliError::BadHookCmd(format!(
+                        "{hook_key}: missing argument keyword \"dns\""
+                    )));
+                }
+                // #cmd dns upstream inf  1
+                // #cmd inf dns upstream  2
+                let dns_keyword_idx = dns_keyword_idx.unwrap();
+                let interface_idx = {
+                    if dns_keyword_idx == 1 {
+                        3
+                    } else if dns_keyword_idx == 2 {
+                        1
+                    } else {
+                        return Err(AliError::BadHookCmd(format!(
+                        "{hook_key}: \"dns\" keyword in bad position: {dns_keyword_idx}"
+                    )));
+                    }
+                };
+
+                QuickNet {
+                    interface: parts[interface_idx].to_string(),
+                    dns_upstream: Some(parts[dns_keyword_idx + 1].to_string()),
+                }
+            }
+
+            l => {
+                return Err(AliError::BadHookCmd(format!(
+                    "{hook_key}: unexpected cmd parts length: {l}"
+                )));
+            }
+        };
+
+        Ok(HookQuickNet { qn, mode_hook })
     }
 }
 
@@ -222,31 +228,56 @@ impl QuickNet {
 #[test]
 fn test_parse_quicknet() {
     let should_pass = vec![
-        "@quicknet eth0",
-        "@quicknet inf",
-        "@quicknet dns 1.1.1.1 eth0",
-        "@quicknet eth0 dns 1.1.1.1",
+        (
+            "@quicknet eth0",
+            QuickNet {
+                interface: "eth0".into(),
+                dns_upstream: None,
+            },
+        ),
+        (
+            "@quicknet inf",
+            QuickNet {
+                interface: "inf".into(),
+                dns_upstream: None,
+            },
+        ),
+        (
+            "@quicknet dns 1.1.1.1 eth0",
+            QuickNet {
+                interface: "eth0".into(),
+                dns_upstream: Some("1.1.1.1".into()),
+            },
+        ),
+        (
+            "@quicknet eth0 dns 1.1.1.1",
+            QuickNet {
+                interface: "eth0".into(),
+                dns_upstream: Some("1.1.1.1".into()),
+            },
+        ),
     ];
 
-    let should_err = vec![
-        "eth0",
-        "@quicknet",
-        "@quicknet dns",
-        "@quicknet eth0 1.1.1.1 dns",
-        "#quickmet eth0 dns",
-    ];
+    let should_err =
+        vec!["@quicknet", "@quicknet dns", "@quicknet eth0 1.1.1.1 dns"];
 
-    for cmd in should_pass {
-        let result = parse_quicknet(KEY_QUICKNET, cmd);
-        if let Err(err) = result {
-            panic!("got error from cmd {cmd}: {err}");
+    for (cmd, expected_qn) in should_pass {
+        let hook_result = HookQuickNet::try_from(cmd);
+        if let Err(ref err) = hook_result {
+            eprintln!("unexpected error result from {cmd}: {err}");
         }
+
+        let qn = hook_result.unwrap().qn;
+        assert_eq!(expected_qn, qn);
     }
 
-    for cmd in should_err {
-        let result = parse_quicknet(KEY_QUICKNET, cmd);
-        if let Ok(qn) = result {
-            panic!("got ok result from bad arg {cmd}: {}", qn.to_string());
+    for cmd in &should_err {
+        let hook_result = HookQuickNet::try_from(*cmd);
+        if let Ok(hook) = hook_result {
+            panic!(
+                "unexpected ok result from bad arg {cmd}: {}",
+                hook.qn.to_string()
+            );
         }
     }
 }
@@ -295,8 +326,8 @@ DNS=8.8.8.8
     ]);
 
     for (cmd, expected) in tests {
-        let qn = parse_quicknet(KEY_QUICKNET, cmd).unwrap();
-        let s = qn.encode_to_string();
+        let hook = HookQuickNet::try_from(cmd).unwrap();
+        let s = hook.qn.encode_to_string();
 
         assert_eq!(expected, s);
     }

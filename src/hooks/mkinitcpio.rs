@@ -5,24 +5,31 @@ use serde::{
 
 use super::constants::mkinitcpio::*;
 use super::{
+    wrap_bad_hook_cmd,
     ActionHook,
     Caller,
     Hook,
     ModeHook,
+    ParseError,
     KEY_MKINITCPIO,
     KEY_MKINITCPIO_PRINT,
 };
 use crate::errors::AliError;
 
-pub(super) fn init_from_key(key: &str) -> Box<dyn Hook> {
-    Box::new(HookMkinitcpio {
-        conf: None,
-        mode_hook: match key {
-            KEY_MKINITCPIO => ModeHook::Normal,
-            KEY_MKINITCPIO_PRINT => ModeHook::Print,
-            key => panic!("unexpected key {key}"),
-        },
-    })
+const USAGE: &str =
+    "[boot_hook=<BOOT_HOOK_PRESET>] [hooks=<HOOKS>] [binaries=BINARIES]";
+
+pub(super) fn parse(k: &str, cmd: &str) -> Result<Box<dyn Hook>, ParseError> {
+    match k {
+        KEY_MKINITCPIO | KEY_MKINITCPIO_PRINT => {
+            match HookMkinitcpio::try_from(cmd) {
+                Err(err) => Err(wrap_bad_hook_cmd(err, USAGE)),
+                Ok(hook) => Ok(Box::new(hook)),
+            }
+        }
+
+        key => panic!("unknown key {key}"),
+    }
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -33,7 +40,7 @@ struct Mkinitcpio {
 }
 
 struct HookMkinitcpio {
-    conf: Option<Mkinitcpio>,
+    conf: Mkinitcpio,
     mode_hook: ModeHook,
 }
 
@@ -43,7 +50,7 @@ impl Hook for HookMkinitcpio {
     }
 
     fn usage(&self) -> &'static str {
-        "[boot_hook=<BOOT_HOOK_PRESET>] [hooks=<HOOKS>] [binaries=BINARIES]"
+        USAGE
     }
 
     fn mode(&self) -> ModeHook {
@@ -62,13 +69,6 @@ impl Hook for HookMkinitcpio {
         true
     }
 
-    fn parse_cmd(&mut self, s: &str) -> Result<(), AliError> {
-        let result = parse_mkinitcpio(&self.hook_key(), s)?;
-        self.conf = Some(result);
-
-        Ok(())
-    }
-
     fn run_hook(
         &self,
         caller: &Caller,
@@ -77,10 +77,82 @@ impl Hook for HookMkinitcpio {
         apply_mkinitcpio(
             &self.hook_key(),
             &self.mode_hook,
-            self.conf.clone().unwrap(),
+            self.conf.clone(),
             caller,
             root_location,
         )
+    }
+}
+
+impl TryFrom<&str> for HookMkinitcpio {
+    type Error = AliError;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        let (hook_key, parts) = super::extract_key_and_parts_shlex(s)?;
+        let mode_hook = match hook_key.as_str() {
+            KEY_MKINITCPIO => ModeHook::Normal,
+            KEY_MKINITCPIO_PRINT => ModeHook::Print,
+            _ => {
+                return Err(AliError::BadHookCmd(format!(
+                    "unexpected key {hook_key}"
+                )));
+            }
+        };
+
+        if parts.len() < 2 {
+            return Err(AliError::BadHookCmd(format!(
+                "{hook_key}: need at least 1 argument"
+            )));
+        }
+
+        let args = &parts[1..];
+        let keys_vals = args
+            .iter()
+            .filter_map(|arg| arg.split_once('='))
+            .collect::<Vec<_>>();
+
+        let mut mkinitcpio = Mkinitcpio::default();
+        let mut dups = std::collections::HashSet::new();
+
+        for (k, v) in keys_vals {
+            let duplicate_key = !dups.insert(k);
+            if duplicate_key {
+                return Err(AliError::AliRsBug(format!(
+                    "{hook_key}: duplicate key {k}"
+                )));
+            }
+
+            match k {
+                "boot_hook" => {
+                    let boot_hook = decide_boot_hooks(&hook_key, v)?;
+                    mkinitcpio.boot_hook = Some(boot_hook);
+
+                    continue;
+                }
+                "binaries" => {
+                    let binaries = split_whitespace_to_strings(v);
+                    mkinitcpio.binaries = Some(binaries);
+
+                    continue;
+                }
+                "hooks" => {
+                    let hooks = split_whitespace_to_strings(v);
+                    mkinitcpio.hooks = Some(hooks);
+                }
+                _ => continue,
+            }
+        }
+
+        if mkinitcpio.boot_hook.is_some() && mkinitcpio.hooks.is_some() {
+            return Err(AliError::BadHookCmd(format!(
+                "{hook_key}: boot_hook and hooks are mutually exclusive, but found both"
+            )));
+        }
+
+        Ok(HookMkinitcpio {
+            conf: mkinitcpio,
+            mode_hook,
+        })
     }
 }
 
@@ -176,61 +248,6 @@ fn decide_boot_hooks(
     Err(AliError::BadHookCmd(format!(
         "{hook_key}: no such boot_hook preset: {v}"
     )))
-}
-
-fn parse_mkinitcpio(hook_key: &str, s: &str) -> Result<Mkinitcpio, AliError> {
-    let parts = shlex::split(s).unwrap();
-    if parts.len() < 2 {
-        return Err(AliError::BadHookCmd(format!(
-            "{hook_key}: need at least 1 argument"
-        )));
-    }
-
-    let args = &parts[1..];
-    let keys_vals = args
-        .iter()
-        .filter_map(|arg| arg.split_once('='))
-        .collect::<Vec<_>>();
-
-    let mut mkinitcpio = Mkinitcpio::default();
-    let mut dups = std::collections::HashSet::new();
-
-    for (k, v) in keys_vals {
-        let duplicate_key = !dups.insert(k);
-        if duplicate_key {
-            return Err(AliError::AliRsBug(format!(
-                "{hook_key}: duplicate key {k}"
-            )));
-        }
-
-        match k {
-            "boot_hook" => {
-                let boot_hook = decide_boot_hooks(hook_key, v)?;
-                mkinitcpio.boot_hook = Some(boot_hook);
-
-                continue;
-            }
-            "binaries" => {
-                let binaries = split_whitespace_to_strings(v);
-                mkinitcpio.binaries = Some(binaries);
-
-                continue;
-            }
-            "hooks" => {
-                let hooks = split_whitespace_to_strings(v);
-                mkinitcpio.hooks = Some(hooks);
-            }
-            _ => continue,
-        }
-    }
-
-    if mkinitcpio.boot_hook.is_some() && mkinitcpio.hooks.is_some() {
-        return Err(AliError::BadHookCmd(format!(
-            "{hook_key}: boot_hook and hooks are mutually exclusive, but found both"
-        )));
-    }
-
-    Ok(mkinitcpio)
 }
 
 fn split_whitespace_to_strings(s: &str) -> Vec<String> {

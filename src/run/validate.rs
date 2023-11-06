@@ -8,7 +8,7 @@ pub(super) fn run(manifest_file: &str) -> Result<(), AliError> {
     let start = std::time::Instant::now();
 
     let manifest_yaml = std::fs::read_to_string(manifest_file)
-        .map_err(|err| AliError::NoSuchFile(err, manifest_file.to_string()))?;
+        .map_err(|err| AliError::FileError(err, manifest_file.to_string()))?;
 
     let manifest = Manifest::from_yaml(&manifest_yaml)?;
 

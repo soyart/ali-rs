@@ -11,6 +11,8 @@ pub mod hook_keys {
     pub const KEY_UNCOMMENT_ALL_PRINT: &str = "@uncomment-all-print";
     pub const KEY_REPLACE_TOKEN: &str = "@replace-token";
     pub const KEY_REPLACE_TOKEN_PRINT: &str = "@replace-token-print";
+    pub const KEY_DOWNLOAD: &str = "@download";
+    pub const KEY_DOWNLOAD_PRINT: &str = "@download-print";
 }
 
 pub mod quicknet {

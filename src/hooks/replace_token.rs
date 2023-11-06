@@ -1,38 +1,40 @@
-use serde_json::json;
-
-use crate::errors::AliError;
-
+use super::utils::{
+    self,
+    download,
+};
 use super::{
+    wrap_bad_hook_cmd,
     ActionHook,
     Caller,
     Hook,
     ModeHook,
+    ParseError,
     KEY_REPLACE_TOKEN,
     KEY_REPLACE_TOKEN_PRINT,
 };
+use crate::errors::AliError;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct ReplaceToken {
-    token: String,
-    value: String,
-    template: String,
-    output: String,
-}
+const USAGE: &str = "<TOKEN> <VALUE> <TEMPLATE> [OUTPUT]";
 
+#[derive(Debug, PartialEq)]
 struct HookReplaceToken {
-    rp: Option<ReplaceToken>,
     mode_hook: ModeHook,
+    output: String,
+    rp: utils::ReplaceToken,
+    template: String,
 }
 
-pub(super) fn init_from_key(key: &str) -> Box<dyn Hook> {
-    Box::new(HookReplaceToken {
-        rp: None,
-        mode_hook: match key {
-            KEY_REPLACE_TOKEN => ModeHook::Normal,
-            KEY_REPLACE_TOKEN_PRINT => ModeHook::Print,
-            _ => panic!("unexpected key {key}"),
-        },
-    })
+pub(super) fn parse(k: &str, cmd: &str) -> Result<Box<dyn Hook>, ParseError> {
+    match k {
+        KEY_REPLACE_TOKEN | KEY_REPLACE_TOKEN_PRINT => {
+            match HookReplaceToken::try_from(cmd) {
+                Err(err) => Err(wrap_bad_hook_cmd(err, USAGE)),
+                Ok(hook) => Ok(Box::new(hook)),
+            }
+        }
+
+        key => panic!("unknown {key}"),
+    }
 }
 
 impl Hook for HookReplaceToken {
@@ -60,13 +62,6 @@ impl Hook for HookReplaceToken {
         false
     }
 
-    fn parse_cmd(&mut self, s: &str) -> Result<(), AliError> {
-        let rp = parse_replace_token(s)?;
-        self.rp = Some(rp);
-
-        Ok(())
-    }
-
     fn run_hook(
         &self,
         _caller: &Caller,
@@ -75,9 +70,57 @@ impl Hook for HookReplaceToken {
         apply_replace_token(
             &self.hook_key(),
             &self.mode_hook,
-            self.rp.as_ref().unwrap(),
+            &self.rp,
             root_location,
+            &self.template,
+            &self.output,
         )
+    }
+}
+
+impl TryFrom<&str> for HookReplaceToken {
+    type Error = AliError;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        let (hook_key, parts) = super::extract_key_and_parts_shlex(s)?;
+        let mode_hook = match hook_key.as_str() {
+            KEY_REPLACE_TOKEN => ModeHook::Normal,
+            KEY_REPLACE_TOKEN_PRINT => ModeHook::Print,
+            key => {
+                return Err(AliError::BadHookCmd(format!(
+                    "unexpected key {key}"
+                )))
+            }
+        };
+
+        if parts.len() < 3 {
+            return Err(AliError::BadHookCmd(format!(
+                "{hook_key}: expect at least 2 arguments"
+            )));
+        }
+
+        let l = parts.len();
+        if l != 4 && l != 5 {
+            return Err(AliError::BadHookCmd(format!(
+                "{hook_key}: bad cmd parts (expecting 3-4): {l}"
+            )));
+        }
+
+        let (token, value, template) =
+            (parts[1].clone(), parts[2].clone(), parts[3].clone());
+
+        // If not given, then use template as output
+        let output = parts
+            .last()
+            .map(|s| s.to_owned())
+            .unwrap_or(template.clone());
+
+        Ok(HookReplaceToken {
+            mode_hook,
+            template,
+            output,
+            rp: utils::ReplaceToken { token, value },
+        })
     }
 }
 
@@ -94,114 +137,48 @@ impl Hook for HookReplaceToken {
 fn apply_replace_token(
     hook_key: &str,
     mode_hook: &ModeHook,
-    r: &ReplaceToken,
+    r: &utils::ReplaceToken,
     root_location: &str,
+    template: &str,
+    output: &str,
 ) -> Result<ActionHook, AliError> {
-    // @TODO: Read from remote template, e.g. with https or ssh
-    let template = std::fs::read_to_string(&r.template).map_err(|err| {
-        AliError::HookError(format!(
-            "{hook_key}: read template {}: {err}",
-            r.template
-        ))
-    })?;
+    let template_string =
+        // If the template is a valid remote URL, download it
+        if let Ok(downloader) = download::Downloader::new_from_url(template) {
+            downloader.get_string()
 
-    let result = r.replace(&template)?;
+        // Otherwise read from file
+        } else {
+            std::fs::read_to_string(template).map_err(|err| {
+                AliError::HookError(format!(
+                    "{hook_key}: read template {}: {err}",
+                    template
+                ))
+            })
+        }?;
+
+    let replaced = r.replace(&template_string)?;
+
     match mode_hook {
         ModeHook::Print => {
-            println!("{}", result);
+            println!("{replaced}")
         }
+
         ModeHook::Normal => {
             let output_location = match root_location {
-                "/" => r.output.clone(),
-                _ => format!("/{root_location}/{}", r.output),
+                "/" => output.to_string(),
+                _ => format!("/{root_location}/{output}"),
             };
 
-            std::fs::write(output_location, result).map_err(|err| {
+            std::fs::write(output_location, replaced).map_err(|err| {
                 AliError::HookError(format!(
-                    "{hook_key}: failed to write to output to {}: {err}",
-                    r.output
+                    "{hook_key}: failed to write to output to {output}: {err}",
                 ))
             })?;
         }
     }
 
     Ok(ActionHook::ReplaceToken(r.to_string()))
-}
-
-fn parse_replace_token(cmd: &str) -> Result<ReplaceToken, AliError> {
-    // shlex will return empty array if 1st word starts with '#'
-    let parts = shlex::split(cmd);
-    if parts.is_none() {
-        return Err(AliError::BadHookCmd(format!(
-            "{KEY_REPLACE_TOKEN}: bad cmd: {cmd}"
-        )));
-    }
-
-    let parts = parts.unwrap();
-    if parts.len() < 3 {
-        return Err(AliError::BadHookCmd(format!(
-            "{KEY_REPLACE_TOKEN}: expect at least 2 arguments"
-        )));
-    }
-
-    let cmd = parts.first().unwrap();
-
-    if !matches!(cmd.as_str(), KEY_REPLACE_TOKEN | KEY_REPLACE_TOKEN_PRINT) {
-        return Err(AliError::BadHookCmd(format!(
-            "{KEY_REPLACE_TOKEN}: bad cmd: {cmd}"
-        )));
-    }
-
-    let l = parts.len();
-
-    if l != 4 && l != 5 {
-        return Err(AliError::BadHookCmd(format!(
-            "{KEY_REPLACE_TOKEN}: bad cmd parts (expecting 3-4): {l}"
-        )));
-    }
-
-    let (token, value, template) =
-        (parts[1].clone(), parts[2].clone(), parts[3].clone());
-
-    // If not given, then use template as output
-    let output = parts
-        .last()
-        .map(|s| s.to_owned())
-        .unwrap_or(template.clone());
-
-    Ok(ReplaceToken {
-        token,
-        value,
-        template,
-        output,
-    })
-}
-
-impl ToString for ReplaceToken {
-    fn to_string(&self) -> String {
-        json!({
-            "token": self.token,
-            "value": self.value,
-            "template": self.template,
-            "output": self.output,
-        })
-        .to_string()
-    }
-}
-
-impl ReplaceToken {
-    fn replace(&self, s: &str) -> Result<String, AliError> {
-        let token = &format!("{} {} {}", "{{", self.token, "}}");
-
-        if !s.contains(token) {
-            return Err(AliError::BadHookCmd(format!(
-                "template {} does not contains token \"{token}\"",
-                self.template
-            )));
-        }
-
-        Ok(s.replace(token, &self.value))
-    }
 }
 
 #[test]
@@ -225,15 +202,15 @@ fn test_parse_replace_token() {
     ];
 
     for cmd in should_pass {
-        let result = parse_replace_token(cmd);
+        let result = HookReplaceToken::try_from(cmd);
         if let Err(err) = result {
             panic!("got error from cmd {cmd}: {err}");
         }
     }
 
     for cmd in should_err {
-        let result = parse_replace_token(cmd);
-        if let Ok(qn) = result {
+        let result = HookReplaceToken::try_from(cmd);
+        if let Ok(HookReplaceToken { rp: qn, .. }) = result {
             panic!("got ok result from bad arg {cmd}: {}", qn.to_string());
         }
     }
@@ -241,73 +218,44 @@ fn test_parse_replace_token() {
     let tests = HashMap::from([
         (
             "@replace-token-print PORT 3322 /etc/ssh/sshd",
-            ReplaceToken{
-                token: String::from("PORT"),
-                value: String::from("3322"),
-                template: String::from("/etc/ssh/sshd"),
-                output: String::from("/etc/ssh/sshd"),
+            HookReplaceToken {
+                mode_hook: ModeHook::Print,
+                template: "/etc/ssh/sshd".to_string(),
+                output: "/etc/ssh/sshd".to_string(),
+                rp: utils::ReplaceToken {
+                    token: "PORT".to_string(),
+                    value: "3322".to_string(),
+                },
             }
         ),
         (
             "@replace-token linux_boot \"loglevel=3 quiet root=/dev/archvg/archlv ro\" /etc/default/grub",
-            ReplaceToken{
-                token: String::from("linux_boot"),
-                value: String::from("loglevel=3 quiet root=/dev/archvg/archlv ro"),
-                template: String::from("/etc/default/grub"),
-                output: String::from("/etc/default/grub"),
-            },
+            HookReplaceToken {
+                mode_hook: ModeHook::Normal,
+                template: "/etc/default/grub".to_string(),
+                output: "/etc/default/grub".to_string(),
+                rp: utils::ReplaceToken {
+                    token: "linux_boot".to_string(),
+                    value: "loglevel=3 quiet root=/dev/archvg/archlv ro".to_string(),
+                },
+            }
         ),
         (
-            "@replace-token-print \"linux boot\" \"loglevel=3 quiet root=/dev/archvg/archlv ro\" /some/template /etc/default/grub",
-            ReplaceToken{
-                token: String::from("linux boot"),
-                value: String::from("loglevel=3 quiet root=/dev/archvg/archlv ro"),
-                template: String::from("/some/template"),
-                output: String::from("/etc/default/grub"),
-            },
+            "@replace-token-print \"linux_boot\" \"loglevel=3 quiet root=/dev/archvg/archlv ro\" /some/template /etc/default/grub",
+            HookReplaceToken {
+                mode_hook: ModeHook::Print,
+                template: "/some/template".to_string(),
+                output: "/etc/default/grub".to_string(),
+                rp: utils::ReplaceToken {
+                    token: "linux_boot".to_string(),
+                    value: "loglevel=3 quiet root=/dev/archvg/archlv ro".to_string(),
+                },
+            }
         ),
     ]);
 
     for (cmd, expected) in tests {
-        let actual = parse_replace_token(cmd).unwrap();
-
-        assert_eq!(expected, actual);
-    }
-}
-
-#[test]
-fn test_uncomment() {
-    use std::collections::HashMap;
-
-    let tests = HashMap::from([
-        (
-            ReplaceToken {
-                token: String::from("PORT"),
-                value: String::from("3322"),
-                template: String::from("/etc/ssh/sshd"),
-                output: String::from("/etc/ssh/sshd"),
-            },
-            ("{{ PORT }} foo bar {{PORT}}", "3322 foo bar {{PORT}}"),
-        ),
-        (
-            ReplaceToken {
-                token: String::from("foo"),
-                value: String::from("bar"),
-                template: String::from("/etc/ssh/sshd"),
-                output: String::from("/etc/ssh/sshd"),
-            },
-            (
-                "{{ bar }} {{ foo }} {{ bar }} foo <{{ foo }}>",
-                "{{ bar }} bar {{ bar }} foo <bar>",
-            ),
-        ),
-    ]);
-
-    for (replace, (template, expected)) in tests {
-        let actual = replace
-            .replace(template)
-            .expect("failed to replace template {template}");
-
+        let actual = HookReplaceToken::try_from(cmd).unwrap();
         assert_eq!(expected, actual);
     }
 }

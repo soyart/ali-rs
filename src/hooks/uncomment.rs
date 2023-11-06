@@ -1,16 +1,21 @@
 use serde_json::json;
 
+use super::utils::download;
 use super::{
+    wrap_bad_hook_cmd,
     ActionHook,
     Caller,
     Hook,
     ModeHook,
+    ParseError,
     KEY_UNCOMMENT,
     KEY_UNCOMMENT_ALL,
     KEY_UNCOMMENT_ALL_PRINT,
     KEY_UNCOMMENT_PRINT,
 };
 use crate::errors::AliError;
+
+const USAGE: &str = "<PATTERN> [marker <COMMENT_MARKER=\"#\">] FILE";
 
 #[derive(Clone)]
 pub(super) enum Mode {
@@ -22,29 +27,30 @@ pub(super) enum Mode {
 struct Uncomment {
     marker: String,
     pattern: String,
-    file: String,
+    source: String,
 }
 
 struct HookUncomment {
     mode_hook: ModeHook,
     mode: Mode,
-    uc: Option<Uncomment>,
+    uc: Uncomment,
 }
 
-pub(super) fn init_from_key(key: &str) -> Box<dyn Hook> {
-    Box::new(HookUncomment {
-        uc: None,
-        mode: match key {
-            KEY_UNCOMMENT | KEY_UNCOMMENT_PRINT => Mode::Once,
-            KEY_UNCOMMENT_ALL | KEY_UNCOMMENT_ALL_PRINT => Mode::All,
-            key => panic!("unexpected key {key}"),
-        },
-        mode_hook: match key {
-            KEY_UNCOMMENT | KEY_UNCOMMENT_ALL => ModeHook::Normal,
-            KEY_UNCOMMENT_PRINT | KEY_UNCOMMENT_ALL_PRINT => ModeHook::Print,
-            key => panic!("unexpected key {key}"),
-        },
-    })
+pub(super) fn parse(k: &str, cmd: &str) -> Result<Box<dyn Hook>, ParseError> {
+    if matches!(
+        k,
+        KEY_UNCOMMENT
+            | KEY_UNCOMMENT_PRINT
+            | KEY_UNCOMMENT_ALL
+            | KEY_UNCOMMENT_ALL_PRINT
+    ) {
+        match HookUncomment::try_from(cmd) {
+            Err(err) => Err(wrap_bad_hook_cmd(err, USAGE)),
+            Ok(hook) => Ok(Box::new(hook)),
+        }
+    } else {
+        panic!("unknown key {k}");
+    }
 }
 
 impl Hook for HookUncomment {
@@ -53,7 +59,7 @@ impl Hook for HookUncomment {
     }
 
     fn usage(&self) -> &'static str {
-        "<PATTERN> [marker <COMMENT_MARKER=\"#\">] FILE"
+        USAGE
     }
 
     fn mode(&self) -> ModeHook {
@@ -72,13 +78,6 @@ impl Hook for HookUncomment {
         false
     }
 
-    fn parse_cmd(&mut self, s: &str) -> Result<(), AliError> {
-        let uc = parse_uncomment(s)?;
-        self.uc = Some(uc);
-
-        Ok(())
-    }
-
     fn run_hook(
         &self,
         caller: &Caller,
@@ -88,10 +87,81 @@ impl Hook for HookUncomment {
             &self.hook_key(),
             &self.mode_hook,
             &self.mode,
-            self.uc.as_ref().unwrap(),
+            &self.uc,
             caller,
             root_location,
         )
+    }
+}
+
+/// @uncomment <PATTERN> [marker <COMMENT_MARKER="#">] FILE
+/// Uncomments lines starting with PATTERN in FILE. Default comment marker is "#",
+/// although alternative marker can be provided after keyword `marker`, e.g. "//", "--", or "!".
+///
+/// Examples:
+/// @uncomment PubkeyAuthentication /etc/ssh/sshd_config
+/// => Uncomments key PubkeyAuthentication in /etc/ssh/sshd_config
+impl TryFrom<&str> for HookUncomment {
+    type Error = AliError;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        let (hook_key, parts) = super::extract_key_and_parts_shlex(s)?;
+
+        let mode_uncomment = match hook_key.as_str() {
+            KEY_UNCOMMENT | KEY_UNCOMMENT_PRINT => Mode::Once,
+            KEY_UNCOMMENT_ALL | KEY_UNCOMMENT_ALL_PRINT => Mode::All,
+            key => {
+                return Err(AliError::BadHookCmd(format!(
+                    "unexpected key {key}"
+                )));
+            }
+        };
+        let mode_hook = match hook_key.as_str() {
+            KEY_UNCOMMENT | KEY_UNCOMMENT_ALL => ModeHook::Normal,
+            KEY_UNCOMMENT_PRINT | KEY_UNCOMMENT_ALL_PRINT => ModeHook::Print,
+            key => panic!("unexpected key {key}"),
+        };
+
+        if parts.len() < 3 {
+            return Err(AliError::BadHookCmd(format!(
+                "{hook_key}: expect at least 2 arguments"
+            )));
+        }
+
+        let uc = match parts.len() {
+            3 => {
+                Uncomment {
+                    marker: "#".to_string(),
+                    pattern: parts[1].to_string(),
+                    source: parts[2].to_string(),
+                }
+            }
+            5 => {
+                if parts[2] != "marker" {
+                    return Err(AliError::BadHookCmd(format!(
+                        "{hook_key}: unexpected argument {}, expecting 2nd argument to be `marker`",
+                        parts[2],
+                    )));
+                }
+
+                Uncomment {
+                    pattern: parts[1].clone(),
+                    marker: parts[3].clone(),
+                    source: parts.last().unwrap().clone(),
+                }
+            }
+            l => {
+                return Err(AliError::BadHookCmd(format!(
+                    "{hook_key}: bad cmd parts: {l}"
+                )));
+            }
+        };
+
+        Ok(HookUncomment {
+            mode_hook,
+            mode: mode_uncomment,
+            uc,
+        })
     }
 }
 
@@ -103,38 +173,55 @@ fn apply_uncomment(
     caller: &Caller,
     root_location: &str,
 ) -> Result<ActionHook, AliError> {
-    let target = match caller {
+    // Outfile, and maybe infile too if uc.source is not remote URL
+    let target_file = match caller {
         Caller::ManifestPostInstall => {
-            format!("{root_location}/{}", uc.file)
+            format!("{root_location}/{}", uc.source)
         }
         Caller::Cli => {
-            format!("{root_location}/{}", uc.file)
+            format!("{root_location}/{}", uc.source)
         }
-        _ => uc.file.clone(),
+        _ => uc.source.clone(),
     };
 
-    // @TODO: Read from remote template
-    let original = std::fs::read_to_string(&target).map_err(|err| {
-        AliError::FileError(
-            err,
-            format!("{hook_key}: read original file to uncomment: {target}"),
-        )
-    })?;
+    // Get original from remote location if source is remote URL
+    let original = if let Ok(downloader) =
+        download::Downloader::new_from_url(&uc.source)
+    {
+        downloader.get_string()
+
+    // Else read from file `target`
+    } else {
+        std::fs::read_to_string(&target_file).map_err(|err| {
+            AliError::FileError(
+                err,
+                format!(
+                    "{hook_key}: read original file to uncomment: {target_file}"
+                ),
+            )
+        })
+    }?;
 
     let uncommented = match mode {
-        Mode::All => uncomment_text_all(&original, &uc.marker, &uc.pattern),
-        Mode::Once => uncomment_text_once(&original, &uc.marker, &uc.pattern),
+        Mode::All => {
+            uncomment_text_all(hook_key, &original, &uc.marker, &uc.pattern)
+        }
+
+        Mode::Once => {
+            uncomment_text_once(hook_key, &original, &uc.marker, &uc.pattern)
+        }
     }?;
 
     match mode_hook {
         ModeHook::Print => {
             println!("{}", uncommented);
         }
+
         ModeHook::Normal => {
-            std::fs::write(&target, uncommented).map_err(|err| {
+            std::fs::write(&target_file, uncommented).map_err(|err| {
                 AliError::FileError(
                     err,
-                    format!("{hook_key} write uncommented to {target}"),
+                    format!("{hook_key} write uncommented to {target_file}"),
                 )
             })?;
         }
@@ -144,6 +231,7 @@ fn apply_uncomment(
 }
 
 fn uncomment_text_all(
+    _hook_key: &str,
     original: &str,
     marker: &str,
     key: &str,
@@ -166,6 +254,7 @@ fn uncomment_text_all(
 }
 
 fn uncomment_text_once(
+    hook_key: &str,
     original: &str,
     marker: &str,
     key: &str,
@@ -184,61 +273,8 @@ fn uncomment_text_once(
     }
 
     Err(AliError::HookError(format!(
-        "{KEY_UNCOMMENT}: no such comment pattern '{marker} {key}'"
+        "{hook_key}: no such comment pattern '{marker} {key}'"
     )))
-}
-
-/// @uncomment <PATTERN> [marker <COMMENT_MARKER="#">] FILE
-/// Uncomments lines starting with PATTERN in FILE. Default comment marker is "#",
-/// although alternative marker can be provided after keyword `marker`, e.g. "//", "--", or "!".
-///
-/// Examples:
-/// @uncomment PubkeyAuthentication /etc/ssh/sshd_config
-/// => Uncomments key PubkeyAuthentication in /etc/ssh/sshd_config
-fn parse_uncomment(hook_cmd: &str) -> Result<Uncomment, AliError> {
-    let parts = shlex::split(hook_cmd);
-    if parts.is_none() {
-        return Err(AliError::BadHookCmd(format!(
-            "{KEY_UNCOMMENT}: bad cmd {hook_cmd}"
-        )));
-    }
-
-    let parts = parts.unwrap();
-    if parts.len() < 3 {
-        return Err(AliError::BadHookCmd(format!(
-            "{KEY_UNCOMMENT}: expect at least 2 arguments"
-        )));
-    }
-
-    let l = parts.len();
-    match l {
-        3 => {
-            Ok(Uncomment {
-                marker: "#".to_string(),
-                pattern: parts[1].to_string(),
-                file: parts[2].to_string(),
-            })
-        }
-        5 => {
-            if parts[2] != "marker" {
-                return Err(AliError::BadHookCmd(format!(
-                    "{KEY_UNCOMMENT}: unexpected argument {}, expecting 2nd argument to be `marker`",
-                    parts[2],
-                )));
-            }
-
-            Ok(Uncomment {
-                pattern: parts[1].clone(),
-                marker: parts[3].clone(),
-                file: parts.last().unwrap().clone(),
-            })
-        }
-        _ => {
-            Err(AliError::BadHookCmd(format!(
-                "{KEY_UNCOMMENT}: bad cmd parts: {l}"
-            )))
-        }
-    }
 }
 
 impl ToString for Uncomment {
@@ -246,9 +282,44 @@ impl ToString for Uncomment {
         json!({
             "comment_marker": self.marker,
             "pattern": self.pattern,
-            "file": self.file
+            "file": self.source
         })
         .to_string()
+    }
+}
+
+#[test]
+fn test_parse_uncomment() {
+    let should_pass = vec![
+        "@uncomment Port /etc/ssh/sshd_config",
+        "@uncomment SomeKey /some_file",
+        "@uncomment someKey marker '#' ./someFile",
+        "@uncomment UseFoo marker '!!' ./someFile",
+    ];
+
+    let should_err = vec![
+        "@uncomment foo bar baz",
+        "@uncomment SomeKey",
+        "@uncomment marker '#' someKey someFile",
+        "@uncomment",
+    ];
+
+    for s in should_pass {
+        let result = HookUncomment::try_from(s);
+        if let Err(ref err) = result {
+            eprintln!("unexpected error result for {s}: {err}");
+        }
+
+        assert!(result.is_ok());
+    }
+
+    for s in should_err {
+        let result = HookUncomment::try_from(s);
+        if result.is_ok() {
+            eprintln!("unexpected ok result for {s}");
+        }
+
+        assert!(result.is_err());
     }
 }
 
@@ -264,17 +335,23 @@ fn test_uncomment_text_all() {
     let expected = r#"Port 22
 PubkeyAuthentication no"#;
 
+    let hook_key = "@uncomment-all";
     for original in originals {
-        let uncommented_port = uncomment_text_all(original, "#", "Port")
-            .expect("failed to uncomment Port");
+        let uncommented_port =
+            uncomment_text_all(hook_key, original, "#", "Port")
+                .expect("failed to uncomment Port");
 
         if original == uncommented_port {
             panic!("'# Port' not uncommented");
         }
 
-        let uncommented_all =
-            uncomment_text_all(&uncommented_port, "#", "PubkeyAuthentication")
-                .expect("failed to uncomment PubkeyAuthentication");
+        let uncommented_all = uncomment_text_all(
+            hook_key,
+            &uncommented_port,
+            "#",
+            "PubkeyAuthentication",
+        )
+        .expect("failed to uncomment PubkeyAuthentication");
 
         if original == uncommented_all {
             panic!("'# PubkeyAuthentication not uncommented'");
@@ -296,13 +373,19 @@ fn test_uncomment_text_once() {
     let expected = r#"Port 22
 PubkeyAuthentication no"#;
 
+    let hook_key = "@uncomment";
     for original in originals {
-        let uncommented_port = uncomment_text_once(original, "#", "Port")
-            .expect("failed to uncomment Port");
+        let uncommented_port =
+            uncomment_text_once(hook_key, original, "#", "Port")
+                .expect("failed to uncomment Port");
 
-        let uncommented_all =
-            uncomment_text_once(&uncommented_port, "#", "PubkeyAuthentication")
-                .expect("failed to uncomment PubkeyAuthentication");
+        let uncommented_all = uncomment_text_once(
+            hook_key,
+            &uncommented_port,
+            "#",
+            "PubkeyAuthentication",
+        )
+        .expect("failed to uncomment PubkeyAuthentication");
 
         assert_ne!(expected, uncommented_port);
         assert_ne!(original, uncommented_all);
