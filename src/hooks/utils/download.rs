@@ -88,7 +88,6 @@ impl Downloader {
         }
     }
 
-    #[allow(unused)]
     pub(crate) fn get_bytes(&self) -> Result<Vec<u8>, AliError> {
         match self.proto {
             Protocol::Http => download_http_bytes(&self.url),
@@ -124,7 +123,7 @@ fn download_http_bytes(url: &str) -> Result<Vec<u8>, AliError> {
     let mut r = resp.into_reader();
     let mut v = Vec::new();
 
-    if let Err(err) = r.read(&mut v) {
+    if let Err(err) = r.read_to_end(&mut v) {
         return Err(AliError::HookError(format!(
             "failed to read response bytes: {err}"
         )));
