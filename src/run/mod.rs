@@ -2,18 +2,27 @@ pub mod apply;
 pub mod hooks;
 pub mod validate;
 
-use crate::cli;
+use std::env;
+
+use crate::constants::defaults;
 use crate::errors::AliError;
+use crate::{
+    cli,
+    constants,
+};
 
 pub fn run(cli_args: cli::Cli) -> Result<(), AliError> {
+    let new_root_location = install_location();
+
     match cli_args.commands {
         // Default is to validate
         None | Some(cli::Commands::Validate) => {
-            validate::run(&cli_args.manifest)
+            validate::run(&cli_args.manifest, &new_root_location)
         }
         // Apply manifest in full
         Some(cli::Commands::Apply(args_apply)) => {
-            match apply::run(&cli_args.manifest, args_apply) {
+            match apply::run(&cli_args.manifest, &new_root_location, args_apply)
+            {
                 Err(err) => Err(err),
                 Ok(report) => Ok(println!("{}", report.to_json_string())),
             }
@@ -22,4 +31,9 @@ pub fn run(cli_args: cli::Cli) -> Result<(), AliError> {
             hooks::run(&cli_args.manifest, args_hooks)
         }
     }
+}
+
+fn install_location() -> String {
+    env::var(constants::ENV_ALI_LOC)
+        .unwrap_or(defaults::INSTALL_LOCATION.to_string())
 }

@@ -1,6 +1,10 @@
 use std::collections::HashSet;
 
-use crate::ali::Manifest;
+use crate::ali::{
+    Manifest,
+    ManifestFs,
+    ManifestMountpoint,
+};
 use crate::entity::stage::StageActions;
 use crate::errors::AliError;
 use crate::hooks;
@@ -9,7 +13,7 @@ use crate::utils::shell;
 /// Prepare mountpoints for the new system on live system
 pub fn mountpoints(
     manifest: &Manifest,
-    mnt_location: &str,
+    root_location: &str,
     stages: &mut StageActions,
 ) -> Result<(), AliError> {
     use super::{
@@ -32,7 +36,8 @@ pub fn mountpoints(
     }
 
     // Create rootfs
-    let action_create_rootfs = fs::apply_filesystem(&manifest.rootfs)?;
+    let rootfs: ManifestFs = manifest.rootfs.clone().into();
+    let action_create_rootfs = fs::apply_filesystem(&rootfs)?;
     stages.mountpoints.push(action_create_rootfs);
 
     // Create other filesystems
@@ -42,27 +47,22 @@ pub fn mountpoints(
     }
 
     // mkdir rootfs chroot mount
-    shell::exec("mkdir", &["-p", mnt_location])?;
+    shell::exec("mkdir", &["-p", root_location])?;
     stages.mountpoints.push(ActionMountpoints::MkdirRootFs);
 
     // Mount rootfs
-    let action_mnt_rootfs =
-        fs::mount_filesystem(&manifest.rootfs, mnt_location)?;
+    let mnt_root: ManifestMountpoint = manifest.rootfs.clone().into();
+    let action_mnt_rootfs = fs::mount_filesystem(&mnt_root, root_location)?;
     stages.mountpoints.push(action_mnt_rootfs);
 
     // Mount other filesystems to /{DEFAULT_CHROOT_LOC}
-    if let Some(filesystems) = &manifest.filesystems {
+    if let Some(mounts) = &manifest.mountpoints {
         // Collect filesystems mountpoints and actions.
         // The mountpoints will be prepended with default base
-        let mountpoints: Vec<(String, ActionMountpoints)> = filesystems
+        let mountpoints: Vec<(String, ActionMountpoints)> = mounts
             .iter()
-            .filter_map(|fs| {
-                fs.mnt.clone().map(|mountpoint| {
-                    (
-                        fs::prepend_base(&Some(mnt_location), &mountpoint),
-                        ActionMountpoints::MkdirFs(mountpoint),
-                    )
-                })
+            .map(|m| {
+                (m.dest.clone(), ActionMountpoints::MkdirFs(m.dest.clone()))
             })
             .collect();
 
@@ -73,7 +73,7 @@ pub fn mountpoints(
         }
 
         // Mount other filesystems under /{DEFAULT_CHROOT_LOC}
-        let actions_mnt = fs::mount_filesystems(filesystems, mnt_location)?;
+        let actions_mnt = fs::mount_filesystems(mounts, root_location)?;
         stages.mountpoints.extend(actions_mnt);
     }
 

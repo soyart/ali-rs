@@ -90,7 +90,6 @@ pub enum ActionMountpoints {
         device: String,
         fs_type: String,
         fs_opts: Option<String>,
-        mountpoint: Option<String>,
     },
 
     #[serde(rename = "mountFilesystem")]
@@ -179,7 +178,6 @@ fn test_json_stages() {
             device: "/dev/sda1".into(),
             fs_type: "btrfs".into(),
             fs_opts: None,
-            mountpoint: Some("/".into()),
         },
     ];
 

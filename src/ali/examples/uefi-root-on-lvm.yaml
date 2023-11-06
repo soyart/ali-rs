@@ -50,20 +50,21 @@ rootfs:
   device: /dev/archvg/rootlv # Use the LVM device created above
   fstype: btrfs
   fsopts: -L rootfs
-  mnt: /
   mntopts: "compress:zstd:3"
 
 # Create extra filesystems
 # This time, it's a boot partition:
 # mkfs.vfat -F 32 -L BOOT /dev/vda1
-#
-# And mount it with:
-# mount /dev/vda1 /boot
 fs:
   - device: /dev/vda1
     fstype: vfat
     fsopts: -F 32 -L BOOT
-    mnt: /boot
+
+## And mount it with:
+# mount /dev/vda1 /boot
+mountpoints:
+  - device: /dev/vda1
+    dest: /boot
     mntopts:
 
 # Create swap with:
