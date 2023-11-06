@@ -1,3 +1,5 @@
+use ureq;
+
 use crate::errors::AliError;
 
 pub(crate) struct Download {
@@ -18,11 +20,8 @@ impl TryFrom<&str> for Protocol {
     fn try_from(prefix: &str) -> Result<Self, Self::Error> {
         match prefix {
             "http" | "https" => Ok(Self::Http),
-
             "scp" | "ssh" => Ok(Self::Scp),
-
             "ftp" => Ok(Self::Ftp),
-
             "sftp" => Ok(Self::Sftp),
 
             prefix => {
@@ -35,15 +34,15 @@ impl TryFrom<&str> for Protocol {
 }
 
 impl Download {
-    const PROTO_DELIM: &'static str = "://";
+    const DELIMITER: &'static str = "://";
 
     fn new(url: &str) -> Result<Self, AliError> {
-        let splited = url.split_once(Self::PROTO_DELIM);
+        let splited = url.split_once(Self::DELIMITER);
 
         if splited.is_none() {
             return Err(AliError::BadHookCmd(format!(
                 "missing protocol delimiter '{}' in url {url}",
-                Self::PROTO_DELIM,
+                Self::DELIMITER,
             )));
         }
 
@@ -65,6 +64,13 @@ impl Download {
             }
         }
     }
+
+    fn download(&self) -> Result<String, AliError> {
+        match self.proto {
+            Protocol::Http => download_http(&self.url),
+            ref other_proto => panic!("unexpected protocol: {other_proto}"),
+        }
+    }
 }
 
 impl std::fmt::Display for Protocol {
@@ -76,4 +82,19 @@ impl std::fmt::Display for Protocol {
             Self::Sftp => write!(f, "sftp"),
         }
     }
+}
+
+fn download_http(url: &str) -> Result<String, AliError> {
+    let resp = ureq::get(url).call().map_err(|err| {
+        AliError::HookError(format!("failed to GET {url}: {err}"))
+    })?;
+
+    let status = resp.status();
+    if !(200..=299).contains(&status) {
+        return Err(AliError::HookError(format!("http status {status}")));
+    }
+
+    resp.into_string().map_err(|err| {
+        AliError::HookError(format!("body is not string: {err}"))
+    })
 }

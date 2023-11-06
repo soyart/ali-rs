@@ -17,6 +17,7 @@ humanize-rs = ">=0.1.5"
 shlex = ">=1.2"
 pwhash = "1"
 colored = ">=2"
+ureq = ">=2.8"
 
 [badges]
 github = { repository = "soyart/ali-rs", workflow = "cargo-test" }
