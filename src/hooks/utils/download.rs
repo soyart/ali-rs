@@ -1,11 +1,10 @@
 use std::io::Read;
 
-use ureq;
-
 use crate::errors::AliError;
 
-const DELIMITER: &'static str = "://";
+const DELIMITER: &str = "://";
 
+/// Synchronous network downloader
 pub(crate) struct Downloader {
     proto: Protocol,
     url: String,
@@ -82,9 +81,17 @@ impl Downloader {
         }
     }
 
-    pub(crate) fn download(&self) -> Result<String, AliError> {
+    pub(crate) fn get_string(&self) -> Result<String, AliError> {
         match self.proto {
             Protocol::Http => download_http_string(&self.url),
+            ref other_proto => panic!("unexpected protocol: {other_proto}"),
+        }
+    }
+
+    #[allow(unused)]
+    pub(crate) fn get_bytes(&self) -> Result<Vec<u8>, AliError> {
+        match self.proto {
+            Protocol::Http => download_http_bytes(&self.url),
             ref other_proto => panic!("unexpected protocol: {other_proto}"),
         }
     }
@@ -111,7 +118,6 @@ fn download_http_string(url: &str) -> Result<String, AliError> {
     })
 }
 
-#[allow(unused)]
 fn download_http_bytes(url: &str) -> Result<Vec<u8>, AliError> {
     let resp = http_get(url)?;
 

@@ -145,7 +145,7 @@ fn apply_replace_token(
     let template_string =
         // If the template is a valid remote URL, download it
         if let Ok(downloader) = download::Downloader::new_from_url(template) {
-            downloader.download()
+            downloader.get_string()
 
         // Otherwise read from file
         } else {

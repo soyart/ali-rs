@@ -1,5 +1,6 @@
 use serde_json::json;
 
+use super::utils::download;
 use super::{
     wrap_bad_hook_cmd,
     ActionHook,
@@ -26,7 +27,7 @@ pub(super) enum Mode {
 struct Uncomment {
     marker: String,
     pattern: String,
-    file: String,
+    source: String,
 }
 
 struct HookUncomment {
@@ -132,7 +133,7 @@ impl TryFrom<&str> for HookUncomment {
                 Uncomment {
                     marker: "#".to_string(),
                     pattern: parts[1].to_string(),
-                    file: parts[2].to_string(),
+                    source: parts[2].to_string(),
                 }
             }
             5 => {
@@ -146,7 +147,7 @@ impl TryFrom<&str> for HookUncomment {
                 Uncomment {
                     pattern: parts[1].clone(),
                     marker: parts[3].clone(),
-                    file: parts.last().unwrap().clone(),
+                    source: parts.last().unwrap().clone(),
                 }
             }
             l => {
@@ -172,28 +173,40 @@ fn apply_uncomment(
     caller: &Caller,
     root_location: &str,
 ) -> Result<ActionHook, AliError> {
-    let target = match caller {
+    // Outfile, and maybe infile too if uc.source is not remote URL
+    let target_file = match caller {
         Caller::ManifestPostInstall => {
-            format!("{root_location}/{}", uc.file)
+            format!("{root_location}/{}", uc.source)
         }
         Caller::Cli => {
-            format!("{root_location}/{}", uc.file)
+            format!("{root_location}/{}", uc.source)
         }
-        _ => uc.file.clone(),
+        _ => uc.source.clone(),
     };
 
-    // @TODO: Read from remote template
-    let original = std::fs::read_to_string(&target).map_err(|err| {
-        AliError::FileError(
-            err,
-            format!("{hook_key}: read original file to uncomment: {target}"),
-        )
-    })?;
+    // Get original from remote location if source is remote URL
+    let original = if let Ok(downloader) =
+        download::Downloader::new_from_url(&uc.source)
+    {
+        downloader.get_string()
+
+    // Else read from file `target`
+    } else {
+        std::fs::read_to_string(&target_file).map_err(|err| {
+            AliError::FileError(
+                err,
+                format!(
+                    "{hook_key}: read original file to uncomment: {target_file}"
+                ),
+            )
+        })
+    }?;
 
     let uncommented = match mode {
         Mode::All => {
             uncomment_text_all(hook_key, &original, &uc.marker, &uc.pattern)
         }
+
         Mode::Once => {
             uncomment_text_once(hook_key, &original, &uc.marker, &uc.pattern)
         }
@@ -203,11 +216,12 @@ fn apply_uncomment(
         ModeHook::Print => {
             println!("{}", uncommented);
         }
+
         ModeHook::Normal => {
-            std::fs::write(&target, uncommented).map_err(|err| {
+            std::fs::write(&target_file, uncommented).map_err(|err| {
                 AliError::FileError(
                     err,
-                    format!("{hook_key} write uncommented to {target}"),
+                    format!("{hook_key} write uncommented to {target_file}"),
                 )
             })?;
         }
@@ -268,7 +282,7 @@ impl ToString for Uncomment {
         json!({
             "comment_marker": self.marker,
             "pattern": self.pattern,
-            "file": self.file
+            "file": self.source
         })
         .to_string()
     }
