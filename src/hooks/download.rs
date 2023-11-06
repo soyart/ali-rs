@@ -33,12 +33,12 @@ pub(super) fn parse(k: &str, cmd: &str) -> Result<Box<dyn Hook>, ParseError> {
 
 impl TryFrom<&str> for HookDownload {
     type Error = AliError;
+
     fn try_from(cmd: &str) -> Result<Self, Self::Error> {
-        let cmd = cmd.trim();
         let parts: Vec<_> = cmd.split_whitespace().collect();
 
         let l = parts.len();
-        if parts.len() != 3 {
+        if l != 3 {
             return Err(AliError::BadHookCmd(format!(
                 "expecting 3 arguments, got {l}"
             )));
