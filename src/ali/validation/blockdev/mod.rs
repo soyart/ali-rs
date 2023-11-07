@@ -86,11 +86,6 @@ fn validate_blockdev(
     mut sys_fs_ready_devs: HashMap<String, BlockDevType>, /* Maps fs-ready devs to their types (e.g. partition) */
     mut sys_lvms: HashMap<String, BlockDevPaths>, /* Maps pv path to all possible LV paths */
 ) -> Result<BlockDevPaths, AliError> {
-    // Validate no duplicate mountpoints
-    if let Some(ref mountpoints) = manifest.mountpoints {
-        mount::validate(mountpoints)?;
-    }
-
     // valids collects all valid known devices to be created in the manifest.
     // The back of each linked list is the top-most device.
     let mut valids = BlockDevPaths::new();
@@ -160,6 +155,7 @@ fn validate_blockdev(
 
     // Validate root FS, other FS, and swap against fs_ready_devs
     let mut msg = "rootfs validation failed";
+
     if !fs_ready_devs.contains(&manifest.rootfs.device.clone()) {
         return Err(AliError::BadManifest(format!(
             "{msg}: no top-level fs-ready device for rootfs: {}",
@@ -196,7 +192,7 @@ fn validate_blockdev(
             }
 
             return Err(AliError::AliRsBug(format!(
-                "duplicate filesystem devices from manifest filesystems: {} ({})",
+                "{msg}: duplicate filesystem devices from manifest filesystems: {} ({})",
                 fs.device, fs.fs_type,
             )));
         }
@@ -206,6 +202,10 @@ fn validate_blockdev(
     if let Some(mountpoints) = &manifest.mountpoints {
         msg = "fs mount validation failed";
 
+        if let Err(err) = mount::validate(mountpoints) {
+            return Err(AliError::BadManifest(format!("{msg}: {err}")));
+        }
+
         // Collect all system's FS
         for (dev, dev_type) in sys_fs_devs {
             if fs_devs.insert(dev) {
@@ -213,7 +213,7 @@ fn validate_blockdev(
             }
 
             return Err(AliError::AliRsBug(format!(
-                "duplicate filesystem devices from from system filesystems: {dev} ({dev_type})",
+                "{msg}: duplicate filesystem devices from from system filesystems: {dev} ({dev_type})",
             )));
         }
 
