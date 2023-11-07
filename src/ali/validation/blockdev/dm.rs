@@ -6,6 +6,7 @@ use std::collections::{
 use crate::ali::validation::*;
 use crate::ali::{
     self,
+    Dm,
     ManifestLuks,
     ManifestLvmLv,
     ManifestLvmVg,
@@ -13,6 +14,68 @@ use crate::ali::{
 use crate::entity::blockdev::*;
 use crate::entity::parse_human_bytes;
 use crate::errors::AliError;
+
+pub(super) fn collect_valids(
+    dms: &[Dm],
+    sys_fs_devs: &HashMap<String, BlockDevType>,
+    sys_fs_ready_devs: &mut HashMap<String, BlockDevType>,
+    sys_lvms: &mut HashMap<String, BlockDevPaths>,
+    valids: &mut BlockDevPaths,
+) -> Result<(), AliError> {
+    // Validate sizing of LVs
+    // Only the last LV on each VG could be unsized (100%FREE)
+    validate_lv_size(dms)?;
+
+    // Collect all DMs into valids to be used later in filesystems validation
+    for dm in dms {
+        match dm {
+            Dm::Luks(luks) => {
+                // Appends LUKS to a path in valids, if OK
+                collect_valid_luks(
+                    luks,
+                    sys_fs_devs,
+                    sys_fs_ready_devs,
+                    sys_lvms,
+                    valids,
+                )?;
+            }
+
+            // We validate a LVM manifest block by adding valid devices in these exact order:
+            // PV -> VG -> LV
+            // This gives us certainty that during VG validation, any known PV would have been in valids.
+            Dm::Lvm(lvm) => {
+                if let Some(pvs) = &lvm.pvs {
+                    for pv_path in pvs {
+                        // Appends PV to a path in valids, if OK
+                        collect_valid_pv(
+                            pv_path,
+                            sys_fs_devs,
+                            sys_fs_ready_devs,
+                            sys_lvms,
+                            valids,
+                        )?;
+                    }
+                }
+
+                if let Some(vgs) = &lvm.vgs {
+                    for vg in vgs {
+                        // Appends VG to paths in valids, if OK
+                        collect_valid_vg(vg, sys_fs_devs, sys_lvms, valids)?;
+                    }
+                }
+
+                if let Some(lvs) = &lvm.lvs {
+                    for lv in lvs {
+                        // Appends LV to paths in valids, if OK
+                        collect_valid_lv(lv, sys_fs_devs, sys_lvms, valids)?;
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
 
 #[inline(always)]
 fn is_luks_base(dev_type: &BlockDevType) -> bool {
@@ -49,7 +112,7 @@ fn is_lv_base(dev_type: &BlockDevType) -> bool {
 // Only the last LV on each VG could be unsized
 // (uses 100% of the remaining space)
 #[inline]
-pub(super) fn validate_lv_size(dms: &[ali::Dm]) -> Result<(), AliError> {
+fn validate_lv_size(dms: &[ali::Dm]) -> Result<(), AliError> {
     // Collect VG -> LVs
     let mut vg_lvs: HashMap<String, Vec<ManifestLvmLv>> = HashMap::new();
     for dm in dms {
@@ -107,7 +170,7 @@ pub(super) fn validate_lv_size(dms: &[ali::Dm]) -> Result<(), AliError> {
 
 // Collects valid block device path(s) into valids
 #[inline]
-pub(super) fn collect_valid_luks(
+fn collect_valid_luks(
     luks: &ManifestLuks,
     sys_fs_devs: &HashMap<String, BlockDevType>,
     sys_fs_ready_devs: &mut HashMap<String, BlockDevType>,
@@ -225,7 +288,7 @@ pub(super) fn collect_valid_luks(
     // Find base device for LUKS
     // There's a possibility that LUKS sits on manifest LV on some VG
     // with itself having >1 PVs
-    let mut found: Option<()> = None;
+    let mut found = false;
     for list in valids.iter_mut() {
         let top_most = list.back().expect("no back node in linked list in v");
 
@@ -240,11 +303,11 @@ pub(super) fn collect_valid_luks(
             )));
         }
 
-        found = Some(());
+        found = true;
         list.push_back(luks_dev.clone());
     }
 
-    if found.is_some() {
+    if found {
         return Ok(());
     }
 
@@ -274,7 +337,7 @@ pub(super) fn collect_valid_luks(
 
 // Collect valid PV device path into valids
 #[inline]
-pub(super) fn collect_valid_pv(
+fn collect_valid_pv(
     pv_path: &str,
     sys_fs_devs: &HashMap<String, BlockDevType>,
     sys_fs_ready_devs: &mut HashMap<String, BlockDevType>,
@@ -375,7 +438,7 @@ pub(super) fn collect_valid_pv(
 
 // Collect valid VG device path into valids
 #[inline]
-pub(super) fn collect_valid_vg(
+fn collect_valid_vg(
     vg: &ManifestLvmVg,
     sys_fs_devs: &HashMap<String, BlockDevType>,
     sys_lvms: &mut HashMap<String, BlockDevPaths>,
@@ -481,7 +544,7 @@ pub(super) fn collect_valid_vg(
 
 // Collect valid LV device path(s) into valids
 #[inline]
-pub(super) fn collect_valid_lv(
+fn collect_valid_lv(
     lv: &ManifestLvmLv,
     sys_fs_devs: &HashMap<String, BlockDevType>,
     sys_lvms: &mut HashMap<String, BlockDevPaths>,

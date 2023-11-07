@@ -1,20 +1,16 @@
+mod disk;
 mod dm;
+mod mount;
 mod trace_blk;
 
 use std::collections::{
     HashMap,
     HashSet,
-    LinkedList,
 };
 
-use crate::ali::{
-    Dm,
-    Manifest,
-};
+use crate::ali::Manifest;
 use crate::entity::blockdev::*;
-use crate::entity::parse_human_bytes;
 use crate::errors::AliError;
-use crate::utils::fs::file_exists;
 
 pub fn validate(
     manifest: &Manifest,
@@ -71,172 +67,29 @@ fn validate_blockdev(
 ) -> Result<BlockDevPaths, AliError> {
     // Validate no duplicate mountpoints
     if let Some(ref mountpoints) = manifest.mountpoints {
-        let mut dups = HashSet::new();
-        for mnt in mountpoints {
-            if mnt.dest.as_str() == "/" {
-                return Err(AliError::BadManifest(format!(
-                    "bad mountpoint / for non-rootfs {}",
-                    mnt.device,
-                )));
-            }
-
-            if !dups.insert(mnt.dest.as_str()) {
-                return Err(AliError::BadManifest(format!(
-                    "duplicate mountpoints {}",
-                    mnt.dest,
-                )));
-            }
-        }
+        mount::validate(mountpoints)?;
     }
 
     // valids collects all valid known devices to be created in the manifest
     let mut valids = BlockDevPaths::new();
 
     if let Some(disks) = &manifest.disks {
-        for disk in disks {
-            if !file_exists(&disk.device) {
-                return Err(AliError::BadManifest(format!(
-                    "no such disk device: {}",
-                    disk.device
-                )));
-            }
-            let partition_prefix: String = {
-                if disk.device.contains("nvme")
-                    || disk.device.contains("mmcblk")
-                {
-                    format!("{}p", disk.device)
-                } else {
-                    disk.device.clone()
-                }
-            };
-
-            // Find if this disk has any used partitions
-            // A GPT table can hold a maximum of 128 partitions
-            for i in 1_u8..=128 {
-                let partition_name = format!("{partition_prefix}{i}");
-                if sys_fs_devs.contains_key(&partition_name) {
-                    let fs = sys_fs_devs.get(&partition_name).unwrap();
-                    return Err(AliError::BadManifest(format!(
-                        "disk {} already in use on {partition_name} as {fs}",
-                        disk.device
-                    )));
-                }
-            }
-
-            // Base disk
-            let base = LinkedList::from([BlockDev {
-                device: disk.device.clone(),
-                device_type: TYPE_DISK,
-            }]);
-
-            // Check if this partition is already in use
-            let msg = "partition validation failed";
-
-            let l = disk.partitions.len();
-            for (i, part) in disk.partitions.iter().enumerate() {
-                let partition_name = format!("{partition_prefix}{}", i + 1);
-
-                // If multiple partitions are to be created on this disk,
-                // only the last partition could be unsized
-                if i != l - 1 && l != 1 && part.size.is_none() {
-                    return Err(AliError::BadManifest(format!(
-                        "unsized partition {partition_name} must be the last partition"
-                    )));
-                }
-
-                if sys_fs_ready_devs.get(&partition_name).is_some() {
-                    return Err(AliError::BadManifest(format!(
-                        "{msg}: partition {partition_name} already exists on system"
-                    )));
-                }
-
-                if let Some(existing_fs) = sys_fs_devs.get(&partition_name) {
-                    return Err(AliError::BadManifest(format!(
-                        "{msg}: partition {partition_name} is already used as {existing_fs}"
-                    )));
-                }
-
-                if let Some(ref size) = part.size {
-                    if let Err(err) = parse_human_bytes(size) {
-                        return Err(AliError::BadManifest(format!(
-                            "bad partition size {size}: {err}"
-                        )));
-                    }
-                }
-
-                let mut partition = base.clone();
-                partition.push_back(BlockDev {
-                    device: partition_name,
-                    device_type: TYPE_PART,
-                });
-
-                valids.push(partition);
-            }
-        }
+        disk::collect_valids(
+            disks,
+            sys_fs_devs,
+            &sys_fs_ready_devs,
+            &mut valids,
+        )?;
     }
 
     if let Some(dms) = &manifest.device_mappers {
-        // Validate sizing of LVs
-        // Only the last LV on each VG could be unsized (100%FREE)
-        dm::validate_lv_size(dms)?;
-
-        // Collect all DMs into valids to be used later in filesystems validation
-        for dm in dms {
-            match dm {
-                Dm::Luks(luks) => {
-                    // Appends LUKS to a path in valids, if OK
-                    dm::collect_valid_luks(
-                        luks,
-                        sys_fs_devs,
-                        &mut sys_fs_ready_devs,
-                        &mut sys_lvms,
-                        &mut valids,
-                    )?;
-                }
-
-                // We validate a LVM manifest block by adding valid devices in these exact order:
-                // PV -> VG -> LV
-                // This gives us certainty that during VG validation, any known PV would have been in valids.
-                Dm::Lvm(lvm) => {
-                    if let Some(pvs) = &lvm.pvs {
-                        for pv_path in pvs {
-                            // Appends PV to a path in valids, if OK
-                            dm::collect_valid_pv(
-                                pv_path,
-                                sys_fs_devs,
-                                &mut sys_fs_ready_devs,
-                                &mut sys_lvms,
-                                &mut valids,
-                            )?;
-                        }
-                    }
-
-                    if let Some(vgs) = &lvm.vgs {
-                        for vg in vgs {
-                            // Appends VG to paths in valids, if OK
-                            dm::collect_valid_vg(
-                                vg,
-                                sys_fs_devs,
-                                &mut sys_lvms,
-                                &mut valids,
-                            )?;
-                        }
-                    }
-
-                    if let Some(lvs) = &lvm.lvs {
-                        for lv in lvs {
-                            // Appends LV to paths in valids, if OK
-                            dm::collect_valid_lv(
-                                lv,
-                                sys_fs_devs,
-                                &mut sys_lvms,
-                                &mut valids,
-                            )?;
-                        }
-                    }
-                }
-            }
-        }
+        dm::collect_valids(
+            dms,
+            sys_fs_devs,
+            &mut sys_fs_ready_devs,
+            &mut sys_lvms,
+            &mut valids,
+        )?;
     }
 
     // fs_ready_devs is used to validate manifest.fs
@@ -394,6 +247,8 @@ impl std::fmt::Display for BlockDevType {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::LinkedList;
+
     use super::*;
     use crate::ali::*;
 
