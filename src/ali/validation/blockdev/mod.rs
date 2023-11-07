@@ -12,7 +12,8 @@ use crate::ali::Manifest;
 use crate::entity::blockdev::*;
 use crate::errors::AliError;
 
-/// Validates manifest for `stage_mountpoints` via [`validate_blockdev`](validate_blockdev).
+/// Validates manifest for `stage_mountpoints`
+/// See [`validate_blockdev`](validate_blockdev) for details.
 ///
 /// If `overwrite` is false, `validate` passes zeroed valued
 /// system state to `validate_blockdev`.
@@ -23,25 +24,20 @@ use crate::errors::AliError;
 /// The system state hash maps are used to check the manifest items against,
 /// to ensure that no instruction in the manifest would be able to modify
 /// current partitions or filesystems on the disks.
-///
-/// Empty state maps will bypass the checks, allowing ali-rs to wipe any
-/// existing system resources which appear in the manifest.
 pub(crate) fn validate(
     manifest: &Manifest,
     overwrite: bool,
 ) -> Result<BlockDevPaths, AliError> {
-    let paths = match overwrite {
+    // Empty state maps will bypass the checks, allowing ali-rs to wipe any
+    // existing system resources which appear in the manifest.
+    match overwrite {
         true => {
-            // Overwrite disk devices - we don't need to trace any existing devices,
-            // as all devices required must already be in the manifest
             validate_blockdev(
                 manifest,
                 &HashMap::<String, BlockDevType>::new(),
                 HashMap::<String, BlockDevType>::new(),
                 HashMap::<String, BlockDevPaths>::new(),
-            )?;
-
-            BlockDevPaths::new()
+            )
         }
 
         false => {
@@ -63,11 +59,9 @@ pub(crate) fn validate(
                 &sys_fs_devs,
                 sys_fs_ready_devs,
                 sys_lvms,
-            )?
+            )
         }
-    };
-
-    Ok(paths)
+    }
 }
 
 /// Validates manifest block storage.
