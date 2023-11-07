@@ -13,7 +13,7 @@ use crate::entity::blockdev::*;
 use crate::errors::AliError;
 
 /// Validates manifest for `stage_mountpoints`
-/// See [`validate_blockdev`](validate_blockdev) for details.
+/// See [`validate_blockdev`] for details.
 ///
 /// If `overwrite` is false, `validate` passes zeroed valued
 /// system state to `validate_blockdev`.

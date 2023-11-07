@@ -94,13 +94,19 @@ impl Hook for HookUncomment {
     }
 }
 
+/// Synopsis
+/// ```txt
 /// @uncomment <PATTERN> [marker <COMMENT_MARKER="#">] FILE
+/// ```
 /// Uncomments lines starting with PATTERN in FILE. Default comment marker is "#",
 /// although alternative marker can be provided after keyword `marker`, e.g. "//", "--", or "!".
 ///
 /// Examples:
+/// ```txt
 /// @uncomment PubkeyAuthentication /etc/ssh/sshd_config
+///
 /// => Uncomments key PubkeyAuthentication in /etc/ssh/sshd_config
+/// ```
 impl TryFrom<&str> for HookUncomment {
     type Error = AliError;
 

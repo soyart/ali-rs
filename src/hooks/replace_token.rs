@@ -78,6 +78,23 @@ impl Hook for HookReplaceToken {
     }
 }
 
+/// Synopsis
+///
+/// ```txt
+/// @replace-token <TOKEN> <VALUE> <TEMPLATE> [OUTPUT]`
+/// ```
+///
+/// TOKEN must exist in TEMPLATE file, as {{ TOKEN }},
+/// e.g. TOKEN=foo, then there exists {{ foo }} in TEMPLATE file
+///
+/// If OUTPUT is not given, output is written to TEMPLATE file
+///
+/// Examples:
+/// ```txt
+/// @replace-token PORT 2222 /etc_templates/ssh/sshd_config /etc/ssh/sshd_config
+///
+/// ==> Replace key PORT value with "2222", using /etc_templates/ssh/sshd_config as template and writes output to /etc/ssh/sshd_config
+/// ```
 impl TryFrom<&str> for HookReplaceToken {
     type Error = AliError;
 
@@ -124,16 +141,6 @@ impl TryFrom<&str> for HookReplaceToken {
     }
 }
 
-/// @replace-token <TOKEN> <VALUE> <TEMPLATE> [OUTPUT]
-/// TOKEN must exist in TEMPLATE file, as {{ TOKEN }},
-/// e.g. TOKEN=foo, then there exists {{ foo }} in TEMPLATE file
-///
-/// If OUTPUT is not given, output is written to TEMPLATE file
-///
-/// Examples:
-///
-/// @replace-token PORT 2222 /etc_templates/ssh/sshd_config /etc/ssh/sshd_config
-/// => Replace key PORT value with "2222", using /etc_templates/ssh/sshd_config as template and writes output to /etc/ssh/sshd_config
 fn apply_replace_token(
     hook_key: &str,
     mode_hook: &ModeHook,
