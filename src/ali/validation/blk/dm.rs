@@ -49,7 +49,7 @@ fn is_lv_base(dev_type: &BlockDevType) -> bool {
 // Only the last LV on each VG could be unsized
 // (uses 100% of the remaining space)
 #[inline]
-pub fn validate_lv_size(dms: &[ali::Dm]) -> Result<(), AliError> {
+pub(super) fn validate_lv_size(dms: &[ali::Dm]) -> Result<(), AliError> {
     // Collect VG -> LVs
     let mut vg_lvs: HashMap<String, Vec<ManifestLvmLv>> = HashMap::new();
     for dm in dms {
