@@ -1,4 +1,3 @@
-mod apply_stages;
 mod archchroot;
 mod bootstrap;
 mod disks;
@@ -6,6 +5,7 @@ mod dm;
 mod fs;
 mod map_err;
 mod routines;
+mod stages;
 
 use std::collections::HashSet;
 
@@ -35,12 +35,12 @@ pub fn apply_manifest(
         }
 
         let f: ApplyFn = match stage {
-            Stage::Mountpoints => apply_stages::mountpoints,
-            Stage::Bootstrap => apply_stages::bootstrap,
-            Stage::Routines => apply_stages::routines,
-            Stage::ChrootAli => apply_stages::chroot_ali,
-            Stage::ChrootUser => apply_stages::chroot_user,
-            Stage::PostInstallUser => apply_stages::postinstall_user,
+            Stage::Mountpoints => stages::mountpoints,
+            Stage::Bootstrap => stages::bootstrap,
+            Stage::Routines => stages::routines,
+            Stage::ChrootAli => stages::chroot_ali,
+            Stage::ChrootUser => stages::chroot_user,
+            Stage::PostInstallUser => stages::postinstall_user,
         };
 
         if let Err(err) = f(manifest, install_location, &mut progress) {

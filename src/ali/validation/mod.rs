@@ -1,4 +1,4 @@
-mod blk;
+mod blockdev;
 mod hooks;
 
 use crate::ali::Manifest;
@@ -17,7 +17,7 @@ pub fn validate(
     overwrite: bool,
 ) -> Result<ValidationReport, AliError> {
     // Validate block devices in manifest
-    let block_devs = blk::validate(manifest, overwrite)?;
+    let block_devs = blockdev::validate(manifest, overwrite)?;
 
     // Check all commands used by ALI before ch-root
     for cmd in constants::REQUIRED_COMMANDS {

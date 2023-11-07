@@ -24,7 +24,7 @@ pub fn validate(
         true => {
             // Overwrite disk devices - we don't need to trace any existing devices,
             // as all devices required must already be in the manifest
-            validate_blk(
+            validate_blockdev(
                 manifest,
                 &HashMap::<String, BlockDevType>::new(),
                 HashMap::<String, BlockDevType>::new(),
@@ -48,7 +48,12 @@ pub fn validate(
             // Unknown disks are not tracked - only LVM devices and their bases.
             let sys_lvms = trace_blk::sys_lvms("lvs", "pvs");
 
-            validate_blk(manifest, &sys_fs_devs, sys_fs_ready_devs, sys_lvms)?
+            validate_blockdev(
+                manifest,
+                &sys_fs_devs,
+                sys_fs_ready_devs,
+                sys_lvms,
+            )?
         }
     };
 
@@ -58,7 +63,7 @@ pub fn validate(
 // Validates manifest block storage.
 // sys_fs_ready_devs and sys_lvms are copied from caller,
 // and are made mutable because we need to remove used up elements.
-fn validate_blk(
+fn validate_blockdev(
     manifest: &Manifest,
     sys_fs_devs: &HashMap<String, BlockDevType>, /* Maps fs devs to their FS type (e.g. Btrfs) */
     mut sys_fs_ready_devs: HashMap<String, BlockDevType>, /* Maps fs-ready devs to their types (e.g. partition) */
@@ -3523,7 +3528,7 @@ mod tests {
         ];
 
         for (i, test) in tests_should_ok.iter().enumerate() {
-            let result = validate_blk(
+            let result = validate_blockdev(
                 &test.manifest,
                 &test.sys_fs_devs.clone().unwrap_or(HashMap::new()),
                 test.sys_fs_ready_devs.clone().unwrap_or_default(),
@@ -3549,7 +3554,7 @@ mod tests {
         }
 
         for (i, test) in tests_should_err.iter().enumerate() {
-            let result = validate_blk(
+            let result = validate_blockdev(
                 &test.manifest,
                 &test.sys_fs_devs.clone().unwrap_or_default(),
                 test.sys_fs_ready_devs.clone().unwrap_or_default(),
