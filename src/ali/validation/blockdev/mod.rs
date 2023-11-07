@@ -12,7 +12,21 @@ use crate::ali::Manifest;
 use crate::entity::blockdev::*;
 use crate::errors::AliError;
 
-pub fn validate(
+/// Validates manifest for `stage_mountpoints` via [`validate_blockdev`](validate_blockdev).
+///
+/// If `overwrite` is false, `validate` passes zeroed valued
+/// system state to `validate_blockdev`.
+///
+/// Otherwise, it collects the current system state as hash maps
+/// and then pass those to `validate_blockdev`.
+///
+/// The system state hash maps are used to check the manifest items against,
+/// to ensure that no instruction in the manifest would be able to modify
+/// current partitions or filesystems on the disks.
+///
+/// Empty state maps will bypass the checks, allowing ali-rs to wipe any
+/// existing system resources which appear in the manifest.
+pub(crate) fn validate(
     manifest: &Manifest,
     overwrite: bool,
 ) -> Result<BlockDevPaths, AliError> {
@@ -56,9 +70,22 @@ pub fn validate(
     Ok(paths)
 }
 
-// Validates manifest block storage.
-// sys_fs_ready_devs and sys_lvms are copied from caller,
-// and are made mutable because we need to remove used up elements.
+/// Validates manifest block storage.
+///
+/// It first collects all valid system and manifest devices
+/// into a list `valids`, returning error if found during collection.
+///
+/// If all names are successfully collected into `valids`,
+/// `valids` is then used to validate the following manifest fields:
+/// `rootfs`, `filesystems`, `swap`, and `mountpoints`
+///
+/// The parameters it takes are the current state of the system
+/// before applying the manifest, which is used to ensure that
+/// no system filesystems or partitions are modified during manifest application.
+///
+/// sys_fs_ready_devs and sys_lvms are copied from caller,
+/// and are made mutable because we may need to modify their elements,
+/// i.e. removing used up elements as we collect more devices.
 fn validate_blockdev(
     manifest: &Manifest,
     sys_fs_devs: &HashMap<String, BlockDevType>, /* Maps fs devs to their FS type (e.g. Btrfs) */
@@ -70,7 +97,8 @@ fn validate_blockdev(
         mount::validate(mountpoints)?;
     }
 
-    // valids collects all valid known devices to be created in the manifest
+    // valids collects all valid known devices to be created in the manifest.
+    // The back of each linked list is the top-most device.
     let mut valids = BlockDevPaths::new();
 
     if let Some(disks) = &manifest.disks {
@@ -97,34 +125,43 @@ fn validate_blockdev(
 
     // Collect remaining sys_fs_ready_devs
     for (dev, dev_type) in sys_fs_ready_devs {
-        if is_fs_base(&dev_type) {
-            fs_ready_devs.insert(dev);
+        if !is_fs_base(&dev_type) {
+            return Err(AliError::AliRsBug(format!(
+                "device {dev} ({dev_type}) cannot be used as base for filesystems"
+            )));
+        }
+
+        if fs_ready_devs.insert(dev.clone()) {
             continue;
         }
 
         return Err(AliError::AliRsBug(format!(
-            "fs-ready dev {dev} is not fs-ready"
+            "duplicate device {dev} ({dev_type}) as base for filesystems"
         )));
     }
 
     // Collect remaining sys_lvms - fs-ready only
-    for sys_lvm_lists in sys_lvms.into_values() {
-        for list in sys_lvm_lists {
-            if let Some(top_most) = list.back() {
-                if is_fs_base(&top_most.device_type) {
-                    fs_ready_devs.insert(top_most.device.clone());
+    for lists in sys_lvms.into_values() {
+        for list in lists {
+            if let Some(dev) = list.back() {
+                if !is_fs_base(&dev.device_type) {
+                    continue;
                 }
+
+                // We should be able to ignore LVM LV duplicates
+                fs_ready_devs.insert(dev.device.clone());
             }
         }
     }
 
     // Collect from valids - fs-ready only
     for list in &valids {
-        let top_most = list.back().expect("v is missing top-most device");
-
-        if is_fs_base(&top_most.device_type) {
-            fs_ready_devs.insert(top_most.device.clone());
+        let dev = list.back().expect("`valids` is missing top-most device");
+        if !is_fs_base(&dev.device_type) {
+            continue;
         }
+
+        fs_ready_devs.insert(dev.device.clone());
     }
 
     // Validate root FS, other FS, and swap against fs_ready_devs
@@ -160,7 +197,14 @@ fn validate_blockdev(
             fs_ready_devs.remove(&fs.device);
 
             // Collect this fs to fs devices to later validate mountpoints
-            fs_devs.insert(&fs.device);
+            if fs_devs.insert(&fs.device) {
+                continue;
+            }
+
+            return Err(AliError::AliRsBug(format!(
+                "duplicate filesystem devices from manifest filesystems: {} ({})",
+                fs.device, fs.fs_type,
+            )));
         }
     }
 
@@ -169,13 +213,13 @@ fn validate_blockdev(
         msg = "fs mount validation failed";
 
         // Collect all system's FS
-        for dev in sys_fs_devs.keys() {
+        for (dev, dev_type) in sys_fs_devs {
             if fs_devs.insert(dev) {
                 continue;
             }
 
             return Err(AliError::AliRsBug(format!(
-                "duplicate fs-devs: {dev}"
+                "duplicate filesystem devices from from system filesystems: {dev} ({dev_type})",
             )));
         }
 
