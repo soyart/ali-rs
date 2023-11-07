@@ -16,6 +16,7 @@ pub fn validate(
     install_location: &str,
     overwrite: bool,
 ) -> Result<ValidationReport, AliError> {
+    // Validate block devices in manifest
     let block_devs = blk::validate(manifest, overwrite)?;
 
     // Check all commands used by ALI before ch-root
@@ -49,6 +50,7 @@ pub fn validate(
         }
     }
 
+    // Validate ali-rs hooks
     hooks::validate(manifest, install_location)?;
 
     // Check timezone file in local installer
