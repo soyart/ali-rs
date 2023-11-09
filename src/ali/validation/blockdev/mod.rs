@@ -130,17 +130,19 @@ fn validate_blockdev(
     }
 
     // Collect remaining sys_lvms - fs-ready only
-    for lists in sys_lvms.into_values() {
-        for list in lists {
-            if let Some(dev) = list.back() {
-                if !is_fs_base(&dev.device_type) {
-                    continue;
-                }
-
-                // We should be able to ignore LVM LV duplicates
-                fs_ready_devs.insert(dev.device.clone());
-            }
+    for list in sys_lvms.into_values().flatten() {
+        let dev = list.back();
+        if dev.is_none() {
+            continue;
         }
+
+        let dev = dev.unwrap();
+        if !is_fs_base(&dev.device_type) {
+            continue;
+        }
+
+        // We should be able to ignore LVM LV duplicates
+        fs_ready_devs.insert(dev.device.clone());
     }
 
     // Collect from valids - fs-ready only

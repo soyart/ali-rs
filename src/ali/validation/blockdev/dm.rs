@@ -353,15 +353,15 @@ fn collect_valid_pv(
 
     // Find and invalidate duplicate PV if it was used for other VG
     if let Some(sys_pv_lvms) = sys_lvms.get(pv_path) {
-        for sys_pv_path in sys_pv_lvms {
-            for node in sys_pv_path {
-                if node.device_type == TYPE_VG {
-                    return Err(AliError::BadManifest(format!(
-                        "{msg}: pv {pv_path} was already used for other vg {}",
-                        node.device,
-                    )));
-                }
+        for node in sys_pv_lvms.iter().flatten() {
+            if node.device_type != TYPE_VG {
+                continue;
             }
+
+            return Err(AliError::BadManifest(format!(
+                "{msg}: pv {pv_path} was already used for other vg {}",
+                node.device,
+            )));
         }
     }
 
@@ -461,15 +461,15 @@ fn collect_valid_vg(
 
         // Invalidate VG if its PV was already used in sys LVM
         if let Some(sys_pv_lvms) = sys_lvms.get(pv_base) {
-            for sys_pv_path in sys_pv_lvms {
-                for node in sys_pv_path {
-                    if node.device_type == TYPE_VG {
-                        return Err(AliError::BadManifest(format!(
-                            "{msg}: vg {} base {} was already used for other vg {}",
-                            vg.name, pv_base, node.device,
-                        )));
-                    }
+            for node in sys_pv_lvms.iter().flatten() {
+                if node.device_type != TYPE_VG {
+                    continue;
                 }
+
+                return Err(AliError::BadManifest(format!(
+                    "{msg}: vg {} base {} was already used for other vg {}",
+                    vg.name, pv_base, node.device,
+                )));
             }
         }
 
