@@ -116,32 +116,29 @@ fn validate_lv_size(dms: &[ali::Dm]) -> Result<(), AliError> {
     // Collect VG -> LVs
     let mut vg_lvs: HashMap<String, Vec<ManifestLvmLv>> = HashMap::new();
     for dm in dms {
-        match dm {
-            ali::Dm::Lvm(lvm) => {
-                if lvm.lvs.is_none() {
+        if let ali::Dm::Lvm(lvm) = dm {
+            if lvm.lvs.is_none() {
+                continue;
+            }
+
+            let lvs = lvm.lvs.as_ref().unwrap();
+            for lv in lvs {
+                // Check if size string is valid
+                if let Some(ref size) = lv.size {
+                    if let Err(err) = parse_human_bytes(size) {
+                        return Err(AliError::BadManifest(format!(
+                            "bad lv size {size}: {err}"
+                        )));
+                    }
+                }
+
+                if vg_lvs.contains_key(&lv.vg) {
+                    vg_lvs.get_mut(&lv.vg).unwrap().push(lv.clone());
                     continue;
                 }
 
-                let lvs = lvm.lvs.as_ref().unwrap();
-                for lv in lvs {
-                    // Check if size string is valid
-                    if let Some(ref size) = lv.size {
-                        if let Err(err) = parse_human_bytes(size) {
-                            return Err(AliError::BadManifest(format!(
-                                "bad lv size {size}: {err}"
-                            )));
-                        }
-                    }
-
-                    if vg_lvs.contains_key(&lv.vg) {
-                        vg_lvs.get_mut(&lv.vg).unwrap().push(lv.clone());
-                        continue;
-                    }
-
-                    vg_lvs.insert(lv.vg.clone(), vec![lv.clone()]);
-                }
+                vg_lvs.insert(lv.vg.clone(), vec![lv.clone()]);
             }
-            _ => continue,
         }
     }
 
@@ -244,7 +241,7 @@ fn collect_valid_luks(
     // We keep pushing since an LV may sit on VG with >1 PVs
     if let Some(vg) = found_vg {
         // Push all paths leading to VG and LV
-        'new_pv: for (_, sys_lvm_lists) in sys_lvms.iter_mut() {
+        'new_pv: for sys_lvm_lists in sys_lvms.values_mut() {
             for sys_lvm in sys_lvm_lists.iter_mut() {
                 let top_most = sys_lvm.back();
 
@@ -276,8 +273,8 @@ fn collect_valid_luks(
                 let mut list = sys_lvm.clone();
                 list.push_back(luks_dev.clone());
                 valids.push(list);
-
                 sys_lvm.clear();
+
                 continue 'new_pv;
             }
         }
