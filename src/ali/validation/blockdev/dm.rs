@@ -222,7 +222,7 @@ fn collect_valid_luks(
 
             if should_be_vg.device_type != TYPE_VG {
                 return Err(AliError::AliRsBug(format!(
-                    "unexpected device type {} - expecting a VG",
+                    "{msg}: unexpected device type {} - expecting a VG",
                     should_be_vg.device_type,
                 )));
             }
@@ -261,7 +261,7 @@ fn collect_valid_luks(
 
                 if maybe_vg.device_type != TYPE_VG {
                     return Err(AliError::AliRsBug(format!(
-                        "unexpected device type {} - expecting a VG",
+                        "{msg}: unexpected device type {} - expecting a VG",
                         maybe_vg.device_type,
                     )));
                 }
