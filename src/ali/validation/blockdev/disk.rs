@@ -34,13 +34,15 @@ pub(crate) fn collect_valids(
         // A GPT table can hold a maximum of 128 partitions
         for i in 1_u8..=128 {
             let partition_name = format!("{partition_prefix}{i}");
-            if sys_fs_devs.contains_key(&partition_name) {
-                let fs = sys_fs_devs.get(&partition_name).unwrap();
-                return Err(AliError::BadManifest(format!(
-                    "disk {} already in use on {partition_name} as {fs}",
-                    disk.device
-                )));
+            if !sys_fs_devs.contains_key(&partition_name) {
+                continue;
             }
+
+            let fs = sys_fs_devs.get(&partition_name).unwrap();
+            return Err(AliError::BadManifest(format!(
+                "disk {} already in use on {partition_name} as {fs}",
+                disk.device
+            )));
         }
 
         // Base disk

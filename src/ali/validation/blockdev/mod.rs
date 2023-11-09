@@ -234,15 +234,14 @@ fn validate_blockdev(
     msg = "swap validation failed";
     if let Some(ref swaps) = manifest.swap {
         for (i, swap) in swaps.iter().enumerate() {
-            if fs_ready_devs.contains(swap) {
-                fs_ready_devs.remove(swap);
-                continue;
+            if !fs_ready_devs.contains(swap) {
+                return Err(AliError::BadManifest(format!(
+                    "{msg}: device {swap} for swap #{} is not fs-ready",
+                    i + 1,
+                )));
             }
 
-            return Err(AliError::BadManifest(format!(
-                "{msg}: device {swap} for swap #{} is not fs-ready",
-                i + 1,
-            )));
+            fs_ready_devs.remove(swap);
         }
     }
 

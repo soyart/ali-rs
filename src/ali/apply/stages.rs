@@ -1,9 +1,22 @@
 use std::collections::HashSet;
 
+use super::{
+    archchroot,
+    bootstrap,
+    disks,
+    dm,
+    fs,
+    routines,
+};
 use crate::ali::{
     Manifest,
     ManifestFs,
     ManifestMountpoint,
+};
+use crate::entity::action::{
+    ActionBootstrap,
+    ActionMountpoints,
+    ActionPostInstallUser,
 };
 use crate::entity::stage::StageActions;
 use crate::errors::AliError;
@@ -16,13 +29,6 @@ pub fn mountpoints(
     root_location: &str,
     stages: &mut StageActions,
 ) -> Result<(), AliError> {
-    use super::{
-        disks,
-        dm,
-        fs,
-    };
-    use crate::entity::action::ActionMountpoints;
-
     // Format and partition disks
     if let Some(ref m_disks) = manifest.disks {
         let actions_disks = disks::apply_disks(m_disks)?;
@@ -86,9 +92,6 @@ pub fn bootstrap(
     install_location: &str,
     stages: &mut StageActions,
 ) -> Result<(), AliError> {
-    use super::bootstrap;
-    use crate::entity::action::ActionBootstrap;
-
     // Collect packages, with base as bare-minimum
     let mut packages = HashSet::from(["base".to_string()]);
     if let Some(pacstraps) = manifest.pacstraps.clone() {
@@ -108,8 +111,6 @@ pub fn routines(
     install_location: &str,
     stages: &mut StageActions,
 ) -> Result<(), AliError> {
-    use super::routines;
-
     // Apply ALI routines installation outside of arch-chroot
     let actions_routine = routines::ali_routines(manifest, install_location)?;
     stages.routines.extend(actions_routine);
@@ -122,8 +123,6 @@ pub fn chroot_ali(
     install_location: &str,
     stages: &mut StageActions,
 ) -> Result<(), AliError> {
-    use super::archchroot;
-
     // Apply ALI routine installation in arch-chroot
     let actions_archchroot =
         archchroot::chroot_ali(manifest, install_location)?;
@@ -138,14 +137,15 @@ pub fn chroot_user(
     install_location: &str,
     stages: &mut StageActions,
 ) -> Result<(), AliError> {
-    use super::archchroot;
-
-    if let Some(ref cmds) = manifest.chroot {
-        let actions_user_cmds =
-            archchroot::chroot_user(cmds.iter(), install_location)?;
-
-        stages.chroot_user.extend(actions_user_cmds);
+    if manifest.chroot.is_none() {
+        return Ok(());
     }
+
+    let commands = manifest.chroot.as_ref().unwrap();
+    let actions_user_cmds =
+        archchroot::chroot_user(commands.iter(), install_location)?;
+
+    stages.chroot_user.extend(actions_user_cmds);
 
     Ok(())
 }
@@ -155,32 +155,33 @@ pub fn postinstall_user(
     install_location: &str,
     stages: &mut StageActions,
 ) -> Result<(), AliError> {
-    use crate::entity::action::ActionPostInstallUser;
-
     // Apply manifest.postinstall with sh -c 'cmd'
-    if let Some(ref cmds) = manifest.postinstall {
-        for cmd in cmds {
-            if hooks::is_hook(cmd) {
-                let action_hook = hooks::apply_hook(
-                    cmd,
-                    hooks::Caller::ManifestPostInstall,
-                    install_location,
-                )?;
+    if manifest.postinstall.is_none() {
+        return Ok(());
+    }
 
-                stages
-                    .postinstall_user
-                    .push(ActionPostInstallUser::Hook(action_hook));
+    let postinstall = manifest.postinstall.as_ref().unwrap();
+    for cmd in postinstall {
+        if hooks::is_hook(cmd) {
+            let action_hook = hooks::apply_hook(
+                cmd,
+                hooks::Caller::ManifestPostInstall,
+                install_location,
+            )?;
 
-                continue;
-            }
+            stages
+                .postinstall_user
+                .push(ActionPostInstallUser::Hook(action_hook));
 
-            shell::sh_c(cmd)?;
-
-            let action_postinstall_cmd =
-                ActionPostInstallUser::UserPostInstallCmd(cmd.clone());
-
-            stages.postinstall_user.push(action_postinstall_cmd);
+            continue;
         }
+
+        shell::sh_c(cmd)?;
+
+        let action_postinstall_cmd =
+            ActionPostInstallUser::UserPostInstallCmd(cmd.clone());
+
+        stages.postinstall_user.push(action_postinstall_cmd);
     }
 
     Ok(())
