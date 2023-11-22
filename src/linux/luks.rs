@@ -64,11 +64,6 @@ mod tests {
             return;
         }
 
-        if !user::is_root() {
-            println!("WARN: skipping luks tests - user is not root");
-            return;
-        }
-
         let fname = "./fake-luks.img";
         let passphrase = "pass1234";
         let opened_name = "fakeluks";
@@ -77,6 +72,13 @@ mod tests {
             panic!(
                 "dd command failed to create zeroed dummy device {fname} with size 100Mx5: {err}"
             );
+        }
+
+        if !user::is_root() {
+            println!("WARN: only testing luksFormat because user is not root");
+
+            format(fname, Some(passphrase)).expect("luksFormat failed");
+            return;
         }
 
         format(fname, Some(passphrase)).expect("luksFormat failed");
