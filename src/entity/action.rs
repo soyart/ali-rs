@@ -76,6 +76,9 @@ pub enum ActionMountpoints {
     #[serde(rename = "createDmLuks")]
     CreateDmLuks { device: String },
 
+    #[serde(rename = "openDmLuks")]
+    OpenDmLuks { device: String, name: String },
+
     #[serde(rename = "createLvmPv")]
     CreateDmLvmPv(String),
 

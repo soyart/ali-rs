@@ -1,4 +1,8 @@
-use crate::ali::Dm;
+use crate::ali::{
+    Dm,
+    ManifestLuks,
+    ManifestLvm,
+};
 use crate::entity::action::ActionMountpoints;
 use crate::errors::AliError;
 use crate::linux;
@@ -26,12 +30,37 @@ pub fn apply_dms(dms: &[Dm]) -> Result<Vec<ActionMountpoints>, AliError> {
 }
 
 pub fn apply_dm(dm: &Dm) -> Result<Vec<ActionMountpoints>, AliError> {
+    let mut actions = Vec::new();
     match dm {
-        Dm::Luks(_) => Err(AliError::NotImplemented("Apply LUKS".to_string())),
-        Dm::Lvm(lvm) => {
-            let mut actions = Vec::new();
+        Dm::Luks(ManifestLuks {
+            device,
+            passphrase,
+            name,
+        }) => {
+            let action_create = ActionMountpoints::CreateDmLuks {
+                device: device.clone(),
+            };
 
-            if let Some(pvs) = &lvm.pvs {
+            let passphrase = match passphrase {
+                None => None,
+                Some(p) => Some(p.as_str()),
+            };
+
+            linux::luks::format(device, passphrase)?;
+            actions.push(action_create);
+
+            let action_open = ActionMountpoints::OpenDmLuks {
+                device: device.clone(),
+                name: name.clone(),
+            };
+
+            linux::luks::open(device, passphrase, name)?;
+            actions.push(action_open);
+        }
+
+        // For each LVM entry, do PV, then VG, then LV
+        Dm::Lvm(ManifestLvm { pvs, vgs, lvs }) => {
+            if let Some(pvs) = &pvs {
                 for pv in pvs {
                     let action_create_pv =
                         ActionMountpoints::CreateDmLvmPv(pv.clone());
@@ -41,7 +70,7 @@ pub fn apply_dm(dm: &Dm) -> Result<Vec<ActionMountpoints>, AliError> {
                 }
             }
 
-            if let Some(vgs) = &lvm.vgs {
+            if let Some(vgs) = &vgs {
                 for vg in vgs {
                     let vg_name = format!("/dev/{}", vg.name);
                     let action_create_vg = ActionMountpoints::CreateDmLvmVg {
@@ -54,7 +83,7 @@ pub fn apply_dm(dm: &Dm) -> Result<Vec<ActionMountpoints>, AliError> {
                 }
             }
 
-            if let Some(lvs) = &lvm.lvs {
+            if let Some(lvs) = &lvs {
                 for lv in lvs {
                     let vg_name = format!("/dev/{}", lv.vg);
                     let lv_name = format!("{vg_name}/{}", lv.name);
@@ -67,8 +96,8 @@ pub fn apply_dm(dm: &Dm) -> Result<Vec<ActionMountpoints>, AliError> {
                     actions.push(action_create_lv);
                 }
             }
-
-            Ok(actions)
         }
     }
+
+    Ok(actions)
 }
