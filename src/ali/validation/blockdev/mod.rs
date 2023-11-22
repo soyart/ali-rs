@@ -450,6 +450,7 @@ mod tests {
                         Dm::Luks(ManifestLuks {
                             device: "/dev/fake1p2".into(),
                             name:  "cryptroot".into(),
+                            passphrase: None,
                         }),
                     ]),
                     rootfs: ManifestRootFs{
@@ -519,10 +520,12 @@ mod tests {
                         Dm::Luks(ManifestLuks {
                             device: "/dev/myvg/mylv".into(),
                             name:  "cryptroot".into(),
+                            passphrase: None,
                         }),
                         Dm::Luks(ManifestLuks {
                             device: "/dev/fake1p2".into(),
                             name:  "cryptswap".into(),
+                            passphrase: None,
                         })
                     ]),
                     rootfs: ManifestRootFs {
@@ -591,10 +594,12 @@ mod tests {
                         Dm::Luks(ManifestLuks {
                             device: "/dev/myvg/mylv".into(),
                             name:  "cryptroot".into(),
+                            passphrase: None,
                         }),
                         Dm::Luks(ManifestLuks {
                             device: "/dev/fake1p2".into(),
                             name:  "cryptswap".into(),
+                            passphrase: None,
                         })
                     ]),
                     rootfs: ManifestRootFs{
@@ -1939,6 +1944,7 @@ mod tests {
                         Dm::Luks(ManifestLuks {
                             device: "/dev/fake1p2".into(),
                             name:  "cryptroot".into(),
+                            passphrase: None,
                         }),
                     ]),
                     rootfs: ManifestRootFs{
@@ -2007,6 +2013,7 @@ mod tests {
                         Dm::Luks(ManifestLuks {
                             device: "/dev/myvg/mylv".into(),
                             name:  "cryptroot".into(),
+                            passphrase: None,
                         }),
                     ]),
                     rootfs: ManifestRootFs{
