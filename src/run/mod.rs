@@ -4,11 +4,14 @@ pub mod validate;
 
 use std::env;
 
+use colored::Colorize;
+
 use crate::constants::defaults;
 use crate::errors::AliError;
 use crate::{
     cli,
     constants,
+    linux,
 };
 
 pub fn run(cli_args: cli::Cli) -> Result<(), AliError> {
@@ -21,6 +24,10 @@ pub fn run(cli_args: cli::Cli) -> Result<(), AliError> {
         }
         // Apply manifest in full
         Some(cli::Commands::Apply(args_apply)) => {
+            if !linux::user::is_root() {
+                println!("{}", "WARN: running as non-root user".yellow())
+            }
+
             match apply::run(&cli_args.manifest, &new_root_location, args_apply)
             {
                 Err(err) => Err(err),

@@ -132,6 +132,11 @@ pub struct ManifestRootFs {
 pub struct ManifestLuks {
     pub device: String,
     pub name: String,
+
+    // If passphrase is None, let cryptsetup prompt user for password,
+    // if it is Some(pass), pipe pass to cryptsetup
+    #[serde(alias = "key")]
+    pub passphrase: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
