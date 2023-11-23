@@ -37,13 +37,9 @@ pub fn apply_dm(dm: &Dm) -> Result<Vec<ActionMountpoints>, AliError> {
             passphrase,
             name,
         }) => {
+            let passphrase = passphrase.as_ref().map(|p| p.as_str());
             let action_create = ActionMountpoints::CreateDmLuks {
                 device: device.clone(),
-            };
-
-            let passphrase = match passphrase {
-                None => None,
-                Some(p) => Some(p.as_str()),
             };
 
             linux::luks::format(device, passphrase)?;

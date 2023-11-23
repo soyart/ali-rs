@@ -31,6 +31,7 @@ pub fn open(
     shell::sh_c(&open_cmd)
 }
 
+#[allow(unused)]
 pub fn close(name: &str) -> Result<(), AliError> {
     let close_cmd = format!("cryptsetup luksClose {name}");
 
