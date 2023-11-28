@@ -1,0 +1,59 @@
+name: release
+
+on:
+  # release:
+  #   types: [created]
+  workflow_dispatch:
+  push:
+    branches:
+      - actions/release
+    tags:
+      - 'v*'
+
+jobs:
+  test-release:
+    name: Test release
+    uses: ./.github/workflows/cargo_test.yaml
+
+  release:
+    # if: github.event_name == 'release'
+    name: release ${{ matrix.target }}
+    needs: test-release
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+            archive: tar.gz
+          # - target: x86_64-unknown-linux-gnu
+          #   archive: zip tar.gz tar.zst
+          # - target: aarch64-unknown-linux-gnu
+          #   archive: zip tar.gz tar.zst
+
+    steps:
+      - name: Checkout to build release ${{ matrix.target }}
+        uses: actions/checkout@v3
+
+      - id: build
+        name: Compile and release ${{ matrix.target }}
+        uses: rust-build/rust-build.action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          RUSTTARGET: ${{ matrix.target }}
+          EXTRA_FILES: "README.md"
+          SRC_DIR: "src"
+          ARCHIVE_TYPES: ${{ matrix.archive }}
+          MINIFY: "yes"
+          UPLOAD_MODE: none
+          # PRE_BUILD: "pre_build.sh"
+          # POST_BUILD: "test/post_build.sh"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: Binary
+          path: |
+            ${{ steps.build.outputs.BUILT_ARCHIVE }}
+            ${{ steps.build.outputs.BUILT_CHECKSUM }}
