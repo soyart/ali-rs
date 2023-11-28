@@ -3,6 +3,7 @@ name: cargo-test
 on:
   push:
   pull_request:
+  workflow_call:
 
 jobs:
   cargo-test:
