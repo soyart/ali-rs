@@ -9,6 +9,7 @@ on:
       - actions/release
     tags:
       - 'v*'
+      - 'dev-*'
 
 jobs:
   test-release:
