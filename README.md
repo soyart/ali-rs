@@ -1,6 +1,6 @@
 # ali-rs
 
-[![Workflow Status](https://github.com/soyart/ali-rs/workflows/cargo%2Dtest/badge.svg)](https://github.com/soyart/ali-rs/actions?query=workflow%3A%22cargo%2Dtest%22)
+[![Workflow Status](https://github.com/soyart/ali-rs/workflows/test/badge.svg)](https://github.com/soyart/ali-rs/actions?query=workflow%3A%22test%22)
 ![Maintenance](https://img.shields.io/badge/maintenance-activly--developed-brightgreen.svg)
 
 ```text
@@ -159,5 +159,5 @@ messing with block devices.
 
 
 
-Version: 0.1.0
+Version: 0.0.1
 License: GPL-2.0
