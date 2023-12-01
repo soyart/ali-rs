@@ -1,8 +1,12 @@
-name: clippy-release
+# Lints with clippy when releases created
+
+name: release-clippy
 
 on:
-  push:
-    tags: ["**"]
+  workflow_call:
+  workflow_dispatch:
+  release:
+    types: [created]
     
 jobs:
   clippy-release:

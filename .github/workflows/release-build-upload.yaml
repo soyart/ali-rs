@@ -1,15 +1,12 @@
-name: release
+# Builds and releases binaries to GitHub releases and GitHub Actions artifacts
+
+name: release-build-upload
 
 on:
-  # release:
-  #   types: [created]
+  workflow_call:
   workflow_dispatch:
-  push:
-    branches:
-      - actions/release
-    tags:
-      - 'v*'
-      - 'dev-*'
+  release:
+    types: [created]
 
 jobs:
   test-release:
@@ -37,24 +34,28 @@ jobs:
         uses: actions/checkout@v3
 
       - id: build
-        name: Compile and release ${{ matrix.target }}
+        name: Compile and upload release ${{ matrix.target }}
         uses: rust-build/rust-build.action@master
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           RUSTTARGET: ${{ matrix.target }}
-          EXTRA_FILES: "README.md"
           SRC_DIR: "src"
+          EXTRA_FILES:
+            - "README.md"
+            - "HOOKS.md"
+            - "LICENSE"
+
           ARCHIVE_TYPES: ${{ matrix.archive }}
           MINIFY: "yes"
-          UPLOAD_MODE: none
+          UPLOAD_MODE: release
           # PRE_BUILD: "pre_build.sh"
           # POST_BUILD: "test/post_build.sh"
 
-      - name: Upload artifact
+      - name: Upload artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: Binary
+          name: release
           path: |
             ${{ steps.build.outputs.BUILT_ARCHIVE }}
             ${{ steps.build.outputs.BUILT_CHECKSUM }}
