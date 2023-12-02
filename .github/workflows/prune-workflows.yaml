@@ -1,4 +1,4 @@
-name: prune old workflow runs
+name: prune-workflows
 on:
   workflow_dispatch:
   schedule:
