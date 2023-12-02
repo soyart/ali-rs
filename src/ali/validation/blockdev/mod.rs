@@ -98,35 +98,12 @@ fn validate_blockdev(
     )?;
 
     // Valid block devices that can be used as fs base (fs-ready)
-    let mut fs_ready_devs = HashSet::<String>::new();
-
-    sysfs::collect_fs_ready_devs(&mut sys_fs_ready_devs, &mut fs_ready_devs)?;
-    sysfs::collect_lvm_fs_ready_devs(sys_lvms, &mut fs_ready_devs);
-
-    // Collect fs-ready devices from valids to fs_ready_devs
-    for list in &valids {
-        let dev = list.back().expect("`valids` is missing top-most device");
-        if !is_fs_ready(&dev.device_type) {
-            continue;
-        }
-
-        fs_ready_devs.insert(dev.device.clone());
-    }
+    let mut fs_ready_devs =
+        collect_fs_ready_devs(&mut sys_fs_ready_devs, sys_lvms, &valids)?;
 
     // Valid block devices used as filesystems
-    let mut fs_devs = HashSet::new();
-
-    fs::collect_rootfs_fs_devs(
-        &manifest.rootfs.device,
-        &mut fs_ready_devs,
-        &mut fs_devs,
-    )?;
-
-    sysfs::collect_fs_devs(sys_fs_devs, &mut fs_devs)?;
-
-    if let Some(filesystems) = &manifest.filesystems {
-        fs::collect_fs_devs(filesystems, &mut fs_ready_devs, &mut fs_devs)?;
-    }
+    let mut fs_devs =
+        collect_fs_devs(manifest, sys_fs_devs, &mut fs_ready_devs)?;
 
     if let Some(mountpoints) = &manifest.mountpoints {
         mount::validate_dups(mountpoints)?;
@@ -170,6 +147,53 @@ fn collect_valids(
     }
 
     Ok(valids)
+}
+
+fn collect_fs_ready_devs(
+    sys_fs_ready_devs: &mut HashMap<String, BlockDevType>,
+    sys_lvms: HashMap<String, BlockDevPaths>,
+    valids: &BlockDevPaths,
+) -> Result<HashSet<String>, AliError> {
+    // Valid block devices that can be used as fs base (fs-ready)
+    let mut fs_ready_devs = HashSet::<String>::new();
+
+    sysfs::collect_fs_ready_devs(sys_fs_ready_devs, &mut fs_ready_devs)?;
+    sysfs::collect_lvm_fs_ready_devs(sys_lvms, &mut fs_ready_devs);
+
+    // Collect fs-ready devices from valids to fs_ready_devs
+    for list in valids {
+        let dev = list.back().expect("`valids` is missing top-most device");
+        if !is_fs_ready(&dev.device_type) {
+            continue;
+        }
+
+        fs_ready_devs.insert(dev.device.clone());
+    }
+
+    Ok(fs_ready_devs)
+}
+
+fn collect_fs_devs<'a>(
+    manifest: &'a Manifest,
+    sys_fs_devs: &'a HashMap<String, BlockDevType>,
+    fs_ready_devs: &'a mut HashSet<String>,
+) -> Result<HashSet<&'a String>, AliError> {
+    // Valid block devices used as filesystems
+    let mut fs_devs = HashSet::new();
+
+    fs::collect_rootfs_fs_devs(
+        &manifest.rootfs.device,
+        fs_ready_devs,
+        &mut fs_devs,
+    )?;
+
+    sysfs::collect_fs_devs(sys_fs_devs, &mut fs_devs)?;
+
+    if let Some(filesystems) = &manifest.filesystems {
+        fs::collect_fs_devs(filesystems, fs_ready_devs, &mut fs_devs)?;
+    }
+
+    Ok(fs_devs)
 }
 
 fn is_fs_ready(dev_type: &BlockDevType) -> bool {
