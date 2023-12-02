@@ -32,3 +32,21 @@ pub(crate) fn partition_name(name: &str, part_number: u8) -> String {
 
     format!("{name}{part_number}")
 }
+
+#[test]
+fn test_partition_name() {
+    use std::collections::HashMap;
+
+    let tests = HashMap::from([
+        (("/dev/nvme0n1", 1u8), "/dev/nvme0n1p1"),
+        (("/dev/mmcblk7", 2u8), "/dev/mmcblk7p8"),
+        (("/dev/vdb", 10u8), "/dev/vdb10"),
+        (("/dev/sda", 5u8), "/dev/sda5"),
+    ]);
+
+    for ((device, part_num), expected) in tests {
+        let result = partition_name(device, part_num);
+
+        assert_eq!(expected, result.as_str());
+    }
+}
