@@ -413,6 +413,71 @@ mod tests {
             },
 
             Test {
+                case: "Root on LUKS on existing partition, swap on existing LV, data on new LV".into(),
+                context: None,
+                sys_fs_ready_devs: Some(HashMap::from([(
+                    "/dev/fake1p2".into(),
+                    TYPE_PART,
+                )])),
+                sys_fs_devs: None,
+                sys_lvms: Some(HashMap::from([(
+                    "/dev/fda1".into(),
+                    vec![LinkedList::from([
+                        BlockDev {
+                            device: "/dev/fda1".into(),
+                            device_type: TYPE_PV,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg".into(),
+                            device_type: TYPE_VG,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg/mylv".into(),
+                            device_type: TYPE_LV,
+                        },
+                    ])],
+                )])),
+
+                manifest: Manifest {
+                    location: None,
+                    disks: None,
+                    device_mappers: Some(vec![
+                        Dm::Luks(ManifestLuks {
+                            device: "/dev/fake1p2".into(),
+                            name:  "cryptroot".into(),
+                            passphrase: None,
+                        }),
+                        Dm::Lvm(ManifestLvm {
+                            pvs: None,
+                            vgs: None,
+                            lvs: Some(vec![
+                                ManifestLvmLv{
+                                    name: "datalv".into(),
+                                    vg: "myvg".into(),
+                                    size: None,
+                                },
+                            ]),
+                        })
+                    ]),
+                    rootfs: ManifestRootFs{
+                        device: "/dev/mapper/cryptroot".into(),
+                        fs_type: "btrfs".into(),
+                        fs_opts: None,
+                        mnt_opts: None,
+                    },
+                    filesystems: None,
+                    mountpoints: None,
+                    swap: Some(vec!["/dev/myvg/mylv".into()]),
+                    pacstraps: None,
+                    chroot: None,
+                    postinstall: None,
+                    hostname: None,
+                    timezone: None,
+                    rootpasswd: None,
+                },
+            },
+
+            Test {
                 case: "Root on LUKS on existing partition, mountpoint on existing LV".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([(

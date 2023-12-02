@@ -547,7 +547,13 @@ fn collect_valid_lv(
     sys_lvms: &mut HashMap<String, BlockDevPaths>,
     valids: &mut BlockDevPaths,
 ) -> Result<(), AliError> {
-    let vg_name = format!("/dev/{}", lv.vg);
+    let vg_name = if lv.vg.contains("/dev/") {
+        lv.vg.clone()
+    } else {
+        format!("/dev/{}", lv.vg)
+    };
+
+    // let vg_name = format!("/dev/{}", lv.vg);
     let lv_name = format!("{vg_name}/{}", lv.name);
 
     let msg = "lvm lv validation failed";
@@ -568,33 +574,17 @@ fn collect_valid_lv(
     let mut lv_vgs = Vec::new();
 
     let msg = "lvm lv validation failed";
-    for sys_lvm_lists in sys_lvms.values_mut() {
-        for sys_lvm in sys_lvm_lists.iter_mut() {
-            let top_most = sys_lvm.back();
-
-            if top_most.is_none() {
+    for sys_lvm_list in sys_lvms.values().flatten() {
+        for sys_lvm in sys_lvm_list {
+            if sys_lvm.device_type != TYPE_VG {
                 continue;
             }
 
-            let top_most = top_most.unwrap();
-            if *top_most == lv_dev {
-                return Err(AliError::BadManifest(format!(
-                    "{msg}: lv {lv_name} already exists"
-                )));
-            }
-
-            if top_most.device != vg_name {
+            if sys_lvm.device != vg_name {
                 continue;
             }
 
-            if !is_lv_base(&top_most.device_type) {
-                return Err(AliError::BadManifest(format!(
-                    "{msg}: lv {lv_name} vg base {vg_name} cannot have type {}",
-                    top_most.device_type
-                )));
-            }
-
-            let mut list = sys_lvm.clone();
+            let mut list = sys_lvm_list.clone();
             list.push_back(lv_dev.clone());
             lv_vgs.push(list);
         }
