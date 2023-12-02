@@ -178,15 +178,10 @@ fn collect_fs_devs<'a>(
     sys_fs_devs: &'a HashMap<String, BlockDevType>,
     fs_ready_devs: &'a mut HashSet<String>,
 ) -> Result<HashSet<&'a String>, AliError> {
+    fs::collect_rootfs_fs_devs(&manifest.rootfs.device, fs_ready_devs)?;
+
     // Valid block devices used as filesystems
     let mut fs_devs = HashSet::new();
-
-    fs::collect_rootfs_fs_devs(
-        &manifest.rootfs.device,
-        fs_ready_devs,
-        &mut fs_devs,
-    )?;
-
     sysfs::collect_fs_devs(sys_fs_devs, &mut fs_devs)?;
 
     if let Some(filesystems) = &manifest.filesystems {
@@ -408,6 +403,72 @@ mod tests {
                     filesystems: None,
                     mountpoints: None,
                     swap: Some(vec!["/dev/myvg/mylv".into()]),
+                    pacstraps: None,
+                    chroot: None,
+                    postinstall: None,
+                    hostname: None,
+                    timezone: None,
+                    rootpasswd: None,
+                },
+            },
+
+            Test {
+                case: "Root on LUKS on existing partition, mountpoint on existing LV".into(),
+                context: None,
+                sys_fs_ready_devs: Some(HashMap::from([(
+                    "/dev/fake1p2".into(),
+                    TYPE_PART,
+                )])),
+                sys_fs_devs: None,
+                sys_lvms: Some(HashMap::from([(
+                    "/dev/fda1".into(),
+                    vec![LinkedList::from([
+                        BlockDev {
+                            device: "/dev/fda1".into(),
+                            device_type: TYPE_PV,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg".into(),
+                            device_type: TYPE_VG,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg/mylv".into(),
+                            device_type: TYPE_LV,
+                        },
+                    ])],
+                )])),
+
+                manifest: Manifest {
+                    location: None,
+                    disks: None,
+                    device_mappers: Some(vec![
+                        Dm::Luks(ManifestLuks {
+                            device: "/dev/fake1p2".into(),
+                            name:  "cryptroot".into(),
+                            passphrase: None,
+                        }),
+                    ]),
+                    rootfs: ManifestRootFs{
+                        device: "/dev/mapper/cryptroot".into(),
+                        fs_type: "btrfs".into(),
+                        fs_opts: None,
+                        mnt_opts: None,
+                    },
+                    filesystems: Some(vec![
+                        ManifestFs{
+                            device: "/dev/myvg/mylv".into(),
+                            fs_type: "btrfs".into(),
+                            fs_opts: None,
+                        },
+                    ]),
+                    mountpoints: Some(vec![
+                        ManifestMountpoint{
+                            device: "/dev/myvg/mylv".into(),
+                            dest: "/data".into(),
+                            mnt_opts: None,
+                        },
+                    ]),
+                    swap: None,
                     pacstraps: None,
                     chroot: None,
                     postinstall: None,
@@ -1971,6 +2032,272 @@ mod tests {
                     filesystems: None,
                     mountpoints: None,
                     swap: Some(vec!["/dev/myvg/mylv".into()]),
+                    pacstraps: None,
+                    chroot: None,
+                    postinstall: None,
+                    hostname: None,
+                    timezone: None,
+                    rootpasswd: None,
+                },
+            },
+
+            Test {
+                case: "Root on LUKS on existing partition, but 1 fs on rootfs device".into(),
+                context: None,
+                sys_fs_ready_devs: Some(HashMap::from([(
+                    "/dev/fake1p2".into(),
+                    TYPE_PART,
+                )])),
+                sys_fs_devs: None,
+                sys_lvms: Some(HashMap::from([(
+                    "/dev/fda1".into(),
+                    vec![LinkedList::from([
+                        BlockDev {
+                            device: "/dev/fda1".into(),
+                            device_type: TYPE_PV,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg".into(),
+                            device_type: TYPE_VG,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg/mylv".into(),
+                            device_type: TYPE_LV,
+                        },
+                    ])],
+                )])),
+
+                manifest: Manifest {
+                    location: None,
+                    disks: None,
+                    device_mappers: Some(vec![
+                        Dm::Luks(ManifestLuks {
+                            device: "/dev/fake1p2".into(),
+                            name:  "cryptroot".into(),
+                            passphrase: None,
+                        }),
+                    ]),
+                    rootfs: ManifestRootFs{
+                        device: "/dev/mapper/cryptroot".into(),
+                        fs_type: "btrfs".into(),
+                        fs_opts: None,
+                        mnt_opts: None,
+                    },
+                    filesystems: Some(vec![
+                        ManifestFs{
+                            device: "/dev/mapper/cryptroot".into(),
+                            fs_type: "btrfs".into(),
+                            fs_opts: None,
+                        },
+                    ]),
+                    mountpoints: None,
+                    swap: None,
+                    pacstraps: None,
+                    chroot: None,
+                    postinstall: None,
+                    hostname: None,
+                    timezone: None,
+                    rootpasswd: None,
+                },
+            },
+
+            Test {
+                case: "Root on LUKS on existing partition, but 1 mountpoint on rootfs".into(),
+                context: None,
+                sys_fs_ready_devs: Some(HashMap::from([(
+                    "/dev/fake1p2".into(),
+                    TYPE_PART,
+                )])),
+                sys_fs_devs: None,
+                sys_lvms: Some(HashMap::from([(
+                    "/dev/fda1".into(),
+                    vec![LinkedList::from([
+                        BlockDev {
+                            device: "/dev/fda1".into(),
+                            device_type: TYPE_PV,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg".into(),
+                            device_type: TYPE_VG,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg/mylv".into(),
+                            device_type: TYPE_LV,
+                        },
+                    ])],
+                )])),
+
+                manifest: Manifest {
+                    location: None,
+                    disks: None,
+                    device_mappers: Some(vec![
+                        Dm::Luks(ManifestLuks {
+                            device: "/dev/fake1p2".into(),
+                            name:  "cryptroot".into(),
+                            passphrase: None,
+                        }),
+                    ]),
+                    rootfs: ManifestRootFs{
+                        device: "/dev/mapper/cryptroot".into(),
+                        fs_type: "btrfs".into(),
+                        fs_opts: None,
+                        mnt_opts: None,
+                    },
+                    filesystems: Some(vec![
+                        ManifestFs{
+                            device: "/dev/myvg/mylv".into(),
+                            fs_type: "btrfs".into(),
+                            fs_opts: None,
+                        },
+                    ]),
+                    mountpoints: Some(vec![
+                        ManifestMountpoint{
+                            device: "/dev/mapper/cryptroot".into(),
+                            dest: "/data".into(),
+                            mnt_opts: None,
+                        },
+                    ]),
+                    swap: None,
+                    pacstraps: None,
+                    chroot: None,
+                    postinstall: None,
+                    hostname: None,
+                    timezone: None,
+                    rootpasswd: None,
+                },
+            },
+
+            Test {
+                case: "Root on LVM, built on manifest partitions, but 1 fs on rootfs device".into(),
+                context: None,
+                sys_fs_ready_devs: Some(HashMap::from([
+                    ("/dev/fake1p2".into(), TYPE_PART),
+                ])),
+                sys_fs_devs: None,
+                sys_lvms: None,
+
+                manifest: Manifest {
+                    location: None,
+                    disks: Some(vec![
+                        ManifestDisk {
+                            device: "./test_assets/mock_devs/sda".into(),
+                            table: PartitionTable::Gpt,
+                            partitions: vec![
+                                ManifestPartition {
+                                    label: "PART_EFI".into(),
+                                    size: Some("500M".into()),
+                                    part_type: "ef".into(),
+                                },
+                                ManifestPartition {
+                                    label: "PART_PV".into(),
+                                    size: None,
+                                    part_type: "8e".into(),
+                                },
+                            ],
+                    }]),
+                    device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
+                        pvs: Some(vec![
+                            "./test_assets/mock_devs/sda2".into(),
+                        ]),
+                        vgs: Some(vec![
+                            ManifestLvmVg {
+                                name: "myvg".into(),
+                                pvs: vec!["./test_assets/mock_devs/sda2".into()],
+                            },
+                        ]),
+                        lvs: Some(vec![
+                            ManifestLvmLv{
+                                name: "mylv".into(),
+                                vg: "myvg".into(),
+                                size: None,
+                            },
+                        ]),
+                    })]),
+                    rootfs: ManifestRootFs{
+                        device: "/dev/myvg/mylv".into(),
+                        fs_type: "btrfs".into(),
+                        fs_opts: None,
+                        mnt_opts: None,
+                    },
+                    filesystems: Some(vec![
+                        ManifestFs {
+                            device: "/dev/myvg/mylv".into(),
+                            fs_type: "btrfs".into(),
+                            fs_opts: None,
+                        },
+                    ]),
+                    mountpoints: None,
+                    swap: Some(vec!["/dev/fake1p2".into()]),
+                    pacstraps: None,
+                    chroot: None,
+                    postinstall: None,
+                    hostname: None,
+                    timezone: None,
+                    rootpasswd: None,
+                },
+            },
+
+            Test {
+                case: "Root on LVM, built on manifest partitions, but 1 mountpoint on rootfs".into(),
+                context: None,
+                sys_fs_ready_devs: Some(HashMap::from([
+                    ("/dev/fake1p2".into(), TYPE_PART),
+                ])),
+                sys_fs_devs: None,
+                sys_lvms: None,
+
+                manifest: Manifest {
+                    location: None,
+                    disks: Some(vec![
+                        ManifestDisk {
+                            device: "./test_assets/mock_devs/sda".into(),
+                            table: PartitionTable::Gpt,
+                            partitions: vec![
+                                ManifestPartition {
+                                    label: "PART_EFI".into(),
+                                    size: Some("500M".into()),
+                                    part_type: "ef".into(),
+                                },
+                                ManifestPartition {
+                                    label: "PART_PV".into(),
+                                    size: None,
+                                    part_type: "8e".into(),
+                                },
+                            ],
+                    }]),
+                    device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
+                        pvs: Some(vec![
+                            "./test_assets/mock_devs/sda2".into(),
+                        ]),
+                        vgs: Some(vec![
+                            ManifestLvmVg {
+                                name: "myvg".into(),
+                                pvs: vec!["./test_assets/mock_devs/sda2".into()],
+                            },
+                        ]),
+                        lvs: Some(vec![
+                            ManifestLvmLv{
+                                name: "mylv".into(),
+                                vg: "myvg".into(),
+                                size: None,
+                            },
+                        ]),
+                    })]),
+                    rootfs: ManifestRootFs{
+                        device: "/dev/myvg/mylv".into(),
+                        fs_type: "btrfs".into(),
+                        fs_opts: None,
+                        mnt_opts: None,
+                    },
+                    filesystems: None,
+                    mountpoints: Some(vec![
+                        ManifestMountpoint {
+                            device: "/dev/myvg/mylv".into(),
+                            dest: "/data".into(),
+                            mnt_opts: None,
+                        },
+                    ]),
+                    swap: Some(vec!["/dev/fake1p2".into()]),
                     pacstraps: None,
                     chroot: None,
                     postinstall: None,

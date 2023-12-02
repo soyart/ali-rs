@@ -3,10 +3,9 @@ use std::collections::HashSet;
 use crate::ali::ManifestFs;
 use crate::errors::AliError;
 
-pub(super) fn collect_rootfs_fs_devs<'a>(
-    rootfs: &'a String,
+pub(super) fn collect_rootfs_fs_devs(
+    rootfs: &String,
     fs_ready_devs: &mut HashSet<String>,
-    fs_devs: &mut HashSet<&'a String>,
 ) -> Result<(), AliError> {
     const MSG: &str = "rootfs validation failed";
 
@@ -18,7 +17,6 @@ pub(super) fn collect_rootfs_fs_devs<'a>(
 
     // Remove used up fs-ready device (rootfs)
     fs_ready_devs.remove(rootfs);
-    fs_devs.insert(rootfs);
 
     Ok(())
 }
