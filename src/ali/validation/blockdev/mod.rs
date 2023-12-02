@@ -73,8 +73,8 @@ pub(crate) fn validate(
 /// into a list `valids`, returning error if found during collection.
 ///
 /// If all names are successfully collected into `valids`,
-/// `valids` is then used to validate the following manifest fields:
-/// `rootfs`, `filesystems`, `swap`, and `mountpoints`
+/// `valids` is then used to construct `fs_ready_devs` and `fs_devs`.
+/// All 3 variables are then used validate the block devices:
 ///
 /// The parameters it takes are the current state of the system
 /// before applying the manifest, which is used to ensure that
@@ -89,29 +89,15 @@ fn validate_blockdev(
     mut sys_fs_ready_devs: HashMap<String, BlockDevType>, /* Maps fs-ready devs to their types (e.g. partition) */
     mut sys_lvms: HashMap<String, BlockDevPaths>, /* Maps pv path to all possible LV paths */
 ) -> Result<BlockDevPaths, AliError> {
-    // valids collects all valid known devices to be created in the manifest.
-    // The back of each linked list is the top-most device.
-    let mut valids = BlockDevPaths::new();
+    // Valid block devices
+    let valids = collect_valids(
+        manifest,
+        sys_fs_devs,
+        &mut sys_fs_ready_devs,
+        &mut sys_lvms,
+    )?;
 
-    if let Some(disks) = &manifest.disks {
-        disk::collect_valids(
-            disks,
-            sys_fs_devs,
-            &sys_fs_ready_devs,
-            &mut valids,
-        )?;
-    }
-
-    if let Some(dms) = &manifest.device_mappers {
-        dm::collect_valids(
-            dms,
-            sys_fs_devs,
-            &mut sys_fs_ready_devs,
-            &mut sys_lvms,
-            &mut valids,
-        )?;
-    }
-
+    // Valid block devices that can be used as fs base (fs-ready)
     let mut fs_ready_devs = HashSet::<String>::new();
 
     sysfs::collect_fs_ready_devs(&mut sys_fs_ready_devs, &mut fs_ready_devs)?;
@@ -127,6 +113,7 @@ fn validate_blockdev(
         fs_ready_devs.insert(dev.device.clone());
     }
 
+    // Valid block devices used as filesystems
     let mut fs_devs = HashSet::new();
 
     fs::collect_rootfs_fs_devs(
@@ -148,6 +135,38 @@ fn validate_blockdev(
 
     if let Some(ref swaps) = manifest.swap {
         swap::validate(swaps, &mut fs_ready_devs)?;
+    }
+
+    Ok(valids)
+}
+
+fn collect_valids(
+    manifest: &Manifest,
+    sys_fs_devs: &HashMap<String, BlockDevType>,
+    sys_fs_ready_devs: &mut HashMap<String, BlockDevType>,
+    sys_lvms: &mut HashMap<String, BlockDevPaths>,
+) -> Result<BlockDevPaths, AliError> {
+    // valids collects all valid known devices to be created in the manifest.
+    // The back of each linked list is the top-most device.
+    let mut valids = BlockDevPaths::new();
+
+    if let Some(disks) = &manifest.disks {
+        disk::collect_valids(
+            disks,
+            sys_fs_devs,
+            sys_fs_ready_devs,
+            &mut valids,
+        )?;
+    }
+
+    if let Some(dms) = &manifest.device_mappers {
+        dm::collect_valids(
+            dms,
+            sys_fs_devs,
+            sys_fs_ready_devs,
+            sys_lvms,
+            &mut valids,
+        )?;
     }
 
     Ok(valids)
