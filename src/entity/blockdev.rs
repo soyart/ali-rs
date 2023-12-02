@@ -1,8 +1,12 @@
+use humanize_rs::bytes;
 use serde::{
     Deserialize,
     Serialize,
 };
+
 use std::collections::LinkedList;
+
+use crate::errors::AliError;
 
 #[derive(
     Debug, PartialEq, Eq, std::hash::Hash, Clone, Serialize, Deserialize,
@@ -69,10 +73,6 @@ pub type BlockDevPath = LinkedList<BlockDev>;
 // 2. [/dev/sda -> /dev/sda1 -> /dev/sda1(pv) -> /dev/myvg -> /dev/myvg/barlv]
 // 4. [/dev/sdb -> /dev/sdb2 -> /dev/sdb2(pv) -> /dev/myvg -> /dev/myvg/barlv]
 pub type BlockDevPaths = Vec<BlockDevPath>;
-
-use humanize_rs::bytes;
-
-use crate::errors::AliError;
 
 pub fn parse_human_bytes(s: &str) -> Result<bytes::Bytes, AliError> {
     (s.to_lowercase()).parse::<bytes::Bytes>().map_err(|err| {
