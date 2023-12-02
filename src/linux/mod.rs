@@ -43,7 +43,7 @@ mod tests {
 
         let tests = HashMap::from([
             (("/dev/nvme0n1", 1u8), "/dev/nvme0n1p1"),
-            (("/dev/mmcblk7", 2u8), "/dev/mmcblk7p7"),
+            (("/dev/mmcblk7", 2u8), "/dev/mmcblk7p2"),
             (("/dev/vdb", 10u8), "/dev/vdb10"),
             (("/dev/sda", 5u8), "/dev/sda5"),
         ]);
