@@ -1,6 +1,9 @@
 mod disk;
 mod dm;
+mod fs;
 mod mount;
+mod swap;
+mod sysfs;
 mod trace_blk;
 
 use std::collections::{
@@ -109,148 +112,48 @@ fn validate_blockdev(
         )?;
     }
 
-    // fs_ready_devs is used to validate manifest.fs
     let mut fs_ready_devs = HashSet::<String>::new();
 
-    // Collect remaining sys_fs_ready_devs
-    for (dev, dev_type) in sys_fs_ready_devs {
-        if !is_fs_base(&dev_type) {
-            return Err(AliError::AliRsBug(format!(
-                "device {dev} ({dev_type}) cannot be used as base for filesystems"
-            )));
-        }
+    sysfs::collect_fs_ready_devs(&mut sys_fs_ready_devs, &mut fs_ready_devs)?;
+    sysfs::collect_lvm_fs_ready_devs(sys_lvms, &mut fs_ready_devs);
 
-        if fs_ready_devs.insert(dev.clone()) {
-            continue;
-        }
-
-        return Err(AliError::AliRsBug(format!(
-            "duplicate device {dev} ({dev_type}) as base for filesystems"
-        )));
-    }
-
-    // Collect remaining sys_lvms - fs-ready only
-    for list in sys_lvms.into_values().flatten() {
-        let dev = list.back();
-        if dev.is_none() {
-            continue;
-        }
-
-        let dev = dev.unwrap();
-        if !is_fs_base(&dev.device_type) {
-            continue;
-        }
-
-        // We should be able to ignore LVM LV duplicates
-        fs_ready_devs.insert(dev.device.clone());
-    }
-
-    // Collect from valids - fs-ready only
+    // Collect fs-ready devices from valids to fs_ready_devs
     for list in &valids {
         let dev = list.back().expect("`valids` is missing top-most device");
-        if !is_fs_base(&dev.device_type) {
+        if !is_fs_ready(&dev.device_type) {
             continue;
         }
 
         fs_ready_devs.insert(dev.device.clone());
     }
 
-    // Validate root FS, other FS, and swap against fs_ready_devs
-    let mut msg = "rootfs validation failed";
-
-    if !fs_ready_devs.contains(&manifest.rootfs.device.clone()) {
-        return Err(AliError::BadManifest(format!(
-            "{msg}: no top-level fs-ready device for rootfs: {}",
-            manifest.rootfs.device,
-        )));
-    }
-
-    // Remove used up fs-ready device (rootfs)
-    fs_ready_devs.remove(&manifest.rootfs.device);
-
-    // Track all devices, system or manifest, with FS
     let mut fs_devs = HashSet::new();
 
-    // Validate that we will only create fs on fs_ready_devs
+    fs::collect_rootfs_fs_devs(
+        &manifest.rootfs.device,
+        &mut fs_ready_devs,
+        &mut fs_devs,
+    )?;
+
+    sysfs::collect_fs_devs(sys_fs_devs, &mut fs_devs)?;
+
     if let Some(filesystems) = &manifest.filesystems {
-        msg = "fs validation failed";
-
-        for (i, fs) in filesystems.iter().enumerate() {
-            if !fs_ready_devs.contains(&fs.device) {
-                return Err(AliError::BadManifest(format!(
-                    "{msg}: device {} for fs #{} ({}) is not fs-ready",
-                    fs.device,
-                    i + 1,
-                    fs.fs_type,
-                )));
-            }
-
-            // Remove used up fs-ready device
-            fs_ready_devs.remove(&fs.device);
-
-            // Collect this fs to fs devices to later validate mountpoints
-            if fs_devs.insert(&fs.device) {
-                continue;
-            }
-
-            return Err(AliError::AliRsBug(format!(
-                "{msg}: duplicate filesystem devices from manifest filesystems: {} ({})",
-                fs.device, fs.fs_type,
-            )));
-        }
+        fs::collect_fs_devs(filesystems, &mut fs_ready_devs, &mut fs_devs)?;
     }
 
-    // Validate mountpoints - all mountpoints must point to valid FS devices
     if let Some(mountpoints) = &manifest.mountpoints {
-        msg = "fs mount validation failed";
-
-        if let Err(err) = mount::validate(mountpoints) {
-            return Err(AliError::BadManifest(format!("{msg}: {err}")));
-        }
-
-        // Collect all system's FS
-        for (dev, dev_type) in sys_fs_devs {
-            if fs_devs.insert(dev) {
-                continue;
-            }
-
-            return Err(AliError::AliRsBug(format!(
-                "{msg}: duplicate filesystem devices from from system filesystems: {dev} ({dev_type})",
-            )));
-        }
-
-        for (i, mnt) in mountpoints.iter().enumerate() {
-            if fs_devs.contains(&mnt.device) {
-                continue;
-            }
-
-            return Err(AliError::BadManifest(format!(
-                "{msg}: mountpoint {} for device #{} ({}) is not fs-ready",
-                mnt.dest,
-                i + 1,
-                mnt.device,
-            )));
-        }
+        mount::validate_dups(mountpoints)?;
+        mount::validate(mountpoints, &mut fs_devs)?;
     }
 
-    msg = "swap validation failed";
     if let Some(ref swaps) = manifest.swap {
-        for (i, swap) in swaps.iter().enumerate() {
-            if !fs_ready_devs.contains(swap) {
-                return Err(AliError::BadManifest(format!(
-                    "{msg}: device {swap} for swap #{} is not fs-ready",
-                    i + 1,
-                )));
-            }
-
-            fs_ready_devs.remove(swap);
-        }
+        swap::validate(swaps, &mut fs_ready_devs)?;
     }
 
     Ok(valids)
 }
 
-fn is_fs_base(dev_type: &BlockDevType) -> bool {
+fn is_fs_ready(dev_type: &BlockDevType) -> bool {
     matches!(
         dev_type,
         BlockDevType::Disk
