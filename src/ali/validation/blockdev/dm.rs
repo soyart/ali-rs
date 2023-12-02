@@ -12,7 +12,6 @@ use crate::ali::{
     ManifestLvmVg,
 };
 use crate::entity::blockdev::*;
-use crate::entity::parse_human_bytes;
 use crate::errors::AliError;
 
 pub(super) fn collect_valids(
