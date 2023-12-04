@@ -433,6 +433,196 @@ mod tests {
             },
         ];
 
+        let mut should_err = vec![
+            //
+            TestCollectValidVg {
+                vg: ManifestLvmVg {
+                    name: "myvg".into(),
+                    pvs: vec!["/dev/fda1".into(), "/dev/fda2".into()],
+                },
+                sys_fs_devs: HashMap::from([
+                    ("/dev/fda3".into(), BlockDevType::Fs("vfat".into())),
+                    ("/dev/fdb1".into(), BlockDevType::Fs("ext4".into())),
+                ]),
+                sys_lvms: HashMap::from([
+                    (
+                        "/dev/fda1".into(),
+                        vec![
+                            //
+                            LinkedList::from([
+                                //
+                                BlockDev {
+                                    device: "/dev/fda1".into(),
+                                    device_type: TYPE_PV,
+                                },
+                                BlockDev {
+                                    device: "/dev/somevg".into(),
+                                    device_type: TYPE_VG,
+                                },
+                            ]),
+                        ],
+                    ),
+                    (
+                        "/dev/fda2".into(),
+                        vec![LinkedList::from([BlockDev {
+                            device: "/dev/fda2".into(),
+                            device_type: TYPE_PV,
+                        }])],
+                    ),
+                ]),
+                valids: BlockDevPaths::from([]),
+                expected_valids: BlockDevPaths::from([]),
+            },
+            TestCollectValidVg {
+                vg: ManifestLvmVg {
+                    name: "myvg".into(),
+                    pvs: vec![
+                        "/dev/fda1".into(),
+                        "/dev/fda2".into(),
+                        "/dev/fda4".into(),
+                    ],
+                },
+                sys_fs_devs: HashMap::from([(
+                    "/dev/fda4".into(),
+                    BlockDevType::Fs("ext4".into()),
+                )]),
+                sys_lvms: HashMap::from([
+                    //
+                    (
+                        "/dev/fda1".into(),
+                        vec![
+                            //
+                            LinkedList::from([
+                                //
+                                BlockDev {
+                                    device: "/dev/fda1".into(),
+                                    device_type: TYPE_PV,
+                                },
+                            ]),
+                        ],
+                    ),
+                ]),
+                valids: BlockDevPaths::from([
+                    //
+                    LinkedList::from([
+                        //
+                        BlockDev {
+                            device: "/dev/fda2".into(),
+                            device_type: TYPE_PV,
+                        },
+                    ]),
+                    LinkedList::from([
+                        //
+                        BlockDev {
+                            device: "/dev/fda".into(),
+                            device_type: TYPE_DISK,
+                        },
+                        BlockDev {
+                            device: "/dev/fda3".into(),
+                            device_type: TYPE_PART,
+                        },
+                        BlockDev {
+                            device: "/dev/fda3".into(),
+                            device_type: TYPE_PV,
+                        },
+                    ]),
+                ]),
+                expected_valids: BlockDevPaths::from([]),
+            },
+            TestCollectValidVg {
+                vg: ManifestLvmVg {
+                    name: "myvg".into(),
+                    pvs: vec![
+                        "/dev/fda1".into(),
+                        "/dev/fda2".into(),
+                        "/dev/fda3".into(),
+                    ],
+                },
+                sys_fs_devs: HashMap::from([(
+                    "/dev/fdb1".into(),
+                    BlockDevType::Fs("ext4".into()),
+                )]),
+                sys_lvms: HashMap::from([
+                    //
+                    (
+                        "/dev/fda1".into(),
+                        vec![
+                            //
+                            LinkedList::from([
+                                //
+                                BlockDev {
+                                    device: "/dev/fda1".into(),
+                                    device_type: TYPE_PV,
+                                },
+                            ]),
+                        ],
+                    ),
+                    (
+                        "/dev/fdb1".into(),
+                        vec![
+                            //
+                            LinkedList::from([
+                                //
+                                BlockDev {
+                                    device: "/dev/fdb1".into(),
+                                    device_type: TYPE_PV,
+                                },
+                                BlockDev {
+                                    device: "/dev/somevg".into(),
+                                    device_type: TYPE_VG,
+                                },
+                                BlockDev {
+                                    device: "/dev/somelv2".into(),
+                                    device_type: TYPE_LV,
+                                },
+                            ]),
+                            LinkedList::from([
+                                //
+                                BlockDev {
+                                    device: "/dev/fdb1".into(),
+                                    device_type: TYPE_PV,
+                                },
+                                BlockDev {
+                                    device: "/dev/somevg".into(),
+                                    device_type: TYPE_VG,
+                                },
+                                BlockDev {
+                                    device: "/dev/somelv2".into(),
+                                    device_type: TYPE_LV,
+                                },
+                            ]),
+                        ],
+                    ),
+                ]),
+                valids: BlockDevPaths::from([
+                    //
+                    LinkedList::from([
+                        //
+                        BlockDev {
+                            device: "/dev/fda2".into(),
+                            device_type: TYPE_PV,
+                        },
+                    ]),
+                    LinkedList::from([
+                        //
+                        BlockDev {
+                            device: "/dev/fda".into(),
+                            device_type: TYPE_DISK,
+                        },
+                        BlockDev {
+                            device: "/dev/fda3".into(),
+                            device_type: TYPE_PART,
+                        },
+                        BlockDev {
+                            device: "/dev/fda3".into(),
+                            device_type: BlockDevType::Fs("ext4".into()),
+                        },
+                    ]),
+                ]),
+                expected_valids: BlockDevPaths::from([]),
+            },
+        ];
+
         for (_i, t) in should_ok.iter_mut().enumerate() {
             let result = collect_valid(
                 &t.vg,
@@ -459,6 +649,17 @@ mod tests {
 
             let diff: Vec<_> = actual.difference(&expected).collect();
             assert_eq!(0, diff.len());
+        }
+
+        for (_i, t) in should_err.iter_mut().enumerate() {
+            let result = collect_valid(
+                &t.vg,
+                &t.sys_fs_devs,
+                &mut t.sys_lvms,
+                &mut t.valids,
+            );
+
+            assert!(result.is_err());
         }
     }
 }
