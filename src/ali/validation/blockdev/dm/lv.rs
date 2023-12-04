@@ -43,6 +43,62 @@ pub(super) fn collect_valid(
     Ok(())
 }
 
+// Only the last LV on each VG could be unsized
+// (uses 100% of the remaining space)
+#[inline]
+pub(super) fn validate_size(dms: &[ali::Dm]) -> Result<(), AliError> {
+    // Collect VG -> LVs
+    let mut vg_lvs: HashMap<String, Vec<ManifestLvmLv>> = HashMap::new();
+    for dm in dms {
+        if let ali::Dm::Lvm(lvm) = dm {
+            if lvm.lvs.is_none() {
+                continue;
+            }
+
+            let lvs = lvm.lvs.as_ref().unwrap();
+            for lv in lvs {
+                // Check if size string is valid
+                if let Some(ref size) = lv.size {
+                    if let Err(err) = parse_human_bytes(size) {
+                        return Err(AliError::BadManifest(format!(
+                            "bad lv size {size}: {err}"
+                        )));
+                    }
+                }
+
+                if vg_lvs.contains_key(&lv.vg) {
+                    vg_lvs.get_mut(&lv.vg).unwrap().push(lv.clone());
+                    continue;
+                }
+
+                vg_lvs.insert(lv.vg.clone(), vec![lv.clone()]);
+            }
+        }
+    }
+
+    for (vg, lvs) in vg_lvs.into_iter() {
+        if lvs.is_empty() {
+            continue;
+        }
+
+        let l = lvs.len();
+        if l == 1 {
+            continue;
+        }
+
+        for (i, lv) in lvs.into_iter().enumerate() {
+            if lv.size.is_none() && (i != l - 1) {
+                return Err(AliError::BadManifest(format!(
+                    "lv {} on vg {vg} has None size",
+                    lv.name
+                )));
+            }
+        }
+    }
+
+    Ok(())
+}
+
 fn collect_from_sys(
     target_vg: &BlockDev,
     target_lv: &BlockDev,
@@ -110,6 +166,11 @@ mod tests {
     use super::*;
 
     #[derive(Debug)]
+    struct TestValidateSize {
+        dms: Vec<ali::Dm>,
+    }
+
+    #[derive(Debug)]
     struct TestCollectFromSys {
         vg: BlockDev,
         lv: BlockDev,
@@ -134,6 +195,230 @@ mod tests {
 
         // counts how many times lv should appear in valids
         count: u8,
+    }
+
+    #[test]
+    fn test_validate_size() {
+        use crate::ali::ManifestLvmVg;
+
+        let should_ok = vec![
+            TestValidateSize {
+                dms: vec![Dm::Lvm(ali::ManifestLvm {
+                    pvs: None,
+                    vgs: Some(vec![ManifestLvmVg {
+                        name: "foo".into(),
+                        pvs: vec!["/dev/fda1".into()],
+                    }]),
+                    lvs: Some(vec![ManifestLvmLv {
+                        name: "1".into(),
+                        vg: "foo".into(),
+                        size: None,
+                    }]),
+                })],
+            },
+            TestValidateSize {
+                dms: vec![Dm::Lvm(ali::ManifestLvm {
+                    pvs: None,
+                    vgs: Some(vec![ManifestLvmVg {
+                        name: "foo".into(),
+                        pvs: vec!["/dev/fda1".into()],
+                    }]),
+                    lvs: Some(vec![
+                        ManifestLvmLv {
+                            name: "1".into(),
+                            vg: "foo".into(),
+                            size: Some("100G".into()),
+                        },
+                        ManifestLvmLv {
+                            name: "2".into(),
+                            vg: "foo".into(),
+                            size: None,
+                        },
+                    ]),
+                })],
+            },
+            TestValidateSize {
+                dms: vec![
+                    //
+                    Dm::Lvm(ali::ManifestLvm {
+                        pvs: None,
+                        vgs: None,
+                        lvs: Some(vec![
+                            //
+                            ManifestLvmLv {
+                                name: "1".into(),
+                                vg: "foo".into(),
+                                size: None,
+                            },
+                        ]),
+                    }),
+                    Dm::Lvm(ali::ManifestLvm {
+                        pvs: None,
+                        vgs: None,
+                        lvs: Some(vec![
+                            //
+                            ManifestLvmLv {
+                                name: "1".into(),
+                                vg: "bar".into(),
+                                size: None,
+                            },
+                        ]),
+                    }),
+                    Dm::Lvm(ali::ManifestLvm {
+                        pvs: None,
+                        vgs: None,
+                        lvs: Some(vec![
+                            //
+                            ManifestLvmLv {
+                                name: "1".into(),
+                                vg: "baz".into(),
+                                size: Some("100M".into()),
+                            },
+                            //
+                            ManifestLvmLv {
+                                name: "2".into(),
+                                vg: "baz".into(),
+                                size: Some("150GB".into()),
+                            },
+                            //
+                            ManifestLvmLv {
+                                name: "3".into(),
+                                vg: "baz".into(),
+                                size: None,
+                            },
+                        ]),
+                    }),
+                ],
+            },
+        ];
+
+        let should_err = vec![
+            TestValidateSize {
+                dms: vec![Dm::Lvm(ali::ManifestLvm {
+                    pvs: None,
+                    vgs: None,
+                    lvs: Some(vec![
+                        //
+                        ManifestLvmLv {
+                            name: "1".into(),
+                            vg: "foo".into(),
+                            size: Some("100G".into()),
+                        },
+                        ManifestLvmLv {
+                            name: "1".into(),
+                            vg: "foo".into(),
+                            size: Some("badsize".into()),
+                        },
+                    ]),
+                })],
+            },
+            TestValidateSize {
+                dms: vec![Dm::Lvm(ali::ManifestLvm {
+                    pvs: None,
+                    vgs: None,
+                    lvs: Some(vec![
+                        //
+                        ManifestLvmLv {
+                            name: "1".into(),
+                            vg: "foo".into(),
+                            size: None,
+                        },
+                        ManifestLvmLv {
+                            name: "1".into(),
+                            vg: "foo".into(),
+                            size: None,
+                        },
+                    ]),
+                })],
+            },
+            TestValidateSize {
+                dms: vec![Dm::Lvm(ali::ManifestLvm {
+                    pvs: None,
+                    vgs: None,
+                    lvs: Some(vec![
+                        //
+                        ManifestLvmLv {
+                            name: "1".into(),
+                            vg: "foo".into(),
+                            size: None,
+                        },
+                        ManifestLvmLv {
+                            name: "1".into(),
+                            vg: "foo".into(),
+                            size: Some("10G".into()),
+                        },
+                    ]),
+                })],
+            },
+            TestValidateSize {
+                dms: vec![
+                    //
+                    Dm::Lvm(ali::ManifestLvm {
+                        pvs: None,
+                        vgs: None,
+                        lvs: Some(vec![
+                            //
+                            ManifestLvmLv {
+                                name: "1".into(),
+                                vg: "foo".into(),
+                                size: None,
+                            },
+                        ]),
+                    }),
+                    Dm::Lvm(ali::ManifestLvm {
+                        pvs: None,
+                        vgs: None,
+                        lvs: Some(vec![
+                            //
+                            ManifestLvmLv {
+                                name: "1".into(),
+                                vg: "bar".into(),
+                                size: None,
+                            },
+                            ManifestLvmLv {
+                                name: "1".into(),
+                                vg: "bar".into(),
+                                size: None,
+                            },
+                        ]),
+                    }),
+                    Dm::Lvm(ali::ManifestLvm {
+                        pvs: None,
+                        vgs: None,
+                        lvs: Some(vec![
+                            //
+                            ManifestLvmLv {
+                                name: "1".into(),
+                                vg: "baz".into(),
+                                size: Some("100M".into()),
+                            },
+                            //
+                            ManifestLvmLv {
+                                name: "2".into(),
+                                vg: "baz".into(),
+                                size: Some("150GB".into()),
+                            },
+                            //
+                            ManifestLvmLv {
+                                name: "3".into(),
+                                vg: "baz".into(),
+                                size: None,
+                            },
+                        ]),
+                    }),
+                ],
+            },
+        ];
+
+        for (_i, t) in should_ok.iter().enumerate() {
+            let result = validate_size(&t.dms);
+            assert!(result.is_ok());
+        }
+
+        for (_i, t) in should_err.iter().enumerate() {
+            let result = validate_size(&t.dms);
+            assert!(result.is_err());
+        }
     }
 
     #[test]
