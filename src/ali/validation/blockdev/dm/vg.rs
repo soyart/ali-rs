@@ -103,3 +103,362 @@ pub(super) fn collect_valid(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use super::*;
+
+    struct TestCollectValidVg {
+        vg: ManifestLvmVg,
+        sys_fs_devs: HashMap<String, BlockDevType>,
+        sys_lvms: HashMap<String, BlockDevPaths>,
+        valids: BlockDevPaths,
+        expected_valids: BlockDevPaths,
+    }
+
+    #[test]
+    fn test_collect_valid() {
+        let mut should_ok = vec![
+            //
+            TestCollectValidVg {
+                vg: ManifestLvmVg {
+                    name: "myvg".into(),
+                    pvs: vec!["/dev/fda1".into(), "/dev/fda2".into()],
+                },
+                sys_fs_devs: HashMap::from([
+                    ("/dev/fda3".into(), BlockDevType::Fs("vfat".into())),
+                    ("/dev/fdb1".into(), BlockDevType::Fs("ext4".into())),
+                ]),
+                sys_lvms: HashMap::from([
+                    (
+                        "/dev/fda1".into(),
+                        vec![LinkedList::from([BlockDev {
+                            device: "/dev/fda1".into(),
+                            device_type: TYPE_PV,
+                        }])],
+                    ),
+                    (
+                        "/dev/fda2".into(),
+                        vec![LinkedList::from([BlockDev {
+                            device: "/dev/fda2".into(),
+                            device_type: TYPE_PV,
+                        }])],
+                    ),
+                ]),
+                valids: BlockDevPaths::from([]),
+                expected_valids: BlockDevPaths::from([
+                    //
+                    LinkedList::from([
+                        BlockDev {
+                            device: "/dev/fda1".into(),
+                            device_type: TYPE_PV,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg".into(),
+                            device_type: TYPE_VG,
+                        },
+                    ]),
+                    LinkedList::from([
+                        BlockDev {
+                            device: "/dev/fda2".into(),
+                            device_type: TYPE_PV,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg".into(),
+                            device_type: TYPE_VG,
+                        },
+                    ]),
+                ]),
+            },
+            //
+            TestCollectValidVg {
+                vg: ManifestLvmVg {
+                    name: "myvg".into(),
+                    pvs: vec!["/dev/fda1".into(), "/dev/fda2".into()],
+                },
+                sys_fs_devs: HashMap::from([(
+                    "/dev/fda4".into(),
+                    BlockDevType::Fs("ext4".into()),
+                )]),
+                sys_lvms: HashMap::from([
+                    //
+                    (
+                        "/dev/fda1".into(),
+                        vec![
+                            //
+                            LinkedList::from([
+                                //
+                                BlockDev {
+                                    device: "/dev/fda1".into(),
+                                    device_type: TYPE_PV,
+                                },
+                            ]),
+                        ],
+                    ),
+                    (
+                        "/dev/fdb1".into(),
+                        vec![
+                            //
+                            LinkedList::from([
+                                //
+                                BlockDev {
+                                    device: "/dev/fdb1".into(),
+                                    device_type: TYPE_PV,
+                                },
+                                BlockDev {
+                                    device: "/dev/somevg".into(),
+                                    device_type: TYPE_VG,
+                                },
+                                BlockDev {
+                                    device: "/dev/somelv2".into(),
+                                    device_type: TYPE_LV,
+                                },
+                            ]),
+                            LinkedList::from([
+                                //
+                                BlockDev {
+                                    device: "/dev/fdb1".into(),
+                                    device_type: TYPE_PV,
+                                },
+                                BlockDev {
+                                    device: "/dev/somevg".into(),
+                                    device_type: TYPE_VG,
+                                },
+                                BlockDev {
+                                    device: "/dev/somelv2".into(),
+                                    device_type: TYPE_LV,
+                                },
+                            ]),
+                        ],
+                    ),
+                ]),
+                valids: BlockDevPaths::from([
+                    //
+                    LinkedList::from([
+                        //
+                        BlockDev {
+                            device: "/dev/fda2".into(),
+                            device_type: TYPE_PV,
+                        },
+                    ]),
+                    LinkedList::from([
+                        //
+                        BlockDev {
+                            device: "/dev/fda".into(),
+                            device_type: TYPE_DISK,
+                        },
+                        BlockDev {
+                            device: "/dev/fda3".into(),
+                            device_type: TYPE_PART,
+                        },
+                        BlockDev {
+                            device: "/dev/fda3".into(),
+                            device_type: TYPE_PV,
+                        },
+                    ]),
+                ]),
+                expected_valids: BlockDevPaths::from([
+                    //
+                    LinkedList::from([
+                        BlockDev {
+                            device: "/dev/fda1".into(),
+                            device_type: TYPE_PV,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg".into(),
+                            device_type: TYPE_VG,
+                        },
+                    ]),
+                    LinkedList::from([
+                        BlockDev {
+                            device: "/dev/fda2".into(),
+                            device_type: TYPE_PV,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg".into(),
+                            device_type: TYPE_VG,
+                        },
+                    ]),
+                    LinkedList::from([
+                        //
+                        BlockDev {
+                            device: "/dev/fda".into(),
+                            device_type: TYPE_DISK,
+                        },
+                        BlockDev {
+                            device: "/dev/fda3".into(),
+                            device_type: TYPE_PART,
+                        },
+                        BlockDev {
+                            device: "/dev/fda3".into(),
+                            device_type: TYPE_PV,
+                        },
+                    ]),
+                ]),
+            },
+            TestCollectValidVg {
+                vg: ManifestLvmVg {
+                    name: "myvg".into(),
+                    pvs: vec![
+                        "/dev/fda1".into(),
+                        "/dev/fda2".into(),
+                        "/dev/fda3".into(),
+                    ],
+                },
+                sys_fs_devs: HashMap::from([(
+                    "/dev/fdb1".into(),
+                    BlockDevType::Fs("ext4".into()),
+                )]),
+                sys_lvms: HashMap::from([
+                    //
+                    (
+                        "/dev/fda1".into(),
+                        vec![
+                            //
+                            LinkedList::from([
+                                //
+                                BlockDev {
+                                    device: "/dev/fda1".into(),
+                                    device_type: TYPE_PV,
+                                },
+                            ]),
+                        ],
+                    ),
+                    (
+                        "/dev/fdb1".into(),
+                        vec![
+                            //
+                            LinkedList::from([
+                                //
+                                BlockDev {
+                                    device: "/dev/fdb1".into(),
+                                    device_type: TYPE_PV,
+                                },
+                                BlockDev {
+                                    device: "/dev/somevg".into(),
+                                    device_type: TYPE_VG,
+                                },
+                                BlockDev {
+                                    device: "/dev/somelv2".into(),
+                                    device_type: TYPE_LV,
+                                },
+                            ]),
+                            LinkedList::from([
+                                //
+                                BlockDev {
+                                    device: "/dev/fdb1".into(),
+                                    device_type: TYPE_PV,
+                                },
+                                BlockDev {
+                                    device: "/dev/somevg".into(),
+                                    device_type: TYPE_VG,
+                                },
+                                BlockDev {
+                                    device: "/dev/somelv2".into(),
+                                    device_type: TYPE_LV,
+                                },
+                            ]),
+                        ],
+                    ),
+                ]),
+                valids: BlockDevPaths::from([
+                    //
+                    LinkedList::from([
+                        //
+                        BlockDev {
+                            device: "/dev/fda2".into(),
+                            device_type: TYPE_PV,
+                        },
+                    ]),
+                    LinkedList::from([
+                        //
+                        BlockDev {
+                            device: "/dev/fda".into(),
+                            device_type: TYPE_DISK,
+                        },
+                        BlockDev {
+                            device: "/dev/fda3".into(),
+                            device_type: TYPE_PART,
+                        },
+                        BlockDev {
+                            device: "/dev/fda3".into(),
+                            device_type: TYPE_PV,
+                        },
+                    ]),
+                ]),
+                expected_valids: BlockDevPaths::from([
+                    //
+                    LinkedList::from([
+                        BlockDev {
+                            device: "/dev/fda1".into(),
+                            device_type: TYPE_PV,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg".into(),
+                            device_type: TYPE_VG,
+                        },
+                    ]),
+                    LinkedList::from([
+                        BlockDev {
+                            device: "/dev/fda2".into(),
+                            device_type: TYPE_PV,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg".into(),
+                            device_type: TYPE_VG,
+                        },
+                    ]),
+                    LinkedList::from([
+                        //
+                        BlockDev {
+                            device: "/dev/fda".into(),
+                            device_type: TYPE_DISK,
+                        },
+                        BlockDev {
+                            device: "/dev/fda3".into(),
+                            device_type: TYPE_PART,
+                        },
+                        BlockDev {
+                            device: "/dev/fda3".into(),
+                            device_type: TYPE_PV,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg".into(),
+                            device_type: TYPE_VG,
+                        },
+                    ]),
+                ]),
+            },
+        ];
+
+        for (_i, t) in should_ok.iter_mut().enumerate() {
+            let result = collect_valid(
+                &t.vg,
+                &t.sys_fs_devs,
+                &mut t.sys_lvms,
+                &mut t.valids,
+            );
+
+            if let Err(ref err) = result {
+                eprintln!("unexpected error: {err}");
+            }
+
+            assert!(result.is_ok());
+
+            let mut expected: HashSet<BlockDevPath> = HashSet::new();
+            for p in t.expected_valids.iter() {
+                expected.insert(p.clone());
+            }
+
+            let mut actual: HashSet<BlockDevPath> = HashSet::new();
+            for p in t.valids.iter() {
+                actual.insert(p.clone());
+            }
+
+            let diff: Vec<_> = actual.difference(&expected).collect();
+            assert_eq!(0, diff.len());
+        }
+    }
+}

@@ -179,7 +179,7 @@ mod tests {
     }
 
     #[derive(Debug)]
-    struct TestCollectFromValids {
+    struct TestCollectFromValidLv {
         vg: BlockDev,
         lv: BlockDev,
         valids: BlockDevPaths,
@@ -187,7 +187,7 @@ mod tests {
     }
 
     #[derive(Debug)]
-    struct TestCollectLv {
+    struct TestCollectValidLv {
         lv: ManifestLvmLv,
         sys_fs_devs: HashMap<String, BlockDevType>,
         sys_lvms: HashMap<String, BlockDevPaths>,
@@ -653,10 +653,10 @@ mod tests {
     }
 
     #[test]
-    fn test_collect_from_valids() {
+    fn test_collect_valid() {
         let should_ok = vec![
             // 1
-            TestCollectFromValids {
+            TestCollectFromValidLv {
                 vg: BlockDev {
                     device: "/dev/vg".into(),
                     device_type: TYPE_VG,
@@ -707,7 +707,7 @@ mod tests {
                 ],
             },
             // 2
-            TestCollectFromValids {
+            TestCollectFromValidLv {
                 vg: BlockDev {
                     device: "/dev/vg".into(),
                     device_type: TYPE_VG,
@@ -803,7 +803,7 @@ mod tests {
     fn test_collect_lv() {
         let mut should_ok = vec![
             // 1
-            TestCollectLv {
+            TestCollectValidLv {
                 lv: ManifestLvmLv {
                     name: "mylv".into(),
                     vg: "myvg".into(),
@@ -830,7 +830,7 @@ mod tests {
                 count: 1u8,
             },
             // 2
-            TestCollectLv {
+            TestCollectValidLv {
                 lv: ManifestLvmLv {
                     name: "mylv".into(),
                     vg: "myvg".into(),
@@ -864,7 +864,7 @@ mod tests {
                 count: 1u8,
             },
             // 3
-            TestCollectLv {
+            TestCollectValidLv {
                 lv: ManifestLvmLv {
                     name: "mylv".into(),
                     vg: "myvg".into(),
@@ -896,7 +896,7 @@ mod tests {
                 count: 1u8,
             },
             // 4
-            TestCollectLv {
+            TestCollectValidLv {
                 lv: ManifestLvmLv {
                     name: "mylv".into(),
                     vg: "myvg".into(),
@@ -925,7 +925,7 @@ mod tests {
                 count: 1u8,
             },
             // 5
-            TestCollectLv {
+            TestCollectValidLv {
                 lv: ManifestLvmLv {
                     name: "mylv".into(),
                     vg: "myvg".into(),
@@ -981,7 +981,7 @@ mod tests {
                 count: 2u8,
             },
             // 6
-            TestCollectLv {
+            TestCollectValidLv {
                 lv: ManifestLvmLv {
                     name: "mylv".into(),
                     vg: "myvg".into(),
