@@ -6,6 +6,7 @@ use serde::{
 
 use std::collections::LinkedList;
 
+use crate::ali;
 use crate::errors::AliError;
 
 #[derive(
@@ -74,10 +75,63 @@ pub type BlockDevPath = LinkedList<BlockDev>;
 // 4. [/dev/sdb -> /dev/sdb2 -> /dev/sdb2(pv) -> /dev/myvg -> /dev/myvg/barlv]
 pub type BlockDevPaths = Vec<BlockDevPath>;
 
+pub fn vg_lv_name(lv: &ali::ManifestLvmLv) -> (String, String) {
+    let vg_name = if lv.vg.contains("/dev/") {
+        lv.vg.clone()
+    } else {
+        format!("/dev/{}", lv.vg)
+    };
+
+    (vg_name.clone(), format!("{vg_name}/{}", lv.name))
+}
+
 pub fn parse_human_bytes(s: &str) -> Result<bytes::Bytes, AliError> {
     (s.to_lowercase()).parse::<bytes::Bytes>().map_err(|err| {
         AliError::BadManifest(format!("bad byte unit string {s}: {err}"))
     })
+}
+
+impl From<&ali::ManifestLuks> for BlockDev {
+    fn from(luks: &ali::ManifestLuks) -> Self {
+        Self {
+            device: format!("/dev/mapper/{}", luks.name),
+            device_type: TYPE_LUKS,
+        }
+    }
+}
+
+impl From<&ali::ManifestLvmLv> for BlockDev {
+    fn from(lv: &ali::ManifestLvmLv) -> Self {
+        let (_vg_name, lv_name) = vg_lv_name(lv);
+
+        Self {
+            device: lv_name,
+            device_type: TYPE_LV,
+        }
+    }
+}
+
+impl From<&ali::ManifestLvmLv> for (BlockDev, BlockDev) {
+    fn from(lv: &ali::ManifestLvmLv) -> Self {
+        let (vg_name, _lv_name) = vg_lv_name(lv);
+        let dev_vg = BlockDev {
+            device: vg_name,
+            device_type: TYPE_VG,
+        };
+
+        let dev_lv = BlockDev::from(lv);
+
+        (dev_vg, dev_lv)
+    }
+}
+
+impl From<&ali::ManifestLvmVg> for BlockDev {
+    fn from(vg: &ali::ManifestLvmVg) -> Self {
+        Self {
+            device: format!("/dev/{}", vg.name),
+            device_type: TYPE_VG,
+        }
+    }
 }
 
 #[test]

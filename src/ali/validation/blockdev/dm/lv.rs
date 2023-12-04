@@ -23,15 +23,7 @@ pub(super) fn collect_valid(
         )));
     }
 
-    let target_vg = BlockDev {
-        device: vg_name.clone(),
-        device_type: TYPE_VG,
-    };
-
-    let target_lv = BlockDev {
-        device: lv_name.clone(),
-        device_type: TYPE_LV,
-    };
+    let (target_vg, target_lv): (BlockDev, BlockDev) = lv.into();
 
     let lv_paths_sys = collect_from_sys(&target_vg, &target_lv, sys_lvms);
     let lv_paths_valids = collect_from_valids(&target_vg, &target_lv, valids);

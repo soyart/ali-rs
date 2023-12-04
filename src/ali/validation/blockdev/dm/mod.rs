@@ -201,10 +201,7 @@ fn collect_valid_luks(
         }
     }
 
-    let luks_dev = BlockDev {
-        device: luks_path,
-        device_type: TYPE_LUKS,
-    };
+    let dev_luks: BlockDev = luks.into();
 
     // Although a LUKS can only sit on 1 LV,
     // We keep pushing since an LV may sit on VG with >1 PVs
@@ -240,7 +237,7 @@ fn collect_valid_luks(
                 }
 
                 let mut list = sys_lvm.clone();
-                list.push_back(luks_dev.clone());
+                list.push_back(dev_luks.clone());
                 valids.push(list);
                 sys_lvm.clear();
 
@@ -270,7 +267,7 @@ fn collect_valid_luks(
         }
 
         found = true;
-        list.push_back(luks_dev.clone());
+        list.push_back(dev_luks.clone());
     }
 
     if found {
@@ -283,7 +280,7 @@ fn collect_valid_luks(
     };
 
     if sys_fs_ready_devs.contains_key(luks_base_path) {
-        valids.push(LinkedList::from([unknown_base, luks_dev]));
+        valids.push(LinkedList::from([unknown_base, dev_luks]));
 
         // Clear used up sys fs_ready device
         sys_fs_ready_devs.remove(luks_base_path);
@@ -296,7 +293,7 @@ fn collect_valid_luks(
         return Err(AliError::NoSuchDevice(luks_base_path.to_string()));
     }
 
-    valids.push(LinkedList::from([unknown_base, luks_dev]));
+    valids.push(LinkedList::from([unknown_base, dev_luks]));
 
     Ok(())
 }
@@ -410,10 +407,7 @@ fn collect_valid_vg(
     sys_lvms: &mut HashMap<String, BlockDevPaths>,
     valids: &mut BlockDevPaths,
 ) -> Result<(), AliError> {
-    let vg_dev = BlockDev {
-        device: format!("/dev/{}", vg.name),
-        device_type: TYPE_VG,
-    };
+    let dev_vg: BlockDev = vg.into();
 
     let msg = "lvm vg validation failed";
     'validate_vg_pv: for pv_base in &vg.pvs {
@@ -456,7 +450,7 @@ fn collect_valid_vg(
                 )));
             }
 
-            list.push_back(vg_dev.clone());
+            list.push_back(dev_vg.clone());
 
             continue 'validate_vg_pv;
         }
@@ -471,7 +465,7 @@ fn collect_valid_vg(
                 }
 
                 let top_most = top_most.unwrap();
-                if *top_most == vg_dev {
+                if *top_most == dev_vg {
                     return Err(AliError::BadManifest(format!(
                         "{msg}: vg {} already exists",
                         vg.name,
@@ -490,7 +484,7 @@ fn collect_valid_vg(
                 }
 
                 let mut new_list = sys_lvm.clone();
-                new_list.push_back(vg_dev.clone());
+                new_list.push_back(dev_vg.clone());
 
                 // Push to valids, and remove used up sys_lvms path
                 valids.push(new_list);
@@ -506,17 +500,6 @@ fn collect_valid_vg(
     }
 
     Ok(())
-}
-
-#[inline(always)]
-fn vg_lv_name(lv: &ManifestLvmLv) -> (String, String) {
-    let vg_name = if lv.vg.contains("/dev/") {
-        lv.vg.clone()
-    } else {
-        format!("/dev/{}", lv.vg)
-    };
-
-    (vg_name.clone(), format!("{vg_name}/{}", lv.name))
 }
 
 #[inline(always)]
