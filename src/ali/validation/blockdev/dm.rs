@@ -76,38 +76,6 @@ pub(super) fn collect_valids(
     Ok(())
 }
 
-#[inline(always)]
-fn is_luks_base(dev_type: &BlockDevType) -> bool {
-    matches!(
-        dev_type,
-        BlockDevType::UnknownBlock
-            | BlockDevType::Disk
-            | BlockDevType::Partition
-            | BlockDevType::Dm(DmType::LvmLv)
-    )
-}
-
-#[inline(always)]
-fn is_pv_base(dev_type: &BlockDevType) -> bool {
-    matches!(
-        dev_type,
-        BlockDevType::UnknownBlock
-            | BlockDevType::Disk
-            | BlockDevType::Partition
-            | BlockDevType::Dm(DmType::Luks)
-    )
-}
-
-#[inline(always)]
-fn is_vg_base(dev_type: &BlockDevType) -> bool {
-    matches!(dev_type, BlockDevType::Dm(DmType::LvmPv))
-}
-
-#[inline(always)]
-fn is_lv_base(dev_type: &BlockDevType) -> bool {
-    matches!(dev_type, BlockDevType::Dm(DmType::LvmVg))
-}
-
 // Only the last LV on each VG could be unsized
 // (uses 100% of the remaining space)
 #[inline]
@@ -546,14 +514,7 @@ fn collect_valid_lv(
     sys_lvms: &mut HashMap<String, BlockDevPaths>,
     valids: &mut BlockDevPaths,
 ) -> Result<(), AliError> {
-    let vg_name = if lv.vg.contains("/dev/") {
-        lv.vg.clone()
-    } else {
-        format!("/dev/{}", lv.vg)
-    };
-
-    // let vg_name = format!("/dev/{}", lv.vg);
-    let lv_name = format!("{vg_name}/{}", lv.name);
+    let (vg_name, lv_name) = vg_lv_name(lv);
 
     let msg = "lvm lv validation failed";
     if let Some(fs) = sys_fs_devs.get(&lv_name) {
@@ -561,6 +522,11 @@ fn collect_valid_lv(
             "{msg}: another lv with matching name {lv_name} was already used as filesystem {fs}"
         )));
     }
+
+    let target_vg = BlockDev {
+        device: vg_name.clone(),
+        device_type: TYPE_VG,
+    };
 
     let lv_dev = BlockDev {
         device: lv_name.clone(),
@@ -574,17 +540,23 @@ fn collect_valid_lv(
 
     let msg = "lvm lv validation failed";
     for sys_lvm_list in sys_lvms.values().flatten() {
-        for sys_lvm in sys_lvm_list {
-            if sys_lvm.device_type != TYPE_VG {
+        for node in sys_lvm_list {
+            if *node != target_vg {
                 continue;
             }
 
-            if sys_lvm.device != vg_name {
-                continue;
+            let sys_list = sys_lvm_list.clone();
+            let mut list = LinkedList::new();
+
+            for list_node in sys_list {
+                list.push_back(list_node.clone());
+                if list_node == target_vg {
+                    break;
+                }
             }
 
-            let mut list = sys_lvm_list.clone();
             list.push_back(lv_dev.clone());
+
             lv_vgs.push(list);
         }
     }
@@ -624,4 +596,366 @@ fn collect_valid_lv(
     valids.extend_from_slice(&lv_vgs);
 
     Ok(())
+}
+
+#[inline(always)]
+fn vg_lv_name(lv: &ManifestLvmLv) -> (String, String) {
+    let vg_name = if lv.vg.contains("/dev/") {
+        lv.vg.clone()
+    } else {
+        format!("/dev/{}", lv.vg)
+    };
+
+    (vg_name.clone(), format!("{vg_name}/{}", lv.name))
+}
+
+#[inline(always)]
+fn is_luks_base(dev_type: &BlockDevType) -> bool {
+    matches!(
+        dev_type,
+        BlockDevType::UnknownBlock
+            | BlockDevType::Disk
+            | BlockDevType::Partition
+            | BlockDevType::Dm(DmType::LvmLv)
+    )
+}
+
+#[inline(always)]
+fn is_pv_base(dev_type: &BlockDevType) -> bool {
+    matches!(
+        dev_type,
+        BlockDevType::UnknownBlock
+            | BlockDevType::Disk
+            | BlockDevType::Partition
+            | BlockDevType::Dm(DmType::Luks)
+    )
+}
+
+#[inline(always)]
+fn is_vg_base(dev_type: &BlockDevType) -> bool {
+    matches!(dev_type, BlockDevType::Dm(DmType::LvmPv))
+}
+
+#[inline(always)]
+fn is_lv_base(dev_type: &BlockDevType) -> bool {
+    matches!(dev_type, BlockDevType::Dm(DmType::LvmVg))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Debug)]
+    struct TestCollectLv {
+        lv: ManifestLvmLv,
+        sys_fs_devs: HashMap<String, BlockDevType>,
+        sys_lvms: HashMap<String, BlockDevPaths>,
+        valids: BlockDevPaths,
+
+        // counts how many times lv should appear in valids
+        count: u8,
+    }
+
+    #[test]
+    fn test_collect_lv_error() {
+        let mut should_ok = vec![
+            // 1
+            TestCollectLv {
+                lv: ManifestLvmLv {
+                    name: "mylv".into(),
+                    vg: "myvg".into(),
+                    size: None,
+                },
+                sys_fs_devs: HashMap::from([
+                    ("/dev/fda2".into(), BlockDevType::Fs("ext4".into())),
+                    ("/dev/vda1".into(), BlockDevType::Fs("swap".into())),
+                ]),
+                sys_lvms: HashMap::from([(
+                    "/dev/fda1".into(),
+                    vec![LinkedList::from([
+                        BlockDev {
+                            device: "/dev/fda1".into(),
+                            device_type: TYPE_PV,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg".into(),
+                            device_type: TYPE_VG,
+                        },
+                    ])],
+                )]),
+                valids: BlockDevPaths::new(),
+                count: 1u8,
+            },
+            // 2
+            TestCollectLv {
+                lv: ManifestLvmLv {
+                    name: "mylv".into(),
+                    vg: "myvg".into(),
+                    size: None,
+                },
+                sys_fs_devs: HashMap::from([
+                    ("/dev/fda2".into(), BlockDevType::Fs("ext4".into())),
+                    ("/dev/vda1".into(), BlockDevType::Fs("swap".into())),
+                ]),
+                sys_lvms: HashMap::from([(
+                    "/dev/fda1".into(),
+                    vec![
+                        //
+                        LinkedList::from([BlockDev {
+                            device: "/dev/fda1".into(),
+                            device_type: TYPE_PV,
+                        }]),
+                    ],
+                )]),
+                valids: BlockDevPaths::from([
+                    //
+                    LinkedList::from([BlockDev {
+                        device: "/dev/fda1".into(),
+                        device_type: TYPE_PV,
+                    }]),
+                    LinkedList::from([BlockDev {
+                        device: "/dev/myvg".into(),
+                        device_type: TYPE_VG,
+                    }]),
+                ]),
+                count: 1u8,
+            },
+            // 3
+            TestCollectLv {
+                lv: ManifestLvmLv {
+                    name: "mylv".into(),
+                    vg: "myvg".into(),
+                    size: None,
+                },
+                sys_fs_devs: HashMap::from([
+                    ("/dev/fda2".into(), BlockDevType::Fs("ext4".into())),
+                    ("/dev/vda1".into(), BlockDevType::Fs("swap".into())),
+                ]),
+                sys_lvms: HashMap::from([(
+                    "/dev/fda1".into(),
+                    vec![
+                        //
+                        LinkedList::from([BlockDev {
+                            device: "/dev/fda1".into(),
+                            device_type: TYPE_PV,
+                        }]),
+                        LinkedList::from([BlockDev {
+                            device: "/dev/myvg".into(),
+                            device_type: TYPE_VG,
+                        }]),
+                        LinkedList::from([BlockDev {
+                            device: "/dev/somelv".into(),
+                            device_type: TYPE_LV,
+                        }]),
+                    ],
+                )]),
+                valids: BlockDevPaths::from([]),
+                count: 1u8,
+            },
+            // 4
+            TestCollectLv {
+                lv: ManifestLvmLv {
+                    name: "mylv".into(),
+                    vg: "myvg".into(),
+                    size: None,
+                },
+                sys_fs_devs: HashMap::from([
+                    ("/dev/fda2".into(), BlockDevType::Fs("ext4".into())),
+                    ("/dev/vda1".into(), BlockDevType::Fs("swap".into())),
+                ]),
+                sys_lvms: HashMap::from([("/dev/fda1".into(), vec![])]),
+                valids: BlockDevPaths::from([
+                    //
+                    LinkedList::from([BlockDev {
+                        device: "/dev/fda1".into(),
+                        device_type: TYPE_PV,
+                    }]),
+                    LinkedList::from([BlockDev {
+                        device: "/dev/myvg".into(),
+                        device_type: TYPE_VG,
+                    }]),
+                    LinkedList::from([BlockDev {
+                        device: "/dev/somelv".into(),
+                        device_type: TYPE_LV,
+                    }]),
+                ]),
+                count: 1u8,
+            },
+            // 5
+            TestCollectLv {
+                lv: ManifestLvmLv {
+                    name: "mylv".into(),
+                    vg: "myvg".into(),
+                    size: None,
+                },
+                sys_fs_devs: HashMap::from([
+                    ("/dev/fda2".into(), BlockDevType::Fs("ext4".into())),
+                    ("/dev/vda1".into(), BlockDevType::Fs("swap".into())),
+                ]),
+                sys_lvms: HashMap::from([
+                    (
+                        "/dev/fda1".into(),
+                        vec![
+                            //
+                            LinkedList::from([
+                                BlockDev {
+                                    device: "/dev/fda1".into(),
+                                    device_type: TYPE_PV,
+                                },
+                                BlockDev {
+                                    device: "/dev/myvg".into(),
+                                    device_type: TYPE_VG,
+                                },
+                                BlockDev {
+                                    device: "/dev/somelv".into(),
+                                    device_type: TYPE_LV,
+                                },
+                            ]),
+                        ],
+                    ),
+                    (
+                        "/dev/fda2".into(),
+                        vec![
+                            //
+                            LinkedList::from([
+                                BlockDev {
+                                    device: "/dev/fda2".into(),
+                                    device_type: TYPE_PV,
+                                },
+                                BlockDev {
+                                    device: "/dev/myvg".into(),
+                                    device_type: TYPE_VG,
+                                },
+                                BlockDev {
+                                    device: "/dev/somelv".into(),
+                                    device_type: TYPE_LV,
+                                },
+                            ]),
+                        ],
+                    ),
+                ]),
+                valids: BlockDevPaths::from([]),
+                count: 2u8,
+            },
+            // // 6
+            // TestCollectLv {
+            //     lv: ManifestLvmLv {
+            //         name: "mylv".into(),
+            //         vg: "myvg".into(),
+            //         size: None,
+            //     },
+            //     sys_fs_devs: HashMap::from([
+            //         ("/dev/fda2".into(), BlockDevType::Fs("ext4".into())),
+            //         ("/dev/vda1".into(), BlockDevType::Fs("swap".into())),
+            //     ]),
+            //     sys_lvms: HashMap::from([
+            //         (
+            //             "/dev/fda1".into(),
+            //             vec![
+            //                 //
+            //                 LinkedList::from([
+            //                     BlockDev {
+            //                         device: "/dev/fda1".into(),
+            //                         device_type: TYPE_PV,
+            //                     },
+            //                     BlockDev {
+            //                         device: "/dev/myvg".into(),
+            //                         device_type: TYPE_VG,
+            //                     },
+            //                     BlockDev {
+            //                         device: "/dev/somelv".into(),
+            //                         device_type: TYPE_LV,
+            //                     },
+            //                 ]),
+            //             ],
+            //         ),
+            //         (
+            //             "/dev/fda2".into(),
+            //             vec![LinkedList::from([BlockDev {
+            //                 device: "/dev/fda2".into(),
+            //                 device_type: TYPE_PV,
+            //             }])],
+            //         ),
+            //     ]),
+            //     valids: BlockDevPaths::from([
+            //         //
+            //         LinkedList::from([
+            //             BlockDev {
+            //                 device: "/dev/fda2".into(),
+            //                 device_type: TYPE_PV,
+            //             },
+            //             BlockDev {
+            //                 device: "/dev/myvg".into(),
+            //                 device_type: TYPE_VG,
+            //             },
+            //             BlockDev {
+            //                 device: "/dev/somelv".into(),
+            //                 device_type: TYPE_LV,
+            //             },
+            //         ]),
+            //     ]),
+            //     count: 2u8,
+            // },
+        ];
+
+        for (i, t) in should_ok.iter_mut().enumerate() {
+            if i != 5 {
+                continue;
+            }
+
+            let result = collect_valid_lv(
+                &t.lv,
+                &t.sys_fs_devs,
+                &mut t.sys_lvms,
+                &mut t.valids,
+            );
+
+            let (_, lv_name) = vg_lv_name(&t.lv);
+            let target_lv = BlockDev {
+                device: lv_name,
+                device_type: TYPE_LV,
+            };
+
+            let mut count_list = 0u8;
+            for list in t.valids.iter() {
+                for node in list {
+                    if *node == target_lv {
+                        count_list += 1;
+                    }
+                }
+            }
+
+            let mut count_nodes = 0u8;
+            for node in t.valids.iter().flatten() {
+                if *node == target_lv {
+                    count_nodes += 1;
+                }
+            }
+
+            let count_ok = count_nodes == t.count && count_list == t.count;
+            let result_ok = result.is_ok();
+
+            if !result_ok {
+                eprintln!("error: {}", result.err().unwrap());
+            }
+
+            if !count_ok {
+                eprintln!(
+                    "unexpected count: expecting count_list {}, got {}",
+                    t.count, count_list
+                );
+                eprintln!(
+                    "unexpected count: expecting count_nodes {}, got {}",
+                    t.count, count_nodes
+                );
+            }
+
+            if !(result_ok && count_ok) {
+                eprintln!("test case number {}", i + 1);
+                eprintln!("valids {:?}", t.valids);
+
+                panic!("unexpected values")
+            }
+        }
+    }
 }
