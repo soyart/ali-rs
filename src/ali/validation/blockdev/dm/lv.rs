@@ -33,8 +33,8 @@ pub(super) fn collect_valid(
         device_type: TYPE_LV,
     };
 
-    let lv_paths_sys = collect_from_sys(&target_vg, &target_lv, &sys_lvms);
-    let lv_paths_valids = collect_from_valids(&target_vg, &target_lv, &valids);
+    let lv_paths_sys = collect_from_sys(&target_vg, &target_lv, sys_lvms);
+    let lv_paths_valids = collect_from_valids(&target_vg, &target_lv, valids);
 
     let mut lv_paths = HashSet::new();
     lv_paths.extend(lv_paths_sys);

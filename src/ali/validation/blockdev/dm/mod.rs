@@ -546,7 +546,7 @@ fn is_vg_base(dev_type: &BlockDevType) -> bool {
     matches!(dev_type, BlockDevType::Dm(DmType::LvmPv))
 }
 
-#[inline(always)]
-fn is_lv_base(dev_type: &BlockDevType) -> bool {
-    matches!(dev_type, BlockDevType::Dm(DmType::LvmVg))
-}
+// #[inline(always)]
+// fn is_lv_base(dev_type: &BlockDevType) -> bool {
+//     matches!(dev_type, BlockDevType::Dm(DmType::LvmVg))
+// }
