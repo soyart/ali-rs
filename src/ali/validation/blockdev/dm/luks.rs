@@ -30,10 +30,9 @@ pub(super) fn collect_valid(
     let mut found_vg: Option<BlockDev> = None;
 
     // Find base LV and its VG in existing LVMs
-    'find_some_vg: for (lvm_base, sys_lvm_lists) in sys_lvms.iter() {
+    'find_some_vg: for (device_base, sys_lvm_lists) in sys_lvms.iter() {
         for sys_lvm in sys_lvm_lists {
             let top_most = sys_lvm.back();
-
             if top_most.is_none() {
                 continue;
             }
@@ -46,7 +45,7 @@ pub(super) fn collect_valid(
             if !is_luks_base(&top_most.device_type) {
                 return Err(AliError::BadManifest(format!(
                     "{msg}: luks base {} (itself is an LVM from {}) cannot have type {}",
-                    luks_base_path, lvm_base, top_most.device_type
+                    luks_base_path, device_base, top_most.device_type
                 )));
             }
 
@@ -54,16 +53,16 @@ pub(super) fn collect_valid(
             // See also: https://doc.rust-lang.org/std/collections/linked_list/struct.Cursor.html
             let mut path = sys_lvm.clone();
             path.pop_back();
-            let should_be_vg = path.pop_back().expect("no vg after 2 pops");
+            let maybe_vg = path.pop_back().expect("no vg after 2 pops");
 
-            if should_be_vg.device_type != TYPE_VG {
+            if maybe_vg.device_type != TYPE_VG {
                 return Err(AliError::AliRsBug(format!(
                     "{msg}: unexpected device type {} - expecting a VG",
-                    should_be_vg.device_type,
+                    maybe_vg.device_type,
                 )));
             }
 
-            found_vg = Some(should_be_vg);
+            found_vg = Some(maybe_vg);
             break 'find_some_vg;
         }
     }

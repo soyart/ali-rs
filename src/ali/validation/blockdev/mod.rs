@@ -11,7 +11,7 @@ use std::collections::{
     HashSet,
 };
 
-use crate::ali::Manifest;
+use crate::ali::*;
 use crate::entity::blockdev::*;
 use crate::errors::AliError;
 
@@ -91,7 +91,8 @@ fn validate_blockdev(
 ) -> Result<BlockDevPaths, AliError> {
     // Valid block devices
     let valids = collect_valids(
-        manifest,
+        &manifest.disks,
+        &manifest.device_mappers,
         sys_fs_devs,
         &mut sys_fs_ready_devs,
         &mut sys_lvms,
@@ -118,7 +119,8 @@ fn validate_blockdev(
 }
 
 fn collect_valids(
-    manifest: &Manifest,
+    disks: &Option<Vec<ManifestDisk>>,
+    device_mappers: &Option<Vec<Dm>>,
     sys_fs_devs: &HashMap<String, BlockDevType>,
     sys_fs_ready_devs: &mut HashMap<String, BlockDevType>,
     sys_lvms: &mut HashMap<String, BlockDevPaths>,
@@ -127,7 +129,7 @@ fn collect_valids(
     // The back of each linked list is the top-most device.
     let mut valids = BlockDevPaths::new();
 
-    if let Some(disks) = &manifest.disks {
+    if let Some(disks) = &disks {
         disk::collect_valids(
             disks,
             sys_fs_devs,
@@ -136,7 +138,7 @@ fn collect_valids(
         )?;
     }
 
-    if let Some(dms) = &manifest.device_mappers {
+    if let Some(dms) = &device_mappers {
         dm::collect_valids(
             dms,
             sys_fs_devs,
@@ -230,10 +232,19 @@ mod tests {
     use std::collections::LinkedList;
 
     use super::*;
-    use crate::ali::*;
 
     #[derive(Debug)]
-    struct Test {
+    struct TestCollectValids {
+        manifest_disks: Vec<ManifestDisk>,
+        manifest_dms: Vec<Dm>,
+        sys_fs_devs: HashMap<String, BlockDevType>,
+        sys_fs_ready_devs: HashMap<String, BlockDevType>,
+        sys_lvms: HashMap<String, BlockDevPaths>,
+        expected_valids: BlockDevPaths,
+    }
+
+    #[derive(Debug)]
+    struct TestValidateBlockDev {
         case: String,
         context: Option<String>, // Extra info about the test
         manifest: Manifest,
@@ -243,9 +254,97 @@ mod tests {
     }
 
     #[test]
+    fn test_collect_valids() {
+        let should_ok = vec![TestCollectValids {
+            manifest_disks: vec![
+                //
+                ManifestDisk {
+                    device: "./test_assets/mock_devs/sda".into(),
+                    table: PartitionTable::Gpt,
+                    partitions: vec![
+                        //
+                        ManifestPartition {
+                            label: "ROOTFS".into(),
+                            size: None,
+                            part_type: "linux".into(),
+                        },
+                    ],
+                },
+            ],
+            manifest_dms: vec![
+                //
+                Dm::Luks(ManifestLuks {
+                    device: "./test_assets/mock_devs/sda1".into(),
+                    name: "cryptroot".into(),
+                    passphrase: None,
+                }),
+            ],
+            sys_fs_devs: HashMap::new(),
+            sys_fs_ready_devs: HashMap::from([]),
+            sys_lvms: HashMap::new(),
+            expected_valids: BlockDevPaths::from([
+                //
+                LinkedList::from([
+                    //
+                    BlockDev {
+                        device: "./test_assets/mock_devs/sda".into(),
+                        device_type: TYPE_DISK,
+                    },
+                    BlockDev {
+                        device: "./test_assets/mock_devs/sda1".into(),
+                        device_type: TYPE_PART,
+                    },
+                    BlockDev {
+                        device: "/dev/mapper/cryptroot".into(),
+                        device_type: TYPE_LUKS,
+                    },
+                ]),
+            ]),
+        }];
+
+        for (i, t) in should_ok.into_iter().enumerate() {
+            let result = collect_valids(
+                &Some(t.manifest_disks),
+                &Some(t.manifest_dms),
+                &mut t.sys_fs_devs.clone(),
+                &mut t.sys_fs_ready_devs.clone(),
+                &mut t.sys_lvms.clone(),
+            );
+
+            if let Err(ref err) = result {
+                eprintln!("unexpected error from case {}: {err}", i + 1);
+            }
+
+            assert!(result.is_ok());
+
+            let valids = result.unwrap();
+            let mut actual = HashSet::<BlockDevPath>::new();
+            for p in valids.iter() {
+                actual.insert(p.clone());
+            }
+
+            let mut expected = HashSet::<BlockDevPath>::new();
+            for p in t.expected_valids.iter() {
+                expected.insert(p.clone());
+            }
+
+            let diff: Vec<_> = actual.difference(&expected).collect();
+            let diff_count = diff.len();
+
+            if diff_count != 0 {
+                eprintln!("unexpected result");
+                eprintln!("expecting {expected:?}");
+                eprintln!("actual {actual:?}");
+            }
+
+            assert_eq!(0, diff_count);
+        }
+    }
+
+    #[test]
     fn test_validate_blk() {
-        let tests_should_ok = vec![
-            Test {
+        let should_ok = vec![
+            TestValidateBlockDev {
                 case: "Root and swap on existing partition".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -277,7 +376,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root FS on existing system device".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -310,7 +409,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on existing LV, swap on existing partition".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([(
@@ -358,7 +457,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on LUKS on existing partition, swap on existing LV".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([(
@@ -412,7 +511,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on LUKS on existing partition, swap on existing LV, data on new LV".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([(
@@ -477,7 +576,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on LUKS on existing partition, mountpoint on existing LV".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([(
@@ -543,7 +642,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on LUKS on existing LV, swap on LUKS on existing partition".into(),
                 context: Some("Existing LV on VG on >1 PVs".into()),
                 sys_fs_ready_devs: Some(HashMap::from([(
@@ -618,7 +717,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on LUKS on existing LV, swap on LUKS on existing partition".into(),
                 context: Some("Existing LV on VG on >1 existing + new PVs".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -692,7 +791,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on existing LV, swap on manifest partition".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -740,7 +839,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root and swap on existing LV on existing VG".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -792,7 +891,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on manifest LVM, built on existing partition. Swap on existing partition".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -835,7 +934,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case:"Root on manifest LVM, built on manifest partition. Swap on manifest partition".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -892,7 +991,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on manifest LVM on manifest partition/existing partition. Swap on manifest partition".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -958,7 +1057,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on manifest LVM, built on manifest/existing partition. Swap on manifest partition".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -1037,7 +1136,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root and Swap on manifest LVs from the same VG".into(),
                 context: Some("2 LVs on 1 VGs - VGs on 3 PVs".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -1123,7 +1222,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root, Data, and Swap on manifest LVs from the same VG".into(),
                 context: Some("3 LVs on 1 VGs - VGs on 3 PVs".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -1214,7 +1313,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root, Data, and Swap on manifest LVs from the same VG, with 1 direct fs mount".into(),
                 context: Some("3 LVs on 1 VGs - VGs on 3 PVs".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -1317,7 +1416,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root, Data, and Swap on manifest LVs from the same VG, with 2 mounts (1 fs, 1 lv)".into(),
                 context: Some("3 LVs on 1 VGs on 3 PVs, and 1 direct FS mount".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -1430,7 +1529,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root, Data, and Swap on manifest LVs from the same VG, with 2 LV mounts".into(),
                 context: Some("3 LVs on 2 VGs on 4 PVs, and 2 LV mounts".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -1557,7 +1656,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root and Swap on manifest LVs from the same VG".into(),
                 context: Some("2 LVs on 1 VG on 4 PVs. One of the PV already exists".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -1650,7 +1749,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Multiple LVs on multiple VGs on multiple PVs".into(),
                 context: Some("3 LVs on 2 VGs, each VG on 2 PVs - one PV already exists".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -1761,8 +1860,8 @@ mod tests {
             },
         }];
 
-        let tests_should_err: Vec<Test> = vec![
-            Test {
+        let should_err: Vec<TestValidateBlockDev> = vec![
+            TestValidateBlockDev {
                 case: "No manifest disks, root on non-existent, swap on non-existent".into(),
                 context: None,
                 sys_fs_ready_devs: None,
@@ -1791,7 +1890,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "No manifest disks, root on existing ext4 fs, swap on non-existent".into(),
                 context: None,
                 sys_fs_ready_devs: None,
@@ -1823,7 +1922,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Swap uses existing FS".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -1857,7 +1956,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Duplicate FS on root FS".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -1897,7 +1996,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Duplicate FS on swap device".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -1939,7 +2038,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Duplicate FS on some device".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -1984,7 +2083,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on LUKS on existing LV, but swap reuses rootfs base".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -2037,7 +2136,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on LUKS on existing LV, swap on used-up LV".into(),
                 context: Some("Existing LV on VG on >1 PVs".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -2106,7 +2205,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on LUKS on existing partition, but 1 fs on rootfs device".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([(
@@ -2166,7 +2265,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on LUKS on existing partition, but 1 mountpoint on rootfs".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([(
@@ -2232,7 +2331,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on LVM, built on manifest partitions, but 1 fs on rootfs device".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -2302,7 +2401,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on LVM, built on manifest partitions, but 1 mountpoint on rootfs".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -2372,7 +2471,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on LVM, built on manifest partitions, but missing LV manifest".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -2428,7 +2527,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on LVM, built on manifest partitions".into(),
                 context: Some("Non-last partition has None size".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -2495,7 +2594,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on LVM, built on manifest partitions".into(),
                 context: Some("Last partition has bad size (decimal)".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -2562,7 +2661,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on LVM, built on manifest partitions".into(),
                 context: Some("Non-last partition has bad size".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -2629,7 +2728,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on LVM, built on manifest partitions".into(),
                 context: Some("Non-last LV has None size".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -2696,7 +2795,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on LVM, built on manifest partitions".into(),
                 context: Some("LV has bad size".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -2763,7 +2862,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on LVM, built on manifest partitions".into(),
                 context: Some("Non-last LV has bad size".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -2830,7 +2929,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on LVM, built on manifest partitions".into(),
                 context: Some("VG is based on used PV".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -2890,7 +2989,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on LVM, built on manifest partitions, but 1 fs is re-using rootfs LV".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -2963,7 +3062,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on manifest LVM, built on manifest partitions and existing partition. Swap on manifest partition that was used to build PV".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from(
@@ -3040,7 +3139,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on manifest LVM, built on manifest partitions and non-existent partition. Swap on manifest partition".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -3117,7 +3216,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root and Swap on manifest LVs from the same VG, but existing VG partition already has fs".into(),
                 context: Some("2 LVs on 1 VG on 4 PVs, but 1 PV already has swap".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -3205,7 +3304,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root and Swap on manifest LVs from the same VG".into(),
                 context: Some("2 LVs on 1 VG on 4 PVs, but 1 PV was already used".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -3300,7 +3399,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root, Data, and Swap on manifest LVs from the same VG, with 2 mounts".into(),
                 context: Some("3 LVs on 1 VGs - VGs on 3 PVs, but missing mountpoint device".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -3408,7 +3507,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root, Data, and Swap on manifest LVs from the same VG, with 2 mounts, but missing 1 FS for mountpoints".into(),
                 context: Some("3 LVs on 1 VGs - VGs on 3 PVs, but missing 1 FS for mountpoint".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -3516,7 +3615,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root, Data, and Swap on manifest LVs from the same VG, with 2 LV mounts".into(),
                 context: Some("3 LVs on 2 VGs on 4 PVs, and 2 LV mounts, but 1 LV is missing FS".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -3638,7 +3737,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root, Data, and Swap on manifest LVs from the same VG, with 2 LV mounts".into(),
                 context: Some("3 LVs on 2 VGs on 4 PVs, and 2 LV mounts, but duplicate mountpoints".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -3766,7 +3865,7 @@ mod tests {
             },
         ];
 
-        for (i, test) in tests_should_ok.iter().enumerate() {
+        for (i, test) in should_ok.iter().enumerate() {
             let result = validate_blockdev(
                 &test.manifest,
                 &test.sys_fs_devs.clone().unwrap_or(HashMap::new()),
@@ -3792,7 +3891,7 @@ mod tests {
             assert!(result.is_ok());
         }
 
-        for (i, test) in tests_should_err.iter().enumerate() {
+        for (i, test) in should_err.iter().enumerate() {
             let result = validate_blockdev(
                 &test.manifest,
                 &test.sys_fs_devs.clone().unwrap_or_default(),

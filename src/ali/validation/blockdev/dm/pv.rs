@@ -386,26 +386,7 @@ mod tests {
                 pv: "/dev/fda2".into(),
                 sys_fs_devs: HashMap::from([]),
                 sys_fs_ready_devs: HashMap::from([]),
-                sys_lvms: HashMap::from([(
-                    "/dev/fda1".into(),
-                    vec![
-                        //
-                        LinkedList::from([
-                            BlockDev {
-                                device: "/dev/fda1".into(),
-                                device_type: TYPE_PV,
-                            },
-                            BlockDev {
-                                device: "/dev/myvg".into(),
-                                device_type: TYPE_VG,
-                            },
-                            BlockDev {
-                                device: "/dev/somelv".into(),
-                                device_type: TYPE_LV,
-                            },
-                        ]),
-                    ],
-                )]),
+                sys_lvms: HashMap::from([]),
                 valids: BlockDevPaths::from([
                     //
                     LinkedList::from([
@@ -416,6 +397,25 @@ mod tests {
                         BlockDev {
                             device: "/dev/fdb1".into(),
                             device_type: BlockDevType::Fs("ext3".into()),
+                        },
+                    ]),
+                    //
+                    LinkedList::from([
+                        BlockDev {
+                            device: "/dev/fda".into(),
+                            device_type: TYPE_UNKNOWN,
+                        },
+                        BlockDev {
+                            device: "/dev/fda2".into(),
+                            device_type: TYPE_PART,
+                        },
+                        BlockDev {
+                            device: "/dev/mapper/foo".into(),
+                            device_type: TYPE_LUKS,
+                        },
+                        BlockDev {
+                            device: "/dev/mapper/foo".into(),
+                            device_type: BlockDevType::Fs("btrfs".into()),
                         },
                     ]),
                 ]),
