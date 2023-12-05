@@ -1,6 +1,9 @@
 mod disk;
 mod dm;
+mod fs;
 mod mount;
+mod swap;
+mod sysfs;
 mod trace_blk;
 
 use std::collections::{
@@ -8,7 +11,7 @@ use std::collections::{
     HashSet,
 };
 
-use crate::ali::Manifest;
+use crate::ali::*;
 use crate::entity::blockdev::*;
 use crate::errors::AliError;
 
@@ -70,8 +73,8 @@ pub(crate) fn validate(
 /// into a list `valids`, returning error if found during collection.
 ///
 /// If all names are successfully collected into `valids`,
-/// `valids` is then used to validate the following manifest fields:
-/// `rootfs`, `filesystems`, `swap`, and `mountpoints`
+/// `valids` is then used to construct `fs_ready_devs` and `fs_devs`.
+/// All 3 variables are then used validate the block devices:
 ///
 /// The parameters it takes are the current state of the system
 /// before applying the manifest, which is used to ensure that
@@ -86,171 +89,111 @@ fn validate_blockdev(
     mut sys_fs_ready_devs: HashMap<String, BlockDevType>, /* Maps fs-ready devs to their types (e.g. partition) */
     mut sys_lvms: HashMap<String, BlockDevPaths>, /* Maps pv path to all possible LV paths */
 ) -> Result<BlockDevPaths, AliError> {
-    // valids collects all valid known devices to be created in the manifest.
-    // The back of each linked list is the top-most device.
-    let mut valids = BlockDevPaths::new();
+    // Valid block devices
+    let valids = collect_valids(
+        &manifest.disks,
+        &manifest.device_mappers,
+        sys_fs_devs,
+        &mut sys_fs_ready_devs,
+        &mut sys_lvms,
+    )?;
 
-    if let Some(disks) = &manifest.disks {
-        disk::collect_valids(
-            disks,
-            sys_fs_devs,
-            &sys_fs_ready_devs,
-            &mut valids,
-        )?;
-    }
+    // Valid block devices that can be used as fs base (fs-ready)
+    let mut fs_ready_devs =
+        collect_fs_ready_devs(&mut sys_fs_ready_devs, sys_lvms, &valids)?;
 
-    if let Some(dms) = &manifest.device_mappers {
-        dm::collect_valids(
-            dms,
-            sys_fs_devs,
-            &mut sys_fs_ready_devs,
-            &mut sys_lvms,
-            &mut valids,
-        )?;
-    }
+    // Valid block devices used as filesystems
+    let mut fs_devs =
+        collect_fs_devs(manifest, sys_fs_devs, &mut fs_ready_devs)?;
 
-    // fs_ready_devs is used to validate manifest.fs
-    let mut fs_ready_devs = HashSet::<String>::new();
-
-    // Collect remaining sys_fs_ready_devs
-    for (dev, dev_type) in sys_fs_ready_devs {
-        if !is_fs_base(&dev_type) {
-            return Err(AliError::AliRsBug(format!(
-                "device {dev} ({dev_type}) cannot be used as base for filesystems"
-            )));
-        }
-
-        if fs_ready_devs.insert(dev.clone()) {
-            continue;
-        }
-
-        return Err(AliError::AliRsBug(format!(
-            "duplicate device {dev} ({dev_type}) as base for filesystems"
-        )));
-    }
-
-    // Collect remaining sys_lvms - fs-ready only
-    for list in sys_lvms.into_values().flatten() {
-        let dev = list.back();
-        if dev.is_none() {
-            continue;
-        }
-
-        let dev = dev.unwrap();
-        if !is_fs_base(&dev.device_type) {
-            continue;
-        }
-
-        // We should be able to ignore LVM LV duplicates
-        fs_ready_devs.insert(dev.device.clone());
-    }
-
-    // Collect from valids - fs-ready only
-    for list in &valids {
-        let dev = list.back().expect("`valids` is missing top-most device");
-        if !is_fs_base(&dev.device_type) {
-            continue;
-        }
-
-        fs_ready_devs.insert(dev.device.clone());
-    }
-
-    // Validate root FS, other FS, and swap against fs_ready_devs
-    let mut msg = "rootfs validation failed";
-
-    if !fs_ready_devs.contains(&manifest.rootfs.device.clone()) {
-        return Err(AliError::BadManifest(format!(
-            "{msg}: no top-level fs-ready device for rootfs: {}",
-            manifest.rootfs.device,
-        )));
-    }
-
-    // Remove used up fs-ready device (rootfs)
-    fs_ready_devs.remove(&manifest.rootfs.device);
-
-    // Track all devices, system or manifest, with FS
-    let mut fs_devs = HashSet::new();
-
-    // Validate that we will only create fs on fs_ready_devs
-    if let Some(filesystems) = &manifest.filesystems {
-        msg = "fs validation failed";
-
-        for (i, fs) in filesystems.iter().enumerate() {
-            if !fs_ready_devs.contains(&fs.device) {
-                return Err(AliError::BadManifest(format!(
-                    "{msg}: device {} for fs #{} ({}) is not fs-ready",
-                    fs.device,
-                    i + 1,
-                    fs.fs_type,
-                )));
-            }
-
-            // Remove used up fs-ready device
-            fs_ready_devs.remove(&fs.device);
-
-            // Collect this fs to fs devices to later validate mountpoints
-            if fs_devs.insert(&fs.device) {
-                continue;
-            }
-
-            return Err(AliError::AliRsBug(format!(
-                "{msg}: duplicate filesystem devices from manifest filesystems: {} ({})",
-                fs.device, fs.fs_type,
-            )));
-        }
-    }
-
-    // Validate mountpoints - all mountpoints must point to valid FS devices
     if let Some(mountpoints) = &manifest.mountpoints {
-        msg = "fs mount validation failed";
-
-        if let Err(err) = mount::validate(mountpoints) {
-            return Err(AliError::BadManifest(format!("{msg}: {err}")));
-        }
-
-        // Collect all system's FS
-        for (dev, dev_type) in sys_fs_devs {
-            if fs_devs.insert(dev) {
-                continue;
-            }
-
-            return Err(AliError::AliRsBug(format!(
-                "{msg}: duplicate filesystem devices from from system filesystems: {dev} ({dev_type})",
-            )));
-        }
-
-        for (i, mnt) in mountpoints.iter().enumerate() {
-            if fs_devs.contains(&mnt.device) {
-                continue;
-            }
-
-            return Err(AliError::BadManifest(format!(
-                "{msg}: mountpoint {} for device #{} ({}) is not fs-ready",
-                mnt.dest,
-                i + 1,
-                mnt.device,
-            )));
-        }
+        mount::validate_dups(mountpoints)?;
+        mount::validate(mountpoints, &mut fs_devs)?;
     }
 
-    msg = "swap validation failed";
     if let Some(ref swaps) = manifest.swap {
-        for (i, swap) in swaps.iter().enumerate() {
-            if !fs_ready_devs.contains(swap) {
-                return Err(AliError::BadManifest(format!(
-                    "{msg}: device {swap} for swap #{} is not fs-ready",
-                    i + 1,
-                )));
-            }
-
-            fs_ready_devs.remove(swap);
-        }
+        swap::validate(swaps, &mut fs_ready_devs)?;
     }
 
     Ok(valids)
 }
 
-fn is_fs_base(dev_type: &BlockDevType) -> bool {
+fn collect_valids(
+    disks: &Option<Vec<ManifestDisk>>,
+    device_mappers: &Option<Vec<Dm>>,
+    sys_fs_devs: &HashMap<String, BlockDevType>,
+    sys_fs_ready_devs: &mut HashMap<String, BlockDevType>,
+    sys_lvms: &mut HashMap<String, BlockDevPaths>,
+) -> Result<BlockDevPaths, AliError> {
+    // valids collects all valid known devices to be created in the manifest.
+    // The back of each linked list is the top-most device.
+    let mut valids = BlockDevPaths::new();
+
+    if let Some(disks) = &disks {
+        disk::collect_valids(
+            disks,
+            sys_fs_devs,
+            sys_fs_ready_devs,
+            &mut valids,
+        )?;
+    }
+
+    if let Some(dms) = &device_mappers {
+        dm::collect_valids(
+            dms,
+            sys_fs_devs,
+            sys_fs_ready_devs,
+            sys_lvms,
+            &mut valids,
+        )?;
+    }
+
+    Ok(valids)
+}
+
+fn collect_fs_ready_devs(
+    sys_fs_ready_devs: &mut HashMap<String, BlockDevType>,
+    sys_lvms: HashMap<String, BlockDevPaths>,
+    valids: &BlockDevPaths,
+) -> Result<HashSet<String>, AliError> {
+    // Valid block devices that can be used as fs base (fs-ready)
+    let mut fs_ready_devs = HashSet::<String>::new();
+
+    sysfs::collect_fs_ready_devs(sys_fs_ready_devs, &mut fs_ready_devs)?;
+    sysfs::collect_lvm_fs_ready_devs(sys_lvms, &mut fs_ready_devs);
+
+    // Collect fs-ready devices from valids to fs_ready_devs
+    for list in valids {
+        let dev = list.back().expect("`valids` is missing top-most device");
+        if !is_fs_ready(&dev.device_type) {
+            continue;
+        }
+
+        fs_ready_devs.insert(dev.device.clone());
+    }
+
+    Ok(fs_ready_devs)
+}
+
+fn collect_fs_devs<'a>(
+    manifest: &'a Manifest,
+    sys_fs_devs: &'a HashMap<String, BlockDevType>,
+    fs_ready_devs: &'a mut HashSet<String>,
+) -> Result<HashSet<&'a String>, AliError> {
+    fs::collect_rootfs_fs_devs(&manifest.rootfs.device, fs_ready_devs)?;
+
+    // Valid block devices used as filesystems
+    let mut fs_devs = HashSet::new();
+    sysfs::collect_fs_devs(sys_fs_devs, &mut fs_devs)?;
+
+    if let Some(filesystems) = &manifest.filesystems {
+        fs::collect_fs_devs(filesystems, fs_ready_devs, &mut fs_devs)?;
+    }
+
+    Ok(fs_devs)
+}
+
+fn is_fs_ready(dev_type: &BlockDevType) -> bool {
     matches!(
         dev_type,
         BlockDevType::Disk
@@ -289,10 +232,19 @@ mod tests {
     use std::collections::LinkedList;
 
     use super::*;
-    use crate::ali::*;
 
     #[derive(Debug)]
-    struct Test {
+    struct TestCollectValids {
+        manifest_disks: Vec<ManifestDisk>,
+        manifest_dms: Vec<Dm>,
+        sys_fs_devs: HashMap<String, BlockDevType>,
+        sys_fs_ready_devs: HashMap<String, BlockDevType>,
+        sys_lvms: HashMap<String, BlockDevPaths>,
+        expected_valids: BlockDevPaths,
+    }
+
+    #[derive(Debug)]
+    struct TestValidateBlockDev {
         case: String,
         context: Option<String>, // Extra info about the test
         manifest: Manifest,
@@ -302,9 +254,97 @@ mod tests {
     }
 
     #[test]
+    fn test_collect_valids() {
+        let should_ok = vec![TestCollectValids {
+            manifest_disks: vec![
+                //
+                ManifestDisk {
+                    device: "./test_assets/mock_devs/sda".into(),
+                    table: PartitionTable::Gpt,
+                    partitions: vec![
+                        //
+                        ManifestPartition {
+                            label: "ROOTFS".into(),
+                            size: None,
+                            part_type: "linux".into(),
+                        },
+                    ],
+                },
+            ],
+            manifest_dms: vec![
+                //
+                Dm::Luks(ManifestLuks {
+                    device: "./test_assets/mock_devs/sda1".into(),
+                    name: "cryptroot".into(),
+                    passphrase: None,
+                }),
+            ],
+            sys_fs_devs: HashMap::new(),
+            sys_fs_ready_devs: HashMap::from([]),
+            sys_lvms: HashMap::new(),
+            expected_valids: BlockDevPaths::from([
+                //
+                LinkedList::from([
+                    //
+                    BlockDev {
+                        device: "./test_assets/mock_devs/sda".into(),
+                        device_type: TYPE_DISK,
+                    },
+                    BlockDev {
+                        device: "./test_assets/mock_devs/sda1".into(),
+                        device_type: TYPE_PART,
+                    },
+                    BlockDev {
+                        device: "/dev/mapper/cryptroot".into(),
+                        device_type: TYPE_LUKS,
+                    },
+                ]),
+            ]),
+        }];
+
+        for (i, t) in should_ok.into_iter().enumerate() {
+            let result = collect_valids(
+                &Some(t.manifest_disks),
+                &Some(t.manifest_dms),
+                &mut t.sys_fs_devs.clone(),
+                &mut t.sys_fs_ready_devs.clone(),
+                &mut t.sys_lvms.clone(),
+            );
+
+            if let Err(ref err) = result {
+                eprintln!("unexpected error from case {}: {err}", i + 1);
+            }
+
+            assert!(result.is_ok());
+
+            let valids = result.unwrap();
+            let mut actual = HashSet::<BlockDevPath>::new();
+            for p in valids.iter() {
+                actual.insert(p.clone());
+            }
+
+            let mut expected = HashSet::<BlockDevPath>::new();
+            for p in t.expected_valids.iter() {
+                expected.insert(p.clone());
+            }
+
+            let diff: Vec<_> = actual.difference(&expected).collect();
+            let diff_count = diff.len();
+
+            if diff_count != 0 {
+                eprintln!("unexpected result");
+                eprintln!("expecting {expected:?}");
+                eprintln!("actual {actual:?}");
+            }
+
+            assert_eq!(0, diff_count);
+        }
+    }
+
+    #[test]
     fn test_validate_blk() {
-        let tests_should_ok = vec![
-            Test {
+        let should_ok = vec![
+            TestValidateBlockDev {
                 case: "Root and swap on existing partition".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -336,7 +376,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root FS on existing system device".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -369,7 +409,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on existing LV, swap on existing partition".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([(
@@ -417,7 +457,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on LUKS on existing partition, swap on existing LV".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([(
@@ -471,7 +511,138 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
+                case: "Root on LUKS on existing partition, swap on existing LV, data on new LV".into(),
+                context: None,
+                sys_fs_ready_devs: Some(HashMap::from([(
+                    "/dev/fake1p2".into(),
+                    TYPE_PART,
+                )])),
+                sys_fs_devs: None,
+                sys_lvms: Some(HashMap::from([(
+                    "/dev/fda1".into(),
+                    vec![LinkedList::from([
+                        BlockDev {
+                            device: "/dev/fda1".into(),
+                            device_type: TYPE_PV,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg".into(),
+                            device_type: TYPE_VG,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg/mylv".into(),
+                            device_type: TYPE_LV,
+                        },
+                    ])],
+                )])),
+
+                manifest: Manifest {
+                    location: None,
+                    disks: None,
+                    device_mappers: Some(vec![
+                        Dm::Luks(ManifestLuks {
+                            device: "/dev/fake1p2".into(),
+                            name:  "cryptroot".into(),
+                            passphrase: None,
+                        }),
+                        Dm::Lvm(ManifestLvm {
+                            pvs: None,
+                            vgs: None,
+                            lvs: Some(vec![
+                                ManifestLvmLv{
+                                    name: "datalv".into(),
+                                    vg: "myvg".into(),
+                                    size: None,
+                                },
+                            ]),
+                        })
+                    ]),
+                    rootfs: ManifestRootFs{
+                        device: "/dev/mapper/cryptroot".into(),
+                        fs_type: "btrfs".into(),
+                        fs_opts: None,
+                        mnt_opts: None,
+                    },
+                    filesystems: None,
+                    mountpoints: None,
+                    swap: Some(vec!["/dev/myvg/mylv".into()]),
+                    pacstraps: None,
+                    chroot: None,
+                    postinstall: None,
+                    hostname: None,
+                    timezone: None,
+                    rootpasswd: None,
+                },
+            },
+
+            TestValidateBlockDev {
+                case: "Root on LUKS on existing partition, mountpoint on existing LV".into(),
+                context: None,
+                sys_fs_ready_devs: Some(HashMap::from([(
+                    "/dev/fake1p2".into(),
+                    TYPE_PART,
+                )])),
+                sys_fs_devs: None,
+                sys_lvms: Some(HashMap::from([(
+                    "/dev/fda1".into(),
+                    vec![LinkedList::from([
+                        BlockDev {
+                            device: "/dev/fda1".into(),
+                            device_type: TYPE_PV,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg".into(),
+                            device_type: TYPE_VG,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg/mylv".into(),
+                            device_type: TYPE_LV,
+                        },
+                    ])],
+                )])),
+
+                manifest: Manifest {
+                    location: None,
+                    disks: None,
+                    device_mappers: Some(vec![
+                        Dm::Luks(ManifestLuks {
+                            device: "/dev/fake1p2".into(),
+                            name:  "cryptroot".into(),
+                            passphrase: None,
+                        }),
+                    ]),
+                    rootfs: ManifestRootFs{
+                        device: "/dev/mapper/cryptroot".into(),
+                        fs_type: "btrfs".into(),
+                        fs_opts: None,
+                        mnt_opts: None,
+                    },
+                    filesystems: Some(vec![
+                        ManifestFs{
+                            device: "/dev/myvg/mylv".into(),
+                            fs_type: "btrfs".into(),
+                            fs_opts: None,
+                        },
+                    ]),
+                    mountpoints: Some(vec![
+                        ManifestMountpoint{
+                            device: "/dev/myvg/mylv".into(),
+                            dest: "/data".into(),
+                            mnt_opts: None,
+                        },
+                    ]),
+                    swap: None,
+                    pacstraps: None,
+                    chroot: None,
+                    postinstall: None,
+                    hostname: None,
+                    timezone: None,
+                    rootpasswd: None,
+                },
+            },
+
+            TestValidateBlockDev {
                 case: "Root on LUKS on existing LV, swap on LUKS on existing partition".into(),
                 context: Some("Existing LV on VG on >1 PVs".into()),
                 sys_fs_ready_devs: Some(HashMap::from([(
@@ -546,7 +717,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on LUKS on existing LV, swap on LUKS on existing partition".into(),
                 context: Some("Existing LV on VG on >1 existing + new PVs".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -620,7 +791,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on existing LV, swap on manifest partition".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -668,7 +839,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root and swap on existing LV on existing VG".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -720,7 +891,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on manifest LVM, built on existing partition. Swap on existing partition".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -763,7 +934,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case:"Root on manifest LVM, built on manifest partition. Swap on manifest partition".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -820,7 +991,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on manifest LVM on manifest partition/existing partition. Swap on manifest partition".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -886,7 +1057,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on manifest LVM, built on manifest/existing partition. Swap on manifest partition".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -965,7 +1136,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root and Swap on manifest LVs from the same VG".into(),
                 context: Some("2 LVs on 1 VGs - VGs on 3 PVs".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -1051,7 +1222,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root, Data, and Swap on manifest LVs from the same VG".into(),
                 context: Some("3 LVs on 1 VGs - VGs on 3 PVs".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -1142,7 +1313,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root, Data, and Swap on manifest LVs from the same VG, with 1 direct fs mount".into(),
                 context: Some("3 LVs on 1 VGs - VGs on 3 PVs".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -1245,7 +1416,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root, Data, and Swap on manifest LVs from the same VG, with 2 mounts (1 fs, 1 lv)".into(),
                 context: Some("3 LVs on 1 VGs on 3 PVs, and 1 direct FS mount".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -1358,7 +1529,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root, Data, and Swap on manifest LVs from the same VG, with 2 LV mounts".into(),
                 context: Some("3 LVs on 2 VGs on 4 PVs, and 2 LV mounts".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -1485,7 +1656,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root and Swap on manifest LVs from the same VG".into(),
                 context: Some("2 LVs on 1 VG on 4 PVs. One of the PV already exists".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -1578,7 +1749,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Multiple LVs on multiple VGs on multiple PVs".into(),
                 context: Some("3 LVs on 2 VGs, each VG on 2 PVs - one PV already exists".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -1689,8 +1860,8 @@ mod tests {
             },
         }];
 
-        let tests_should_err: Vec<Test> = vec![
-            Test {
+        let should_err: Vec<TestValidateBlockDev> = vec![
+            TestValidateBlockDev {
                 case: "No manifest disks, root on non-existent, swap on non-existent".into(),
                 context: None,
                 sys_fs_ready_devs: None,
@@ -1719,7 +1890,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "No manifest disks, root on existing ext4 fs, swap on non-existent".into(),
                 context: None,
                 sys_fs_ready_devs: None,
@@ -1751,7 +1922,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Swap uses existing FS".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -1785,7 +1956,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Duplicate FS on root FS".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -1825,7 +1996,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Duplicate FS on swap device".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -1867,7 +2038,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Duplicate FS on some device".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -1912,7 +2083,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on LUKS on existing LV, but swap reuses rootfs base".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -1965,7 +2136,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on LUKS on existing LV, swap on used-up LV".into(),
                 context: Some("Existing LV on VG on >1 PVs".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -2034,7 +2205,273 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
+                case: "Root on LUKS on existing partition, but 1 fs on rootfs device".into(),
+                context: None,
+                sys_fs_ready_devs: Some(HashMap::from([(
+                    "/dev/fake1p2".into(),
+                    TYPE_PART,
+                )])),
+                sys_fs_devs: None,
+                sys_lvms: Some(HashMap::from([(
+                    "/dev/fda1".into(),
+                    vec![LinkedList::from([
+                        BlockDev {
+                            device: "/dev/fda1".into(),
+                            device_type: TYPE_PV,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg".into(),
+                            device_type: TYPE_VG,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg/mylv".into(),
+                            device_type: TYPE_LV,
+                        },
+                    ])],
+                )])),
+
+                manifest: Manifest {
+                    location: None,
+                    disks: None,
+                    device_mappers: Some(vec![
+                        Dm::Luks(ManifestLuks {
+                            device: "/dev/fake1p2".into(),
+                            name:  "cryptroot".into(),
+                            passphrase: None,
+                        }),
+                    ]),
+                    rootfs: ManifestRootFs{
+                        device: "/dev/mapper/cryptroot".into(),
+                        fs_type: "btrfs".into(),
+                        fs_opts: None,
+                        mnt_opts: None,
+                    },
+                    filesystems: Some(vec![
+                        ManifestFs{
+                            device: "/dev/mapper/cryptroot".into(),
+                            fs_type: "btrfs".into(),
+                            fs_opts: None,
+                        },
+                    ]),
+                    mountpoints: None,
+                    swap: None,
+                    pacstraps: None,
+                    chroot: None,
+                    postinstall: None,
+                    hostname: None,
+                    timezone: None,
+                    rootpasswd: None,
+                },
+            },
+
+            TestValidateBlockDev {
+                case: "Root on LUKS on existing partition, but 1 mountpoint on rootfs".into(),
+                context: None,
+                sys_fs_ready_devs: Some(HashMap::from([(
+                    "/dev/fake1p2".into(),
+                    TYPE_PART,
+                )])),
+                sys_fs_devs: None,
+                sys_lvms: Some(HashMap::from([(
+                    "/dev/fda1".into(),
+                    vec![LinkedList::from([
+                        BlockDev {
+                            device: "/dev/fda1".into(),
+                            device_type: TYPE_PV,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg".into(),
+                            device_type: TYPE_VG,
+                        },
+                        BlockDev {
+                            device: "/dev/myvg/mylv".into(),
+                            device_type: TYPE_LV,
+                        },
+                    ])],
+                )])),
+
+                manifest: Manifest {
+                    location: None,
+                    disks: None,
+                    device_mappers: Some(vec![
+                        Dm::Luks(ManifestLuks {
+                            device: "/dev/fake1p2".into(),
+                            name:  "cryptroot".into(),
+                            passphrase: None,
+                        }),
+                    ]),
+                    rootfs: ManifestRootFs{
+                        device: "/dev/mapper/cryptroot".into(),
+                        fs_type: "btrfs".into(),
+                        fs_opts: None,
+                        mnt_opts: None,
+                    },
+                    filesystems: Some(vec![
+                        ManifestFs{
+                            device: "/dev/myvg/mylv".into(),
+                            fs_type: "btrfs".into(),
+                            fs_opts: None,
+                        },
+                    ]),
+                    mountpoints: Some(vec![
+                        ManifestMountpoint{
+                            device: "/dev/mapper/cryptroot".into(),
+                            dest: "/data".into(),
+                            mnt_opts: None,
+                        },
+                    ]),
+                    swap: None,
+                    pacstraps: None,
+                    chroot: None,
+                    postinstall: None,
+                    hostname: None,
+                    timezone: None,
+                    rootpasswd: None,
+                },
+            },
+
+            TestValidateBlockDev {
+                case: "Root on LVM, built on manifest partitions, but 1 fs on rootfs device".into(),
+                context: None,
+                sys_fs_ready_devs: Some(HashMap::from([
+                    ("/dev/fake1p2".into(), TYPE_PART),
+                ])),
+                sys_fs_devs: None,
+                sys_lvms: None,
+
+                manifest: Manifest {
+                    location: None,
+                    disks: Some(vec![
+                        ManifestDisk {
+                            device: "./test_assets/mock_devs/sda".into(),
+                            table: PartitionTable::Gpt,
+                            partitions: vec![
+                                ManifestPartition {
+                                    label: "PART_EFI".into(),
+                                    size: Some("500M".into()),
+                                    part_type: "ef".into(),
+                                },
+                                ManifestPartition {
+                                    label: "PART_PV".into(),
+                                    size: None,
+                                    part_type: "8e".into(),
+                                },
+                            ],
+                    }]),
+                    device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
+                        pvs: Some(vec![
+                            "./test_assets/mock_devs/sda2".into(),
+                        ]),
+                        vgs: Some(vec![
+                            ManifestLvmVg {
+                                name: "myvg".into(),
+                                pvs: vec!["./test_assets/mock_devs/sda2".into()],
+                            },
+                        ]),
+                        lvs: Some(vec![
+                            ManifestLvmLv{
+                                name: "mylv".into(),
+                                vg: "myvg".into(),
+                                size: None,
+                            },
+                        ]),
+                    })]),
+                    rootfs: ManifestRootFs{
+                        device: "/dev/myvg/mylv".into(),
+                        fs_type: "btrfs".into(),
+                        fs_opts: None,
+                        mnt_opts: None,
+                    },
+                    filesystems: Some(vec![
+                        ManifestFs {
+                            device: "/dev/myvg/mylv".into(),
+                            fs_type: "btrfs".into(),
+                            fs_opts: None,
+                        },
+                    ]),
+                    mountpoints: None,
+                    swap: Some(vec!["/dev/fake1p2".into()]),
+                    pacstraps: None,
+                    chroot: None,
+                    postinstall: None,
+                    hostname: None,
+                    timezone: None,
+                    rootpasswd: None,
+                },
+            },
+
+            TestValidateBlockDev {
+                case: "Root on LVM, built on manifest partitions, but 1 mountpoint on rootfs".into(),
+                context: None,
+                sys_fs_ready_devs: Some(HashMap::from([
+                    ("/dev/fake1p2".into(), TYPE_PART),
+                ])),
+                sys_fs_devs: None,
+                sys_lvms: None,
+
+                manifest: Manifest {
+                    location: None,
+                    disks: Some(vec![
+                        ManifestDisk {
+                            device: "./test_assets/mock_devs/sda".into(),
+                            table: PartitionTable::Gpt,
+                            partitions: vec![
+                                ManifestPartition {
+                                    label: "PART_EFI".into(),
+                                    size: Some("500M".into()),
+                                    part_type: "ef".into(),
+                                },
+                                ManifestPartition {
+                                    label: "PART_PV".into(),
+                                    size: None,
+                                    part_type: "8e".into(),
+                                },
+                            ],
+                    }]),
+                    device_mappers: Some(vec![Dm::Lvm(ManifestLvm {
+                        pvs: Some(vec![
+                            "./test_assets/mock_devs/sda2".into(),
+                        ]),
+                        vgs: Some(vec![
+                            ManifestLvmVg {
+                                name: "myvg".into(),
+                                pvs: vec!["./test_assets/mock_devs/sda2".into()],
+                            },
+                        ]),
+                        lvs: Some(vec![
+                            ManifestLvmLv{
+                                name: "mylv".into(),
+                                vg: "myvg".into(),
+                                size: None,
+                            },
+                        ]),
+                    })]),
+                    rootfs: ManifestRootFs{
+                        device: "/dev/myvg/mylv".into(),
+                        fs_type: "btrfs".into(),
+                        fs_opts: None,
+                        mnt_opts: None,
+                    },
+                    filesystems: None,
+                    mountpoints: Some(vec![
+                        ManifestMountpoint {
+                            device: "/dev/myvg/mylv".into(),
+                            dest: "/data".into(),
+                            mnt_opts: None,
+                        },
+                    ]),
+                    swap: Some(vec!["/dev/fake1p2".into()]),
+                    pacstraps: None,
+                    chroot: None,
+                    postinstall: None,
+                    hostname: None,
+                    timezone: None,
+                    rootpasswd: None,
+                },
+            },
+
+            TestValidateBlockDev {
                 case: "Root on LVM, built on manifest partitions, but missing LV manifest".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -2090,7 +2527,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on LVM, built on manifest partitions".into(),
                 context: Some("Non-last partition has None size".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -2157,7 +2594,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on LVM, built on manifest partitions".into(),
                 context: Some("Last partition has bad size (decimal)".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -2224,7 +2661,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on LVM, built on manifest partitions".into(),
                 context: Some("Non-last partition has bad size".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -2291,7 +2728,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on LVM, built on manifest partitions".into(),
                 context: Some("Non-last LV has None size".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -2358,7 +2795,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on LVM, built on manifest partitions".into(),
                 context: Some("LV has bad size".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -2425,7 +2862,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on LVM, built on manifest partitions".into(),
                 context: Some("Non-last LV has bad size".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -2492,7 +2929,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on LVM, built on manifest partitions".into(),
                 context: Some("VG is based on used PV".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -2552,7 +2989,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on LVM, built on manifest partitions, but 1 fs is re-using rootfs LV".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -2625,7 +3062,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on manifest LVM, built on manifest partitions and existing partition. Swap on manifest partition that was used to build PV".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from(
@@ -2702,7 +3139,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root on manifest LVM, built on manifest partitions and non-existent partition. Swap on manifest partition".into(),
                 context: None,
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -2779,7 +3216,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root and Swap on manifest LVs from the same VG, but existing VG partition already has fs".into(),
                 context: Some("2 LVs on 1 VG on 4 PVs, but 1 PV already has swap".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -2867,7 +3304,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root and Swap on manifest LVs from the same VG".into(),
                 context: Some("2 LVs on 1 VG on 4 PVs, but 1 PV was already used".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -2962,7 +3399,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root, Data, and Swap on manifest LVs from the same VG, with 2 mounts".into(),
                 context: Some("3 LVs on 1 VGs - VGs on 3 PVs, but missing mountpoint device".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -3070,7 +3507,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root, Data, and Swap on manifest LVs from the same VG, with 2 mounts, but missing 1 FS for mountpoints".into(),
                 context: Some("3 LVs on 1 VGs - VGs on 3 PVs, but missing 1 FS for mountpoint".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -3178,7 +3615,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root, Data, and Swap on manifest LVs from the same VG, with 2 LV mounts".into(),
                 context: Some("3 LVs on 2 VGs on 4 PVs, and 2 LV mounts, but 1 LV is missing FS".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -3300,7 +3737,7 @@ mod tests {
                 },
             },
 
-            Test {
+            TestValidateBlockDev {
                 case: "Root, Data, and Swap on manifest LVs from the same VG, with 2 LV mounts".into(),
                 context: Some("3 LVs on 2 VGs on 4 PVs, and 2 LV mounts, but duplicate mountpoints".into()),
                 sys_fs_ready_devs: Some(HashMap::from([
@@ -3428,7 +3865,7 @@ mod tests {
             },
         ];
 
-        for (i, test) in tests_should_ok.iter().enumerate() {
+        for (i, test) in should_ok.iter().enumerate() {
             let result = validate_blockdev(
                 &test.manifest,
                 &test.sys_fs_devs.clone().unwrap_or(HashMap::new()),
@@ -3454,7 +3891,7 @@ mod tests {
             assert!(result.is_ok());
         }
 
-        for (i, test) in tests_should_err.iter().enumerate() {
+        for (i, test) in should_err.iter().enumerate() {
             let result = validate_blockdev(
                 &test.manifest,
                 &test.sys_fs_devs.clone().unwrap_or_default(),
