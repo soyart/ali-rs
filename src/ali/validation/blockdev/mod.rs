@@ -168,7 +168,7 @@ fn collect_fs_ready_devs(
     let mut fs_ready_devs = HashSet::<String>::new();
 
     sysfs::collect_fs_ready_devs(sys_fs_ready_devs, &mut fs_ready_devs)?;
-    sysfs::collect_lvm_fs_ready_devs(sys_lvms, &mut fs_ready_devs);
+    sysfs::collect_fs_ready_devs_lvm(sys_lvms, &mut fs_ready_devs);
 
     // Collect fs-ready devices from valids to fs_ready_devs
     for list in valids {
