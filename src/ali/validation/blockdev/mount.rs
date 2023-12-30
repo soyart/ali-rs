@@ -31,7 +31,7 @@ pub(super) fn validate_dups(
 
 pub(super) fn validate(
     mountpoints: &[ManifestMountpoint],
-    fs_devs: &mut HashSet<&String>,
+    fs_devs: &mut HashSet<String>,
 ) -> Result<(), AliError> {
     for (i, mnt) in mountpoints.iter().enumerate() {
         if fs_devs.contains(&mnt.device) {

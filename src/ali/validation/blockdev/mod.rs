@@ -106,6 +106,14 @@ fn validate_blockdev(
     let mut fs_devs =
         collect_fs_devs(manifest, sys_fs_devs, &mut fs_ready_devs)?;
 
+    fs::validate_rootfs(
+        &manifest.rootfs.device,
+        &mut fs_ready_devs,
+        &mut fs_devs,
+    )?;
+
+    fs_ready_devs.remove(&manifest.rootfs.device);
+
     if let Some(mountpoints) = &manifest.mountpoints {
         mount::validate_dups(mountpoints)?;
         mount::validate(mountpoints, &mut fs_devs)?;
@@ -179,11 +187,9 @@ fn collect_fs_devs<'a>(
     manifest: &'a Manifest,
     sys_fs_devs: &'a HashMap<String, BlockDevType>,
     fs_ready_devs: &'a mut HashSet<String>,
-) -> Result<HashSet<&'a String>, AliError> {
-    fs::collect_rootfs_fs_devs(&manifest.rootfs.device, fs_ready_devs)?;
-
-    // Valid block devices used as filesystems
+) -> Result<HashSet<String>, AliError> {
     let mut fs_devs = HashSet::new();
+
     sysfs::collect_fs_devs(sys_fs_devs, &mut fs_devs)?;
 
     if let Some(filesystems) = &manifest.filesystems {

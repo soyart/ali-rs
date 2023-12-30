@@ -3,9 +3,10 @@ use std::collections::HashSet;
 use crate::ali::ManifestFs;
 use crate::errors::AliError;
 
-pub(super) fn collect_rootfs_fs_devs(
+pub(super) fn validate_rootfs(
     rootfs: &String,
     fs_ready_devs: &mut HashSet<String>,
+    fs_devs: &mut HashSet<String>,
 ) -> Result<(), AliError> {
     const MSG: &str = "rootfs validation failed";
 
@@ -15,18 +16,21 @@ pub(super) fn collect_rootfs_fs_devs(
         )));
     }
 
-    // Remove used up fs-ready device (rootfs)
-    fs_ready_devs.remove(rootfs);
+    if let Some(thing) = fs_devs.get(rootfs) {
+        return Err(AliError::BadManifest(format!(
+            "{MSG}: found duplicate fs: {thing}",
+        )));
+    }
 
     Ok(())
 }
 
 // Collects filesystems into fs_devs,
 // and removing the base from fs_ready_devs as it goes through the list.
-pub(super) fn collect_fs_devs<'a>(
-    filesystems: &'a [ManifestFs],
+pub(super) fn collect_fs_devs(
+    filesystems: &[ManifestFs],
     fs_ready_devs: &mut HashSet<String>,
-    fs_devs: &mut HashSet<&'a String>,
+    fs_devs: &mut HashSet<String>,
 ) -> Result<(), AliError> {
     const MSG: &str = "fs validation failed";
 
@@ -43,8 +47,8 @@ pub(super) fn collect_fs_devs<'a>(
         // Remove used up fs-ready device
         fs_ready_devs.remove(&fs.device);
 
-        // Collect this fs to fs devices to later validate mountpoints
-        if fs_devs.insert(&fs.device) {
+        // Collect this fs to fs_dev to later validate mountpoints
+        if fs_devs.insert(fs.device.clone()) {
             continue;
         }
 

@@ -54,14 +54,14 @@ pub(crate) fn collect_lvm_fs_ready_devs(
     }
 }
 
-pub(super) fn collect_fs_devs<'a>(
-    sys_fs_devs: &'a HashMap<String, BlockDevType>,
-    fs_devs: &mut HashSet<&'a String>,
+pub(super) fn collect_fs_devs(
+    sys_fs_devs: &HashMap<String, BlockDevType>,
+    fs_devs: &mut HashSet<String>,
 ) -> Result<(), AliError> {
     const MSG: &str = "fs mount validation failed";
 
     for (dev, dev_type) in sys_fs_devs {
-        if fs_devs.insert(dev) {
+        if fs_devs.insert(dev.clone()) {
             continue;
         }
 
