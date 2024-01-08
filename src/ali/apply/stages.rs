@@ -157,9 +157,9 @@ pub fn postinstall_user(
 ) -> Result<(), AliError> {
     // Read postinstall and exec hooks or shell commands
     for cmd in manifest.postinstall.as_ref().unwrap_or(&vec![]) {
-        if hooks::is_hook(&cmd) {
+        if hooks::is_hook(cmd) {
             let action_hook = hooks::apply_hook(
-                &cmd,
+                cmd,
                 hooks::Caller::ManifestPostInstall,
                 install_location,
             )?;
@@ -172,7 +172,7 @@ pub fn postinstall_user(
         }
 
         // Apply manifest.postinstall with sh -c 'cmd'
-        shell::sh_c(&cmd)?;
+        shell::sh_c(cmd)?;
 
         let action_postinstall_cmd =
             ActionPostInstallUser::UserPostInstallCmd(cmd.clone());
