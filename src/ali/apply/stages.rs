@@ -43,12 +43,12 @@ pub fn mountpoints(
 
     // Create rootfs
     let rootfs: ManifestFs = manifest.rootfs.clone().into();
-    let action_create_rootfs = fs::apply_filesystem(&rootfs)?;
+    let action_create_rootfs = fs::create_filesystem(&rootfs)?;
     stages.mountpoints.push(action_create_rootfs);
 
     // Create other filesystems
     if let Some(filesystems) = &manifest.filesystems {
-        let actions_create_filesystems = fs::apply_filesystems(filesystems)?;
+        let actions_create_filesystems = fs::create_filesystems(filesystems)?;
         stages.mountpoints.extend(actions_create_filesystems);
     }
 
@@ -155,16 +155,11 @@ pub fn postinstall_user(
     install_location: &str,
     stages: &mut StageActions,
 ) -> Result<(), AliError> {
-    // Apply manifest.postinstall with sh -c 'cmd'
-    if manifest.postinstall.is_none() {
-        return Ok(());
-    }
-
-    let postinstall = manifest.postinstall.as_ref().unwrap();
-    for cmd in postinstall {
-        if hooks::is_hook(cmd) {
+    // Read postinstall and exec hooks or shell commands
+    for cmd in manifest.postinstall.as_ref().unwrap_or(&vec![]) {
+        if hooks::is_hook(&cmd) {
             let action_hook = hooks::apply_hook(
-                cmd,
+                &cmd,
                 hooks::Caller::ManifestPostInstall,
                 install_location,
             )?;
@@ -176,7 +171,8 @@ pub fn postinstall_user(
             continue;
         }
 
-        shell::sh_c(cmd)?;
+        // Apply manifest.postinstall with sh -c 'cmd'
+        shell::sh_c(&cmd)?;
 
         let action_postinstall_cmd =
             ActionPostInstallUser::UserPostInstallCmd(cmd.clone());
