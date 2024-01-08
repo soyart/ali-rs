@@ -1,7 +1,7 @@
 use crate::ali;
-use crate::entity::action::ActionMountpoints;
 use crate::errors::AliError;
 use crate::linux::fdisk;
+use crate::types::action::ActionMountpoints;
 
 use super::map_err::map_err_mountpoints;
 

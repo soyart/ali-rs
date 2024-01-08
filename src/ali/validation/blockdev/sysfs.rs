@@ -4,11 +4,11 @@ use std::collections::{
 };
 
 use super::is_fs_ready;
-use crate::entity::blockdev::{
+use crate::errors::AliError;
+use crate::types::blockdev::{
     BlockDevPaths,
     BlockDevType,
 };
-use crate::errors::AliError;
 
 // Collects fs-ready devices on the system into fs_ready_devs
 pub(super) fn collect_fs_ready_devs(

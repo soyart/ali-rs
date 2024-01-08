@@ -2,13 +2,13 @@ use crate::ali::{
     ManifestFs,
     ManifestMountpoint,
 };
-use crate::entity::action::ActionMountpoints;
 use crate::errors::AliError;
 use crate::linux;
+use crate::types::action::ActionMountpoints;
 
 use super::map_err::map_err_mountpoints;
 
-pub fn apply_filesystem(
+pub fn create_filesystem(
     filesystem: &ManifestFs,
 ) -> Result<ActionMountpoints, AliError> {
     linux::mkfs::create_fs(filesystem)?;
@@ -34,7 +34,7 @@ pub fn mount_filesystem(
     })
 }
 
-pub fn apply_filesystems(
+pub fn create_filesystems(
     filesystems: &[ManifestFs],
 ) -> Result<Vec<ActionMountpoints>, AliError> {
     let mut actions = Vec::new();
@@ -46,7 +46,7 @@ pub fn apply_filesystems(
             fs_opts: fs.fs_opts.clone(),
         };
 
-        match apply_filesystem(fs) {
+        match create_filesystem(fs) {
             Err(err) => {
                 return Err(map_err_mountpoints(
                     err,

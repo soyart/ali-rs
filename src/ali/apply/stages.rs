@@ -13,14 +13,14 @@ use crate::ali::{
     ManifestFs,
     ManifestMountpoint,
 };
-use crate::entity::action::{
+use crate::errors::AliError;
+use crate::hooks;
+use crate::types::action::{
     ActionBootstrap,
     ActionMountpoints,
     ActionPostInstallUser,
 };
-use crate::entity::stage::StageActions;
-use crate::errors::AliError;
-use crate::hooks;
+use crate::types::stage::StageActions;
 use crate::utils::shell;
 
 /// Prepare mountpoints for the new system on live system
@@ -43,12 +43,12 @@ pub fn mountpoints(
 
     // Create rootfs
     let rootfs: ManifestFs = manifest.rootfs.clone().into();
-    let action_create_rootfs = fs::apply_filesystem(&rootfs)?;
+    let action_create_rootfs = fs::create_filesystem(&rootfs)?;
     stages.mountpoints.push(action_create_rootfs);
 
     // Create other filesystems
     if let Some(filesystems) = &manifest.filesystems {
-        let actions_create_filesystems = fs::apply_filesystems(filesystems)?;
+        let actions_create_filesystems = fs::create_filesystems(filesystems)?;
         stages.mountpoints.extend(actions_create_filesystems);
     }
 
@@ -155,13 +155,8 @@ pub fn postinstall_user(
     install_location: &str,
     stages: &mut StageActions,
 ) -> Result<(), AliError> {
-    // Apply manifest.postinstall with sh -c 'cmd'
-    if manifest.postinstall.is_none() {
-        return Ok(());
-    }
-
-    let postinstall = manifest.postinstall.as_ref().unwrap();
-    for cmd in postinstall {
+    // Read postinstall and exec hooks or shell commands
+    for cmd in manifest.postinstall.as_ref().unwrap_or(&vec![]) {
         if hooks::is_hook(cmd) {
             let action_hook = hooks::apply_hook(
                 cmd,
@@ -176,6 +171,7 @@ pub fn postinstall_user(
             continue;
         }
 
+        // Apply manifest.postinstall with sh -c 'cmd'
         shell::sh_c(cmd)?;
 
         let action_postinstall_cmd =

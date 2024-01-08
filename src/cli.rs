@@ -4,8 +4,8 @@ use clap::{
     Subcommand,
 };
 
-use crate::entity::stage;
 use crate::errors::AliError;
+use crate::types::stage;
 
 #[derive(Debug, Parser)]
 #[clap(

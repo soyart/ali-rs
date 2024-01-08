@@ -1,7 +1,7 @@
 use serde_json::json;
 use thiserror::Error;
 
-use crate::entity::{
+use crate::types::{
     action,
     stage,
 };
@@ -111,7 +111,7 @@ fn test_json_error() {
     use std::collections::HashSet;
 
     use crate::ali::PartitionTable;
-    use crate::entity::action::*;
+    use crate::types::action::*;
 
     let actions_mountpoints = vec![
         Action::Mountpoints(ActionMountpoints::CreatePartitionTable {

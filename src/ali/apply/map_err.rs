@@ -1,11 +1,11 @@
-use crate::entity::action::{
+use crate::errors::AliError;
+use crate::types::action::{
     Action,
     ActionChrootAli,
     ActionChrootUser,
     ActionMountpoints,
     ActionRoutine,
 };
-use crate::errors::AliError;
 
 pub(super) fn map_err_mountpoints(
     err: AliError,
