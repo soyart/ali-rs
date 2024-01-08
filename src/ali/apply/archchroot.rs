@@ -20,12 +20,15 @@ pub fn chroot_ali(
     if let Err(err) = shell::arch_chroot(location, &cmd_tz) {
         return Err(map_err_chroot_ali(err, action_tz, actions));
     }
+
     actions.push(action_tz);
 
-    let (action_locale_gen, cmd_locale_gen) = cmd_locale_gen();
+    let cmd_locale_gen = cmd_locale_gen();
+    let action_locale_gen = ActionChrootAli::LocaleGen;
     if let Err(err) = shell::arch_chroot(location, &cmd_locale_gen) {
         return Err(map_err_chroot_ali(err, action_locale_gen, actions));
     }
+
     actions.push(action_locale_gen);
 
     Ok(actions)
@@ -49,11 +52,13 @@ where
             )?;
 
             actions.push(ActionChrootUser::Hook(action_hook));
+
             continue;
         }
 
         let action_user_cmd =
             ActionChrootUser::UserArchChrootCmd(cmd.to_string());
+
         if let Err(err) = shell::arch_chroot(location, cmd) {
             return Err(map_err_chroot_user(err, action_user_cmd, actions));
         }
@@ -72,12 +77,9 @@ fn cmd_link_timezone(tz: &Option<String>) -> (ActionChrootAli, String) {
 }
 
 // Appends defaults::DEFAULT_LOCALE_GEN to /etc/locale.gen
-fn cmd_locale_gen() -> (ActionChrootAli, String) {
-    (
-        ActionChrootAli::LocaleGen,
-        format!(
-            "echo {} >> /etc/locale.gen && locale-gen",
-            defaults::LOCALE_GEN
-        ),
+fn cmd_locale_gen() -> String {
+    format!(
+        "echo {} >> /etc/locale.gen && locale-gen",
+        defaults::LOCALE_GEN
     )
 }
