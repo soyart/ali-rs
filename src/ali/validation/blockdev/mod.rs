@@ -12,7 +12,7 @@ use std::collections::{
 };
 
 use crate::ali::*;
-use crate::entity::blockdev::*;
+use crate::types::blockdev::*;
 use crate::errors::AliError;
 
 /// Validates manifest for `stage_mountpoints`

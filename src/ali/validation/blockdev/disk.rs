@@ -4,7 +4,7 @@ use std::collections::{
 };
 
 use crate::ali::ManifestDisk;
-use crate::entity::blockdev::*;
+use crate::types::blockdev::*;
 use crate::errors::AliError;
 use crate::linux;
 use crate::utils::fs::file_exists;

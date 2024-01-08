@@ -1,7 +1,7 @@
 mod ali;
 mod cli;
 mod constants;
-mod entity;
+mod types;
 mod errors;
 mod hooks;
 mod linux;

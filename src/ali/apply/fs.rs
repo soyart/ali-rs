@@ -2,7 +2,7 @@ use crate::ali::{
     ManifestFs,
     ManifestMountpoint,
 };
-use crate::entity::action::ActionMountpoints;
+use crate::types::action::ActionMountpoints;
 use crate::errors::AliError;
 use crate::linux;
 

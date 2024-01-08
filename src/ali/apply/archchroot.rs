@@ -1,6 +1,6 @@
 use crate::ali::Manifest;
 use crate::constants::defaults;
-use crate::entity::action::{
+use crate::types::action::{
     ActionChrootAli,
     ActionChrootUser,
 };

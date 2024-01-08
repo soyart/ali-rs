@@ -7,8 +7,8 @@ use crate::ali::{
     Manifest,
 };
 use crate::cli;
-use crate::entity::report::Report;
-use crate::entity::stage;
+use crate::types::report::Report;
+use crate::types::stage;
 use crate::errors::AliError;
 
 pub(super) fn run(

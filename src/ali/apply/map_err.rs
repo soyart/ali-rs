@@ -1,4 +1,4 @@
-use crate::entity::action::{
+use crate::types::action::{
     Action,
     ActionChrootAli,
     ActionChrootUser,

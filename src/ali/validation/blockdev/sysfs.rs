@@ -4,7 +4,7 @@ use std::collections::{
 };
 
 use super::is_fs_ready;
-use crate::entity::blockdev::{
+use crate::types::blockdev::{
     BlockDevPaths,
     BlockDevType,
 };

@@ -13,12 +13,12 @@ use crate::ali::{
     ManifestFs,
     ManifestMountpoint,
 };
-use crate::entity::action::{
+use crate::types::action::{
     ActionBootstrap,
     ActionMountpoints,
     ActionPostInstallUser,
 };
-use crate::entity::stage::StageActions;
+use crate::types::stage::StageActions;
 use crate::errors::AliError;
 use crate::hooks;
 use crate::utils::shell;

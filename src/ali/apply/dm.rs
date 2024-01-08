@@ -3,7 +3,7 @@ use crate::ali::{
     ManifestLuks,
     ManifestLvm,
 };
-use crate::entity::action::ActionMountpoints;
+use crate::types::action::ActionMountpoints;
 use crate::errors::AliError;
 use crate::linux;
 

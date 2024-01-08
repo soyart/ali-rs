@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use super::*;
 use crate::ali::ManifestLvmLv;
-use crate::entity::blockdev::*;
+use crate::types::blockdev::*;
 use crate::errors::AliError;
 
 const MSG: &str = "lvm lv validation failed";

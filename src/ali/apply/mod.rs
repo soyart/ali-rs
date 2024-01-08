@@ -10,7 +10,7 @@ mod stages;
 use std::collections::HashSet;
 
 use crate::ali::Manifest;
-use crate::entity::stage::{
+use crate::types::stage::{
     self,
     Stage,
     StageActions,
