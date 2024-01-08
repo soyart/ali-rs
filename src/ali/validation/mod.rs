@@ -6,8 +6,8 @@ use crate::constants::{
     self,
     defaults,
 };
-use crate::types::report::ValidationReport;
 use crate::errors::AliError;
+use crate::types::report::ValidationReport;
 use crate::utils::fs::file_exists;
 use crate::utils::shell;
 

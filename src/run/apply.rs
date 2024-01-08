@@ -7,9 +7,9 @@ use crate::ali::{
     Manifest,
 };
 use crate::cli;
+use crate::errors::AliError;
 use crate::types::report::Report;
 use crate::types::stage;
-use crate::errors::AliError;
 
 pub(super) fn run(
     manifest_file: &str,

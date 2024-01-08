@@ -12,8 +12,8 @@ use std::collections::{
 };
 
 use crate::ali::*;
-use crate::types::blockdev::*;
 use crate::errors::AliError;
+use crate::types::blockdev::*;
 
 /// Validates manifest for `stage_mountpoints`
 /// See [`validate_blockdev`] for details.

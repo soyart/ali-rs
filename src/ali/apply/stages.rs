@@ -13,14 +13,14 @@ use crate::ali::{
     ManifestFs,
     ManifestMountpoint,
 };
+use crate::errors::AliError;
+use crate::hooks;
 use crate::types::action::{
     ActionBootstrap,
     ActionMountpoints,
     ActionPostInstallUser,
 };
 use crate::types::stage::StageActions;
-use crate::errors::AliError;
-use crate::hooks;
 use crate::utils::shell;
 
 /// Prepare mountpoints for the new system on live system

@@ -2,9 +2,9 @@ use crate::ali::{
     ManifestFs,
     ManifestMountpoint,
 };
-use crate::types::action::ActionMountpoints;
 use crate::errors::AliError;
 use crate::linux;
+use crate::types::action::ActionMountpoints;
 
 use super::map_err::map_err_mountpoints;
 

@@ -1,11 +1,11 @@
 mod ali;
 mod cli;
 mod constants;
-mod types;
 mod errors;
 mod hooks;
 mod linux;
 mod run;
+mod types;
 mod utils;
 
 use clap::Parser;

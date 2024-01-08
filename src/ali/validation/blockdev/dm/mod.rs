@@ -13,8 +13,8 @@ use crate::ali::{
     self,
     Dm,
 };
-use crate::types::blockdev::*;
 use crate::errors::AliError;
+use crate::types::blockdev::*;
 
 pub(super) fn collect_valids(
     dms: &[Dm],
