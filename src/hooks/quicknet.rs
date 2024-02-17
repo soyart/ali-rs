@@ -3,7 +3,7 @@ use serde_json::json;
 use super::constants::quicknet::*;
 use super::{
     extract_key_and_parts,
-    wrap_bad_hook_cmd,
+    wrap_hook_parse_help,
     ActionHook,
     Caller,
     Hook,
@@ -15,7 +15,7 @@ use super::{
 use crate::errors::AliError;
 use crate::utils::shell;
 
-const USAGE: &str = "interface [dns <DNS_STREAM>]";
+const USAGE: &str = "INTERFACE [dns <DNS_STREAM>]";
 
 #[derive(Debug, Clone, PartialEq)]
 struct QuickNet {
@@ -32,7 +32,7 @@ pub(super) fn parse(k: &str, cmd: &str) -> Result<Box<dyn Hook>, ParseError> {
     match k {
         KEY_QUICKNET | KEY_QUICKNET_DEBUG => {
             match HookQuickNet::try_from(cmd) {
-                Err(err) => Err(wrap_bad_hook_cmd(err, USAGE)),
+                Err(err) => Err(wrap_hook_parse_help(err, USAGE)),
                 Ok(hook) => Ok(Box::new(hook)),
             }
         }
@@ -86,12 +86,7 @@ impl super::Hook for HookQuickNet {
         _caller: &Caller,
         root_location: &str,
     ) -> Result<ActionHook, AliError> {
-        apply_quicknet(
-            &self.hook_key(),
-            &self.mode_hook,
-            &self.qn,
-            root_location,
-        )
+        apply_quicknet(&self.key(), &self.mode_hook, &self.qn, root_location)
     }
 }
 
@@ -110,7 +105,7 @@ impl TryFrom<&str> for HookQuickNet {
             2 => {
                 let interface = parts.get(1).unwrap();
                 if interface == "dns" {
-                    return Err(AliError::BadHookCmd(format!(
+                    return Err(AliError::HookParse(format!(
                         "{hook_key}: got only keyword `dns`"
                     )));
                 }
@@ -132,7 +127,7 @@ impl TryFrom<&str> for HookQuickNet {
                 }
 
                 if dns_keyword_idx.is_none() {
-                    return Err(AliError::BadHookCmd(format!(
+                    return Err(AliError::HookParse(format!(
                         "{hook_key}: missing argument keyword \"dns\""
                     )));
                 }
@@ -145,7 +140,7 @@ impl TryFrom<&str> for HookQuickNet {
                     } else if dns_keyword_idx == 2 {
                         1
                     } else {
-                        return Err(AliError::BadHookCmd(format!(
+                        return Err(AliError::HookParse(format!(
                         "{hook_key}: \"dns\" keyword in bad position: {dns_keyword_idx}"
                     )));
                     }
@@ -158,7 +153,7 @@ impl TryFrom<&str> for HookQuickNet {
             }
 
             l => {
-                return Err(AliError::BadHookCmd(format!(
+                return Err(AliError::HookParse(format!(
                     "{hook_key}: unexpected cmd parts length: {l}"
                 )));
             }

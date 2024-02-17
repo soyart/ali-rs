@@ -20,7 +20,7 @@ pub(crate) enum Protocol {
 pub(crate) fn extract_proto_prefix(url: &str) -> Result<&str, AliError> {
     url.split_once(DELIMITER).map_or_else(
         || {
-            Err(AliError::BadHookCmd(format!(
+            Err(AliError::HookParse(format!(
                 "url {url} is missing delimiter '{DELIMITER}'"
             )))
         },
@@ -50,7 +50,7 @@ impl TryFrom<&str> for Protocol {
             "sftp" => Ok(Self::Sftp),
 
             prefix => {
-                Err(AliError::BadHookCmd(format!(
+                Err(AliError::HookParse(format!(
                     "unknown downloader protocol prefix {prefix}"
                 )))
             }
@@ -98,12 +98,12 @@ impl Downloader {
 
 fn http_get(url: &str) -> Result<ureq::Response, AliError> {
     let resp = ureq::get(url).call().map_err(|err| {
-        AliError::HookError(format!("failed to GET {url}: {err}"))
+        AliError::HookApply(format!("failed to GET {url}: {err}"))
     })?;
 
     let status = resp.status();
     if !(200..=299).contains(&status) {
-        return Err(AliError::HookError(format!("http status {status}")));
+        return Err(AliError::HookApply(format!("http status {status}")));
     }
 
     Ok(resp)
@@ -113,7 +113,7 @@ fn download_http_string(url: &str) -> Result<String, AliError> {
     let resp = http_get(url)?;
 
     resp.into_string().map_err(|err| {
-        AliError::HookError(format!("body is not string: {err}"))
+        AliError::HookApply(format!("body is not string: {err}"))
     })
 }
 
@@ -124,7 +124,7 @@ fn download_http_bytes(url: &str) -> Result<Vec<u8>, AliError> {
     let mut v = Vec::new();
 
     if let Err(err) = r.read_to_end(&mut v) {
-        return Err(AliError::HookError(format!(
+        return Err(AliError::HookApply(format!(
             "failed to read response bytes: {err}"
         )));
     }

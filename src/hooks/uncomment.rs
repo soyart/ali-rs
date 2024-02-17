@@ -2,7 +2,7 @@ use serde_json::json;
 
 use super::utils::download;
 use super::{
-    wrap_bad_hook_cmd,
+    wrap_hook_parse_help,
     ActionHook,
     Caller,
     Hook,
@@ -45,7 +45,7 @@ pub(super) fn parse(k: &str, cmd: &str) -> Result<Box<dyn Hook>, ParseError> {
             | KEY_UNCOMMENT_ALL_DEBUG
     ) {
         match HookUncomment::try_from(cmd) {
-            Err(err) => Err(wrap_bad_hook_cmd(err, USAGE)),
+            Err(err) => Err(wrap_hook_parse_help(err, USAGE)),
             Ok(hook) => Ok(Box::new(hook)),
         }
     } else {
@@ -84,7 +84,7 @@ impl Hook for HookUncomment {
         root_location: &str,
     ) -> Result<ActionHook, AliError> {
         apply_uncomment(
-            &self.hook_key(),
+            &self.key(),
             &self.mode_hook,
             &self.mode,
             &self.uc,
@@ -117,9 +117,7 @@ impl TryFrom<&str> for HookUncomment {
             KEY_UNCOMMENT | KEY_UNCOMMENT_DEBUG => Mode::Once,
             KEY_UNCOMMENT_ALL | KEY_UNCOMMENT_ALL_DEBUG => Mode::All,
             key => {
-                return Err(AliError::BadHookCmd(format!(
-                    "unexpected key {key}"
-                )));
+                panic!("unexpected key {key}");
             }
         };
         let mode_hook = match hook_key.as_str() {
@@ -129,7 +127,7 @@ impl TryFrom<&str> for HookUncomment {
         };
 
         if parts.len() < 3 {
-            return Err(AliError::BadHookCmd(format!(
+            return Err(AliError::HookParse(format!(
                 "{hook_key}: expect at least 2 arguments"
             )));
         }
@@ -144,7 +142,7 @@ impl TryFrom<&str> for HookUncomment {
             }
             5 => {
                 if parts[2] != "marker" {
-                    return Err(AliError::BadHookCmd(format!(
+                    return Err(AliError::HookParse(format!(
                         "{hook_key}: unexpected argument {}, expecting 2nd argument to be `marker`",
                         parts[2],
                     )));
@@ -157,7 +155,7 @@ impl TryFrom<&str> for HookUncomment {
                 }
             }
             l => {
-                return Err(AliError::BadHookCmd(format!(
+                return Err(AliError::HookParse(format!(
                     "{hook_key}: bad cmd parts: {l}"
                 )));
             }
@@ -278,7 +276,7 @@ fn uncomment_text_once(
         }
     }
 
-    Err(AliError::HookError(format!(
+    Err(AliError::HookApply(format!(
         "{hook_key}: no such comment pattern '{marker} {key}'"
     )))
 }

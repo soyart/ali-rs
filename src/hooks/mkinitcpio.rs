@@ -5,7 +5,7 @@ use serde::{
 
 use super::constants::mkinitcpio::*;
 use super::{
-    wrap_bad_hook_cmd,
+    wrap_hook_parse_help,
     ActionHook,
     Caller,
     Hook,
@@ -23,7 +23,7 @@ pub(super) fn parse(k: &str, cmd: &str) -> Result<Box<dyn Hook>, ParseError> {
     match k {
         KEY_MKINITCPIO | KEY_MKINITCPIO_DEBUG => {
             match HookMkinitcpio::try_from(cmd) {
-                Err(err) => Err(wrap_bad_hook_cmd(err, USAGE)),
+                Err(err) => Err(wrap_hook_parse_help(err, USAGE)),
                 Ok(hook) => Ok(Box::new(hook)),
             }
         }
@@ -75,7 +75,7 @@ impl Hook for HookMkinitcpio {
         root_location: &str,
     ) -> Result<ActionHook, AliError> {
         apply_mkinitcpio(
-            &self.hook_key(),
+            &self.key(),
             &self.mode_hook,
             self.conf.clone(),
             caller,
@@ -92,15 +92,13 @@ impl TryFrom<&str> for HookMkinitcpio {
         let mode_hook = match hook_key.as_str() {
             KEY_MKINITCPIO => ModeHook::Normal,
             KEY_MKINITCPIO_DEBUG => ModeHook::Debug,
-            _ => {
-                return Err(AliError::BadHookCmd(format!(
-                    "unexpected key {hook_key}"
-                )));
+            key => {
+                panic!("unexpected key {key}");
             }
         };
 
         if parts.len() < 2 {
-            return Err(AliError::BadHookCmd(format!(
+            return Err(AliError::HookParse(format!(
                 "{hook_key}: need at least 1 argument"
             )));
         }
@@ -144,7 +142,7 @@ impl TryFrom<&str> for HookMkinitcpio {
         }
 
         if mkinitcpio.boot_hook.is_some() && mkinitcpio.hooks.is_some() {
-            return Err(AliError::BadHookCmd(format!(
+            return Err(AliError::HookParse(format!(
                 "{hook_key}: boot_hook and hooks are mutually exclusive, but found both"
             )));
         }
@@ -245,7 +243,7 @@ fn decide_boot_hooks(
         return Ok(BootHooksRoot::LuksOnLvm);
     }
 
-    Err(AliError::BadHookCmd(format!(
+    Err(AliError::HookParse(format!(
         "{hook_key}: no such boot_hook preset: {v}"
     )))
 }

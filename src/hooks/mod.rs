@@ -60,7 +60,8 @@ struct ParseError {
 /// actually executes the hook, this trait also defines
 /// many methods for validating user calls to hooks.
 trait Hook {
-    /// (Default) Prints yellow warning text to output
+    /// (Default) Prints yellow warning text to output.
+    /// This should be called inside hook implementation
     fn eprintln_warn(&self, msg: &str) {
         eprintln!(
             "### {} ###",
@@ -68,13 +69,13 @@ trait Hook {
         );
     }
 
-    /// (Default) Wraps error in hook with some string prefix
-    fn hook_error(&self, msg: &str) -> AliError {
-        AliError::HookError(format!("{}: {msg}", self.hook_key()))
+    /// (Default) Wraps error in hook with hook key prefix
+    fn hook_error(&self, err: &AliError) -> AliError {
+        AliError::HookApply(format!("{}: {err}", self.key()))
     }
 
     /// (Default) Full key of the hook
-    fn hook_key(&self) -> String {
+    fn key(&self) -> String {
         match self.mode() {
             ModeHook::Normal => self.base_key().to_string(),
             ModeHook::Debug => format!("{}-debug", self.base_key()),
@@ -114,8 +115,14 @@ pub fn apply_hook(
     caller: Caller,
     root_location: &str,
 ) -> Result<ActionHook, AliError> {
-    let h = parse_validate_caller(cmd, &caller, root_location)?;
-    h.run_hook(&caller, root_location)
+    let hook = parse_validate_hook(cmd, &caller, root_location)?;
+    let result = hook.run_hook(&caller, root_location);
+
+    if let Err(ref err) = result {
+        eprintln!("{}", hook.hook_error(err));
+    }
+
+    result
 }
 
 /// Validates if hook_cmd is valid for its caller and mountpoint
@@ -124,7 +131,7 @@ pub fn validate_hook(
     caller: &Caller,
     root_location: &str,
 ) -> Result<(), AliError> {
-    _ = parse_validate_caller(cmd, caller, root_location)?;
+    let _ = parse_validate_hook(cmd, caller, root_location)?;
 
     Ok(())
 }
@@ -138,7 +145,7 @@ pub fn extract_key_and_parts(
 ) -> Result<(String, Vec<String>), AliError> {
     let parts = cmd.split_whitespace().collect::<Vec<_>>();
     if parts.first().is_none() {
-        return Err(AliError::AliRsBug("@mnt: got 0 part".to_string()));
+        return Err(AliError::AliRsBug("got 0 part".to_string()));
     }
 
     Ok((
@@ -154,13 +161,13 @@ pub fn extract_key_and_parts_shlex(
 
     let parts = shlex::split(cmd);
     if parts.is_none() {
-        return Err(AliError::BadHookCmd("bad argument format".to_string()));
+        return Err(AliError::HookParse("bad argument format".to_string()));
     }
 
     Ok((key, parts.unwrap()))
 }
 
-fn wrap_bad_hook_cmd(err: AliError, help_msg: &str) -> ParseError {
+fn wrap_hook_parse_help(err: AliError, help_msg: &str) -> ParseError {
     ParseError {
         error: err,
         help_msg: help_msg.to_string(),
@@ -169,7 +176,7 @@ fn wrap_bad_hook_cmd(err: AliError, help_msg: &str) -> ParseError {
 
 /// (Default) Prints help to output
 fn print_help(hook_key: &str, usage: &str) {
-    println!("{}", format!("{}: {}", hook_key, usage).green());
+    println!("{}", format!("{} {}", hook_key, usage).green());
 }
 
 fn parse_hook(k: &str, cmd: &str) -> Result<Box<dyn Hook>, ParseError> {
@@ -201,14 +208,14 @@ fn parse_hook(k: &str, cmd: &str) -> Result<Box<dyn Hook>, ParseError> {
 
         key => {
             Err(ParseError {
-                error: AliError::BadHookCmd(format!("unknown hook key {key}")),
+                error: AliError::HookParse(format!("unknown hook key {key}")),
                 help_msg: "Use `--help` to see help".to_string(),
             })
         }
     }
 }
 
-fn parse_validate_caller(
+fn parse_validate_hook(
     cmd: &str,
     caller: &Caller,
     root_location: &str,
@@ -216,9 +223,15 @@ fn parse_validate_caller(
     let (key, _) = extract_key_and_parts(cmd)?;
     let result = parse_hook(&key, cmd);
 
-    if let Err(ParseError { error, help_msg }) = result {
+    if let Err(ParseError {
+        error: err,
+        help_msg,
+    }) = result
+    {
+        eprintln!("{err}");
         print_help(&key, &help_msg);
-        return Err(error);
+
+        return Err(err);
     }
 
     let hook = result.unwrap();
@@ -236,25 +249,27 @@ fn handle_no_mountpoint(
 ) -> Result<(), AliError> {
     if mountpoint == "/" {
         hook.eprintln_warn("got / as mountpoint");
+        let key = hook.key();
+
+        if hook.abort_if_no_mount() {
+            return Err(AliError::HookParse(format!(
+                "hook {key} is to be run with a mountpoint",
+            )));
+        }
+
+        // Warn
         match caller {
+            Caller::ManifestPostInstall | Caller::ManifestChroot => {
+                return Err(AliError::AliRsBug(format!(
+                    "got / as mountpoint for hook {key}",
+                )))
+            }
+
             Caller::Cli => {
                 hook.eprintln_warn(
                     "hint: use --mountpoint flag to specify non-/ mountpoint",
                 )
             }
-            Caller::ManifestPostInstall | Caller::ManifestChroot => {
-                return Err(AliError::AliRsBug(format!(
-                    "Got / as mountpoint for hook {}",
-                    hook.hook_key(),
-                )))
-            }
-        }
-
-        if hook.abort_if_no_mount() {
-            return Err(AliError::BadHookCmd(format!(
-                "hook {} is to be run with a mountpoint",
-                hook.hook_key()
-            )));
         }
     }
 
@@ -358,5 +373,29 @@ fn test_extract_key_and_parts_shlex() {
         let (key, parts) = extract_key_and_parts_shlex(s).unwrap();
         assert_eq!(expected_key, key);
         assert_eq!(expected_parts, parts);
+    }
+}
+
+#[ignore = "Test hook parse error messages"]
+#[test]
+fn test_parse_error() {
+    let bad_hooks = vec![
+        "@download-debug badurl ./test_assests/download",
+        "@download 0",
+        "@quicknet",
+        "@uncomment-debug bar",
+        "@mkinitcpio",
+    ];
+
+    let callers = vec![
+        Caller::ManifestChroot,
+        Caller::ManifestPostInstall,
+        Caller::Cli,
+    ];
+
+    for bad_hook in bad_hooks {
+        for caller in &callers {
+            let _ = validate_hook(bad_hook, caller, "/");
+        }
     }
 }

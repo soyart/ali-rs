@@ -16,7 +16,7 @@ impl ReplaceToken {
         let token = &format!("{} {} {}", "{{", self.token, "}}");
 
         if !s.contains(token) {
-            return Err(AliError::BadHookCmd(format!(
+            return Err(AliError::HookApply(format!(
                 "template does not contains token \"{token}\"",
             )));
         }

@@ -1,4 +1,4 @@
-use super::wrap_bad_hook_cmd;
+use super::wrap_hook_parse_help;
 use crate::errors::AliError;
 use crate::hooks::{
     self,
@@ -36,14 +36,14 @@ pub(super) fn parse(k: &str, cmd: &str) -> Result<Box<dyn Hook>, ParseError> {
         KEY_WRAPPER_MNT => {
             match WrapperMnt::try_from(cmd) {
                 Ok(hook) => Ok(Box::new(hook)),
-                Err(err) => Err(wrap_bad_hook_cmd(err, USAGE_MNT)),
+                Err(err) => Err(wrap_hook_parse_help(err, USAGE_MNT)),
             }
         }
 
         KEY_WRAPPER_NO_MNT => {
             match WrapperNoMnt::try_from(cmd) {
                 Ok(hook) => Ok(Box::new(hook)),
-                Err(err) => Err(wrap_bad_hook_cmd(err, USAGE_NO_MNT)),
+                Err(err) => Err(wrap_hook_parse_help(err, USAGE_NO_MNT)),
             }
         }
 
@@ -159,7 +159,7 @@ impl TryFrom<&str> for WrapperMnt {
 
         let l = parts.len();
         if l < 3 {
-            return Err(AliError::BadHookCmd(format!(
+            return Err(AliError::HookParse(format!(
                 "{hook_key}: expected at least 2 arguments, got {l}",
             )));
         }
@@ -167,12 +167,12 @@ impl TryFrom<&str> for WrapperMnt {
         let mountpoint = parts.get(1).unwrap();
 
         if !mountpoint.starts_with('/') {
-            return Err(AliError::BadHookCmd(format!(
-            "{hook_key}: mountpoint must be absolute, got relative path {mountpoint}",
-        )));
+            return Err(AliError::HookParse(format!(
+                "{hook_key}: mountpoint must be absolute, got relative path {mountpoint}",
+            )));
         }
         if hooks::is_hook(mountpoint) {
-            return Err(AliError::BadHookCmd(format!(
+            return Err(AliError::HookParse(format!(
                 "{hook_key}: expected mountpoint, found hook key {mountpoint}",
             )));
         }
@@ -212,7 +212,7 @@ impl TryFrom<&str> for WrapperNoMnt {
         let inner_key = inner_cmd_parts.first();
 
         if inner_key.is_none() {
-            return Err(AliError::BadHookCmd(format!(
+            return Err(AliError::HookParse(format!(
                 "{hook_key}: missing inner hook key",
             )));
         }

@@ -3,7 +3,7 @@ use super::utils::{
     download,
 };
 use super::{
-    wrap_bad_hook_cmd,
+    wrap_hook_parse_help,
     ActionHook,
     Caller,
     Hook,
@@ -28,7 +28,7 @@ pub(super) fn parse(k: &str, cmd: &str) -> Result<Box<dyn Hook>, ParseError> {
     match k {
         KEY_REPLACE_TOKEN | KEY_REPLACE_TOKEN_DEBUG => {
             match HookReplaceToken::try_from(cmd) {
-                Err(err) => Err(wrap_bad_hook_cmd(err, USAGE)),
+                Err(err) => Err(wrap_hook_parse_help(err, USAGE)),
                 Ok(hook) => Ok(Box::new(hook)),
             }
         }
@@ -68,7 +68,7 @@ impl Hook for HookReplaceToken {
         root_location: &str,
     ) -> Result<ActionHook, AliError> {
         apply_replace_token(
-            &self.hook_key(),
+            &self.key(),
             &self.mode_hook,
             &self.rp,
             root_location,
@@ -104,21 +104,19 @@ impl TryFrom<&str> for HookReplaceToken {
             KEY_REPLACE_TOKEN => ModeHook::Normal,
             KEY_REPLACE_TOKEN_DEBUG => ModeHook::Debug,
             key => {
-                return Err(AliError::BadHookCmd(format!(
-                    "unexpected key {key}"
-                )))
+                panic!("unexpected key '{key}'")
             }
         };
 
         if parts.len() < 3 {
-            return Err(AliError::BadHookCmd(format!(
+            return Err(AliError::HookParse(format!(
                 "{hook_key}: expect at least 2 arguments"
             )));
         }
 
         let l = parts.len();
         if l != 4 && l != 5 {
-            return Err(AliError::BadHookCmd(format!(
+            return Err(AliError::HookParse(format!(
                 "{hook_key}: bad cmd parts (expecting 3-4): {l}"
             )));
         }
@@ -157,7 +155,7 @@ fn apply_replace_token(
         // Otherwise read from file
         } else {
             std::fs::read_to_string(template).map_err(|err| {
-                AliError::HookError(format!(
+                AliError::HookApply(format!(
                     "{hook_key}: read template {}: {err}",
                     template
                 ))
@@ -178,7 +176,7 @@ fn apply_replace_token(
             };
 
             std::fs::write(output_location, replaced).map_err(|err| {
-                AliError::HookError(format!(
+                AliError::HookApply(format!(
                     "{hook_key}: failed to write to output to {output}: {err}",
                 ))
             })?;
@@ -200,7 +198,6 @@ fn test_parse_replace_token() {
     ];
 
     let should_err = vec![
-        "PORT 3322 /etc/ssh/sshd",
         "@replace-token PORT",
         "@replace-token PORT 3322",
         "@replace-token PORT \"3322\"",

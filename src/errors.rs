@@ -59,11 +59,11 @@ pub enum AliError {
     #[error("bad cli arguments: {0}")]
     BadArgs(String),
 
-    #[error("bad hook command: {0}")]
-    BadHookCmd(String),
+    #[error("hook parse error: {0}")]
+    HookParse(String),
 
     #[error("hook error: {0}")]
-    HookError(String),
+    HookApply(String),
 
     #[error("not implemented: {0}")]
     NotImplemented(String),

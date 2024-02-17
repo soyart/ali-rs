@@ -1,6 +1,7 @@
 use super::utils::download;
 use super::{
-    wrap_bad_hook_cmd,
+    extract_key_and_parts,
+    wrap_hook_parse_help,
     ActionHook,
     Hook,
     ModeHook,
@@ -10,7 +11,7 @@ use super::{
 };
 use crate::errors::AliError;
 
-const USAGE: &str = "<url> <outfile>";
+const USAGE: &str = "<URL> <OUTFILE>";
 
 struct HookDownload {
     url: String,
@@ -22,8 +23,8 @@ pub(super) fn parse(k: &str, cmd: &str) -> Result<Box<dyn Hook>, ParseError> {
     match k {
         KEY_DOWNLOAD | KEY_DOWNLOAD_DEBUG => {
             match HookDownload::try_from(cmd) {
-                Err(err) => Err(wrap_bad_hook_cmd(err, USAGE)),
                 Ok(hook) => Ok(Box::new(hook)),
+                Err(err) => Err(wrap_hook_parse_help(err, USAGE)),
             }
         }
 
@@ -35,24 +36,27 @@ impl TryFrom<&str> for HookDownload {
     type Error = AliError;
 
     fn try_from(cmd: &str) -> Result<Self, Self::Error> {
-        let parts: Vec<_> = cmd.split_whitespace().collect();
+        let (hook_key, parts) = extract_key_and_parts(cmd)?;
+
+        let mode = match hook_key.as_str() {
+            KEY_DOWNLOAD => ModeHook::Normal,
+            KEY_DOWNLOAD_DEBUG => ModeHook::Debug,
+            key => {
+                panic!("unexpected key {key}");
+            }
+        };
 
         let l = parts.len();
         if l != 3 {
-            return Err(AliError::BadHookCmd(format!(
-                "expecting 3 arguments, got {l}"
+            return Err(AliError::HookParse(format!(
+                "{hook_key}: expecting 3 arguments, got {l}"
             )));
         }
 
         Ok(Self {
-            mode_hook: match parts[0] {
-                KEY_DOWNLOAD => ModeHook::Normal,
-                KEY_DOWNLOAD_DEBUG => ModeHook::Debug,
-                key => panic!("unexpected key {key}"),
-            },
-
-            url: parts[1].to_string(),
-            outfile: parts[2].to_string(),
+            mode_hook: mode,
+            url: parts[0].to_string(),
+            outfile: parts[1].to_string(),
         })
     }
 }
