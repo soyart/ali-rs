@@ -2,17 +2,17 @@ pub mod hook_keys {
     pub const KEY_WRAPPER_MNT: &str = "@mnt";
     pub const KEY_WRAPPER_NO_MNT: &str = "@no-mnt";
     pub const KEY_QUICKNET: &str = "@quicknet";
-    pub const KEY_QUICKNET_PRINT: &str = "@quicknet-print";
+    pub const KEY_QUICKNET_DEBUG: &str = "@quicknet-debug";
     pub const KEY_MKINITCPIO: &str = "@mkinitcpio";
-    pub const KEY_MKINITCPIO_PRINT: &str = "@mkinitcpio-print";
+    pub const KEY_MKINITCPIO_DEBUG: &str = "@mkinitcpio-debug";
     pub const KEY_UNCOMMENT: &str = "@uncomment";
-    pub const KEY_UNCOMMENT_PRINT: &str = "@uncomment-print";
+    pub const KEY_UNCOMMENT_DEBUG: &str = "@uncomment-debug";
     pub const KEY_UNCOMMENT_ALL: &str = "@uncomment-all";
-    pub const KEY_UNCOMMENT_ALL_PRINT: &str = "@uncomment-all-print";
+    pub const KEY_UNCOMMENT_ALL_DEBUG: &str = "@uncomment-all-debug";
     pub const KEY_REPLACE_TOKEN: &str = "@replace-token";
-    pub const KEY_REPLACE_TOKEN_PRINT: &str = "@replace-token-print";
+    pub const KEY_REPLACE_TOKEN_DEBUG: &str = "@replace-token-debug";
     pub const KEY_DOWNLOAD: &str = "@download";
-    pub const KEY_DOWNLOAD_PRINT: &str = "@download-print";
+    pub const KEY_DOWNLOAD_DEBUG: &str = "@download-debug";
 }
 
 pub mod quicknet {

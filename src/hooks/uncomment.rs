@@ -10,8 +10,8 @@ use super::{
     ParseError,
     KEY_UNCOMMENT,
     KEY_UNCOMMENT_ALL,
-    KEY_UNCOMMENT_ALL_PRINT,
-    KEY_UNCOMMENT_PRINT,
+    KEY_UNCOMMENT_ALL_DEBUG,
+    KEY_UNCOMMENT_DEBUG,
 };
 use crate::errors::AliError;
 
@@ -40,9 +40,9 @@ pub(super) fn parse(k: &str, cmd: &str) -> Result<Box<dyn Hook>, ParseError> {
     if matches!(
         k,
         KEY_UNCOMMENT
-            | KEY_UNCOMMENT_PRINT
+            | KEY_UNCOMMENT_DEBUG
             | KEY_UNCOMMENT_ALL
-            | KEY_UNCOMMENT_ALL_PRINT
+            | KEY_UNCOMMENT_ALL_DEBUG
     ) {
         match HookUncomment::try_from(cmd) {
             Err(err) => Err(wrap_bad_hook_cmd(err, USAGE)),
@@ -114,8 +114,8 @@ impl TryFrom<&str> for HookUncomment {
         let (hook_key, parts) = super::extract_key_and_parts_shlex(s)?;
 
         let mode_uncomment = match hook_key.as_str() {
-            KEY_UNCOMMENT | KEY_UNCOMMENT_PRINT => Mode::Once,
-            KEY_UNCOMMENT_ALL | KEY_UNCOMMENT_ALL_PRINT => Mode::All,
+            KEY_UNCOMMENT | KEY_UNCOMMENT_DEBUG => Mode::Once,
+            KEY_UNCOMMENT_ALL | KEY_UNCOMMENT_ALL_DEBUG => Mode::All,
             key => {
                 return Err(AliError::BadHookCmd(format!(
                     "unexpected key {key}"
@@ -124,7 +124,7 @@ impl TryFrom<&str> for HookUncomment {
         };
         let mode_hook = match hook_key.as_str() {
             KEY_UNCOMMENT | KEY_UNCOMMENT_ALL => ModeHook::Normal,
-            KEY_UNCOMMENT_PRINT | KEY_UNCOMMENT_ALL_PRINT => ModeHook::Print,
+            KEY_UNCOMMENT_DEBUG | KEY_UNCOMMENT_ALL_DEBUG => ModeHook::Debug,
             key => panic!("unexpected key {key}"),
         };
 
@@ -219,7 +219,7 @@ fn apply_uncomment(
     }?;
 
     match mode_hook {
-        ModeHook::Print => {
+        ModeHook::Debug => {
             println!("{}", uncommented);
         }
 

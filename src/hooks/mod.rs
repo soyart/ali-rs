@@ -45,7 +45,7 @@ enum ModeHook {
     /// May write changes to disk
     Normal,
     /// Print-only, i.e. idempotent
-    Print,
+    Debug,
 }
 
 #[derive(Debug)]
@@ -77,11 +77,11 @@ trait Hook {
     fn hook_key(&self) -> String {
         match self.mode() {
             ModeHook::Normal => self.base_key().to_string(),
-            ModeHook::Print => format!("{}-print", self.base_key()),
+            ModeHook::Debug => format!("{}-debug", self.base_key()),
         }
     }
 
-    /// Base hook key (no `-print` suffix)
+    /// Base hook key (no `-debug` suffix)
     fn base_key(&self) -> &'static str;
 
     /// Returns usage string for Self.help
@@ -178,24 +178,24 @@ fn parse_hook(k: &str, cmd: &str) -> Result<Box<dyn Hook>, ParseError> {
             wrappers::parse(k, cmd) //
         }
 
-        KEY_QUICKNET | KEY_QUICKNET_PRINT => {
+        KEY_QUICKNET | KEY_QUICKNET_DEBUG => {
             quicknet::parse(k, cmd) //
         }
 
-        KEY_MKINITCPIO | KEY_MKINITCPIO_PRINT => {
+        KEY_MKINITCPIO | KEY_MKINITCPIO_DEBUG => {
             mkinitcpio::parse(k, cmd) //
         }
 
-        KEY_REPLACE_TOKEN | KEY_REPLACE_TOKEN_PRINT => {
+        KEY_REPLACE_TOKEN | KEY_REPLACE_TOKEN_DEBUG => {
             replace_token::parse(k, cmd)
         }
 
-        KEY_DOWNLOAD | KEY_DOWNLOAD_PRINT => download::parse(k, cmd),
+        KEY_DOWNLOAD | KEY_DOWNLOAD_DEBUG => download::parse(k, cmd),
 
         KEY_UNCOMMENT
-        | KEY_UNCOMMENT_PRINT
+        | KEY_UNCOMMENT_DEBUG
         | KEY_UNCOMMENT_ALL
-        | KEY_UNCOMMENT_ALL_PRINT => {
+        | KEY_UNCOMMENT_ALL_DEBUG => {
             uncomment::parse(k, cmd) //
         }
 
@@ -300,7 +300,7 @@ impl std::fmt::Display for ModeHook {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Normal => write!(f, "hookmode-normal"),
-            Self::Print => write!(f, "hookmode-print"),
+            Self::Debug => write!(f, "hookmode-debug"),
         }
     }
 }

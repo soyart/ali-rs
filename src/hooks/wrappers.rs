@@ -288,7 +288,7 @@ mod tests {
         let should_pass = vec![
             "@mnt /mnt @quicknet ens3 dns 1.1.1.1",
             "@mnt /foo @uncomment PORT /etc/ssh",
-            "@mnt /foo @uncomment-print PORT /etc/ssh",
+            "@mnt /foo @uncomment-debug PORT /etc/ssh",
         ];
 
         let should_err = vec![

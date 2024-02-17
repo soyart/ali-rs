@@ -10,7 +10,7 @@ use super::{
     ModeHook,
     ParseError,
     KEY_QUICKNET,
-    KEY_QUICKNET_PRINT,
+    KEY_QUICKNET_DEBUG,
 };
 use crate::errors::AliError;
 use crate::utils::shell;
@@ -30,7 +30,7 @@ struct HookQuickNet {
 
 pub(super) fn parse(k: &str, cmd: &str) -> Result<Box<dyn Hook>, ParseError> {
     match k {
-        KEY_QUICKNET | KEY_QUICKNET_PRINT => {
+        KEY_QUICKNET | KEY_QUICKNET_DEBUG => {
             match HookQuickNet::try_from(cmd) {
                 Err(err) => Err(wrap_bad_hook_cmd(err, USAGE)),
                 Ok(hook) => Ok(Box::new(hook)),
@@ -102,7 +102,7 @@ impl TryFrom<&str> for HookQuickNet {
         let (hook_key, parts) = extract_key_and_parts(s)?;
         let mode_hook = match hook_key.as_str() {
             KEY_QUICKNET => ModeHook::Normal,
-            KEY_QUICKNET_PRINT => ModeHook::Print,
+            KEY_QUICKNET_DEBUG => ModeHook::Debug,
             key => panic!("unexpected key {key}"),
         };
 
@@ -182,7 +182,7 @@ fn apply_quicknet(
     let conf_str = qn.encode_to_string();
 
     match mode_hook {
-        ModeHook::Print => {
+        ModeHook::Debug => {
             println!("{conf_str}");
         }
         ModeHook::Normal => {

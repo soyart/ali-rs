@@ -12,7 +12,7 @@ use super::{
     ModeHook,
     ParseError,
     KEY_MKINITCPIO,
-    KEY_MKINITCPIO_PRINT,
+    KEY_MKINITCPIO_DEBUG,
 };
 use crate::errors::AliError;
 
@@ -21,7 +21,7 @@ const USAGE: &str =
 
 pub(super) fn parse(k: &str, cmd: &str) -> Result<Box<dyn Hook>, ParseError> {
     match k {
-        KEY_MKINITCPIO | KEY_MKINITCPIO_PRINT => {
+        KEY_MKINITCPIO | KEY_MKINITCPIO_DEBUG => {
             match HookMkinitcpio::try_from(cmd) {
                 Err(err) => Err(wrap_bad_hook_cmd(err, USAGE)),
                 Ok(hook) => Ok(Box::new(hook)),
@@ -91,7 +91,7 @@ impl TryFrom<&str> for HookMkinitcpio {
         let (hook_key, parts) = super::extract_key_and_parts_shlex(s)?;
         let mode_hook = match hook_key.as_str() {
             KEY_MKINITCPIO => ModeHook::Normal,
-            KEY_MKINITCPIO_PRINT => ModeHook::Print,
+            KEY_MKINITCPIO_DEBUG => ModeHook::Debug,
             _ => {
                 return Err(AliError::BadHookCmd(format!(
                     "unexpected key {hook_key}"
@@ -181,7 +181,7 @@ fn apply_mkinitcpio(
     }
 
     let s = serde_json::to_string(&m).unwrap();
-    if matches!(mode_hook, ModeHook::Print) {
+    if matches!(mode_hook, ModeHook::Debug) {
         if let Some(s) = binaries_mkinitcpio {
             println!("{s}");
         }

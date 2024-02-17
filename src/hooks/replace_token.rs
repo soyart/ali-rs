@@ -10,7 +10,7 @@ use super::{
     ModeHook,
     ParseError,
     KEY_REPLACE_TOKEN,
-    KEY_REPLACE_TOKEN_PRINT,
+    KEY_REPLACE_TOKEN_DEBUG,
 };
 use crate::errors::AliError;
 
@@ -26,7 +26,7 @@ struct HookReplaceToken {
 
 pub(super) fn parse(k: &str, cmd: &str) -> Result<Box<dyn Hook>, ParseError> {
     match k {
-        KEY_REPLACE_TOKEN | KEY_REPLACE_TOKEN_PRINT => {
+        KEY_REPLACE_TOKEN | KEY_REPLACE_TOKEN_DEBUG => {
             match HookReplaceToken::try_from(cmd) {
                 Err(err) => Err(wrap_bad_hook_cmd(err, USAGE)),
                 Ok(hook) => Ok(Box::new(hook)),
@@ -102,7 +102,7 @@ impl TryFrom<&str> for HookReplaceToken {
         let (hook_key, parts) = super::extract_key_and_parts_shlex(s)?;
         let mode_hook = match hook_key.as_str() {
             KEY_REPLACE_TOKEN => ModeHook::Normal,
-            KEY_REPLACE_TOKEN_PRINT => ModeHook::Print,
+            KEY_REPLACE_TOKEN_DEBUG => ModeHook::Debug,
             key => {
                 return Err(AliError::BadHookCmd(format!(
                     "unexpected key {key}"
@@ -167,7 +167,7 @@ fn apply_replace_token(
     let replaced = r.replace(&template_string)?;
 
     match mode_hook {
-        ModeHook::Print => {
+        ModeHook::Debug => {
             println!("{replaced}")
         }
 
@@ -224,9 +224,9 @@ fn test_parse_replace_token() {
 
     let tests = HashMap::from([
         (
-            "@replace-token-print PORT 3322 /etc/ssh/sshd",
+            "@replace-token-debug PORT 3322 /etc/ssh/sshd",
             HookReplaceToken {
-                mode_hook: ModeHook::Print,
+                mode_hook: ModeHook::Debug,
                 template: "/etc/ssh/sshd".to_string(),
                 output: "/etc/ssh/sshd".to_string(),
                 rp: utils::ReplaceToken {
@@ -248,9 +248,9 @@ fn test_parse_replace_token() {
             }
         ),
         (
-            "@replace-token-print \"linux_boot\" \"loglevel=3 quiet root=/dev/archvg/archlv ro\" /some/template /etc/default/grub",
+            "@replace-token-debug \"linux_boot\" \"loglevel=3 quiet root=/dev/archvg/archlv ro\" /some/template /etc/default/grub",
             HookReplaceToken {
-                mode_hook: ModeHook::Print,
+                mode_hook: ModeHook::Debug,
                 template: "/some/template".to_string(),
                 output: "/etc/default/grub".to_string(),
                 rp: utils::ReplaceToken {

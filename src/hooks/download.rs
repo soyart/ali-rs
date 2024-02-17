@@ -6,7 +6,7 @@ use super::{
     ModeHook,
     ParseError,
     KEY_DOWNLOAD,
-    KEY_DOWNLOAD_PRINT,
+    KEY_DOWNLOAD_DEBUG,
 };
 use crate::errors::AliError;
 
@@ -20,7 +20,7 @@ struct HookDownload {
 
 pub(super) fn parse(k: &str, cmd: &str) -> Result<Box<dyn Hook>, ParseError> {
     match k {
-        KEY_DOWNLOAD | KEY_DOWNLOAD_PRINT => {
+        KEY_DOWNLOAD | KEY_DOWNLOAD_DEBUG => {
             match HookDownload::try_from(cmd) {
                 Err(err) => Err(wrap_bad_hook_cmd(err, USAGE)),
                 Ok(hook) => Ok(Box::new(hook)),
@@ -47,7 +47,7 @@ impl TryFrom<&str> for HookDownload {
         Ok(Self {
             mode_hook: match parts[0] {
                 KEY_DOWNLOAD => ModeHook::Normal,
-                KEY_DOWNLOAD_PRINT => ModeHook::Print,
+                KEY_DOWNLOAD_DEBUG => ModeHook::Debug,
                 key => panic!("unexpected key {key}"),
             },
 

@@ -42,14 +42,14 @@ ali-rs hooks --dry-run "@hook-1 foo bar" --mountpoint "/mnt"
 ali-rs hooks --dry-run --manifest -f path/to/manifest.yaml
 ```
 
-## Print hooks
+## Debug hooks
 
 All hooks, by default, modifies some files on the system.
-To avoid corrupting system files, ali-rs provide _print_ hooks,
-which is a stateless print-only version of each hook.
+To avoid corrupting system files, ali-rs provide _debug_ hooks,
+which is a stateless, idempotent, print-only version of each hook.
 
-For example, `@uncomment-all` hook has print-only version
-`@uncomment-all-print` which instead of writing to output files,
+For example, `@uncomment-all` hook has debug mode `@uncomment-all-debug`
+which instead of writing to output files,
 simply prints `@uncomment-all` output to screen.
 
 ## Hooks in ALI manifest, execution stage, and output file locations
@@ -209,7 +209,7 @@ files are written to the correct path under the mountpoint.
     and `foo` to `BINARIES`, only printing output
 
     ```
-    @mkinitcpio-print 'boot_hook=lvm' 'binaries=btrfs foo'
+    @mkinitcpio-debug 'boot_hook=lvm' 'binaries=btrfs foo'
     ```
       
     Output:
