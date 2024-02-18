@@ -47,7 +47,7 @@ where
         if hooks::is_hook(cmd) {
             let action_hook = hooks::apply_hook(
                 cmd,
-                hooks::Caller::ManifestChroot,
+                &hooks::Caller::ManifestChroot,
                 location,
             )?;
 

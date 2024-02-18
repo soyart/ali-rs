@@ -112,11 +112,11 @@ trait Hook {
 
 pub fn apply_hook(
     cmd: &str,
-    caller: Caller,
+    caller: &Caller,
     root_location: &str,
 ) -> Result<ActionHook, AliError> {
-    let hook = parse_validate_hook(cmd, &caller, root_location)?;
-    let result = hook.run_hook(&caller, root_location);
+    let hook = parse_validate_hook(cmd, caller, root_location)?;
+    let result = hook.run_hook(caller, root_location);
 
     if let Err(ref err) = result {
         eprintln!("{}", hook.hook_error(err));
@@ -396,6 +396,35 @@ fn test_parse_error() {
     for bad_hook in bad_hooks {
         for caller in &callers {
             let _ = validate_hook(bad_hook, caller, "/");
+        }
+    }
+}
+
+#[ignore = "Test hook parse error messages"]
+#[test]
+fn test_apply_error() {
+    let bad_hooks = vec![
+        "@download https://openbsd.org ./bad-dir/download",
+        "@download https://freebsd.org ./bad-dir/download",
+        "@uncomment-debug SomeKey ./bad-dir",
+        "@uncomment-debug SomeNonExistentKey ./test_assets/foo",
+        "@no-mnt @uncomment-debug SomeKey ./bad-dir",
+        "@no-mnt @uncomment-debug SomeNonExistentKey ./test_assets/foo",
+    ];
+
+    let callers = vec![
+        Caller::ManifestChroot,
+        Caller::ManifestPostInstall,
+        Caller::Cli,
+    ];
+
+    for bad_hook in bad_hooks {
+        println!("cmd: {bad_hook}");
+        println!();
+
+        for caller in &callers {
+            println!("caller: {caller}");
+            let _ = apply_hook(bad_hook, caller, "/");
         }
     }
 }

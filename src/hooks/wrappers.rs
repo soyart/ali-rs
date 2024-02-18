@@ -25,10 +25,10 @@ impl Wrapper {
     }
 }
 
-/// Wraps another HookMetadata and enforce mountpoint to manifest mountpoint
+/// Wraps another Hook and enforce mountpoint to manifest mountpoint
 struct WrapperMnt(Wrapper, String);
 
-/// Force mountpoint value to "/"
+/// Wraps another Hook and enforce mountpoint value to "/"
 struct WrapperNoMnt(Wrapper);
 
 pub(super) fn parse(k: &str, cmd: &str) -> Result<Box<dyn Hook>, ParseError> {

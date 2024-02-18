@@ -156,7 +156,7 @@ fn apply_replace_token(
         } else {
             std::fs::read_to_string(template).map_err(|err| {
                 AliError::HookApply(format!(
-                    "{hook_key}: read template {}: {err}",
+                    "failed to read template {}: {err}",
                     template
                 ))
             })

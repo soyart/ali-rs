@@ -1,3 +1,8 @@
+use std::io::{
+    stdout,
+    Write,
+};
+
 use super::utils::download;
 use super::{
     extract_key_and_parts,
@@ -55,8 +60,8 @@ impl TryFrom<&str> for HookDownload {
 
         Ok(Self {
             mode_hook: mode,
-            url: parts[0].to_string(),
-            outfile: parts[1].to_string(),
+            url: parts[1].to_string(),
+            outfile: parts[2].to_string(),
         })
     }
 }
@@ -95,11 +100,27 @@ impl Hook for HookDownload {
         let downloader = download::Downloader::new_from_url(&self.url)?;
         let bytes = downloader.get_bytes()?;
 
-        if let Err(err) = std::fs::write(&self.outfile, bytes) {
-            return Err(AliError::FileError(
-                err,
-                format!("failed to write downloaded file to {}", self.outfile),
-            ));
+        match self.mode_hook {
+            ModeHook::Normal => {
+                let result = std::fs::write(&self.outfile, bytes);
+                if let Err(err) = result {
+                    let err_msg = format!(
+                        "failed to write downloaded file to {}",
+                        self.outfile
+                    );
+
+                    return Err(AliError::FileError(err, err_msg));
+                }
+            }
+
+            ModeHook::Debug => {
+                let mut out = stdout();
+                if let Err(err) = out.write_all(&bytes) {
+                    return Err(AliError::HookApply(format!(
+                        "failed to write downloaded bytes to stdout: {err}"
+                    )));
+                }
+            }
         }
 
         Ok(ActionHook::Download(format!(

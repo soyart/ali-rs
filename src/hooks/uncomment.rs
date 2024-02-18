@@ -199,9 +199,7 @@ fn apply_uncomment(
         std::fs::read_to_string(&target_file).map_err(|err| {
             AliError::FileError(
                 err,
-                format!(
-                    "{hook_key}: read original file to uncomment: {target_file}"
-                ),
+                format!("read original file to uncomment: {target_file}"),
             )
         })
     }?;

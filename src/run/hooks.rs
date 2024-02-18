@@ -17,7 +17,7 @@ pub fn run(
     }
 
     for hook in hooks {
-        hooks::apply_hook(&hook, hooks::Caller::Cli, &mountpoint)?;
+        hooks::apply_hook(&hook, &hooks::Caller::Cli, &mountpoint)?;
     }
 
     Ok(())
